@@ -146,9 +146,19 @@
     z-index: 30;
     overflow: hidden;
 }
-        .chat-page.active {
-            display: flex;
-        }
+.chat-page.active {
+    display: flex;
+}
+.chat-page .chat-messages {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+.chat-page .chat-top {
+    flex-shrink: 0;
+}
+.chat-page .chat-input-area {
+    flex-shrink: 0;
+}
         .chat-top {
     padding: 10px 16px;
     background: #ffffff;
@@ -189,12 +199,41 @@ color: #000000;
             height: 100%;
             object-fit: cover;
         }
-        .chat-top .chat-title {
-            font-weight: 600;
-            font-size: 13px;
-            color: #000000;
-            flex: 1;
-        }
+        .chat-top .chat-top-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+}
+.chat-top .chat-title {
+    font-weight: 600;
+    font-size: 13px;
+    color: #000000;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.chat-top .chat-top-status {
+    font-size: 10px;
+    color: #999999;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: none;
+}
+.chat-top .chat-top-status.show {
+    display: block;
+}
+.chat-top .chat-top-status .status-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    margin-right: 4px;
+    vertical-align: middle;
+}
         .chat-messages {
     flex: 1;
     overflow-y: auto;
@@ -883,6 +922,7 @@ color: #000000;
     border-top: 1px solid var(--theme-border, #d4e9d6);
     flex-shrink: 0;
     z-index: 25;
+    position: relative;
 }
 #emojiPanel.show {
     display: flex;
@@ -1233,12 +1273,15 @@ color: #000000;
 
     <div class="chat-page" id="chatPage">
         <div class="chat-top">
-            <div class="back-btn" onclick="closeChat()">
-                <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
-            </div>
-            <div class="chat-top-avatar" id="chatTopAvatar" onclick="openChatFriendProfile()"></div>
-            <span class="chat-title" id="chatTitle">聊天</span>
-        </div>
+    <div class="back-btn" onclick="closeChat()">
+        <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+    </div>
+    <div class="chat-top-avatar" id="chatTopAvatar" onclick="openChatFriendProfile()"></div>
+    <div class="chat-top-info">
+        <span class="chat-title" id="chatTitle">聊天</span>
+        <span class="chat-top-status" id="chatTopStatus"></span>
+    </div>
+</div>
         <div class="chat-messages" id="chatMessages"></div>
         <div id="typingBar" style="display:none;align-items:center;gap:6px;padding:4px 16px;color:#999999;font-size:13px;background:var(--theme-lighter, #fafcfa);border-top:1px solid var(--theme-border, #d4e9d6);"></div>
         <div class="chat-input-area" style="flex-direction:column;padding:6px 12px 4px 12px;gap:4px;">
@@ -1266,7 +1309,7 @@ color: #000000;
 </div>
             </div>
         </div>
-<div id="chatBottomPanel" style="display:none;position:absolute;left:0;right:0;bottom:0;height:25%;background:#ffffff;border-top:1px solid var(--theme-border, #d4e9d6);z-index:60;flex-direction:column;padding:10px 12px;box-sizing:border-box;">
+<div id="chatBottomPanel" style="display:none;position:relative;height:25%;background:#ffffff;border-top:1px solid var(--theme-border, #d4e9d6);z-index:60;flex-direction:column;padding:10px 12px;box-sizing:border-box;flex-shrink:0;">
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;overflow-y:auto;flex:1;align-content:start;">
         <div onclick="openChatStyleSettings()" style="display:flex;align-items:center;justify-content:center;padding:14px 4px;background:var(--theme-lighter, #eef5ef);border-radius:12px;cursor:pointer;font-size:14px;color:#000000;">装扮</div>
 <div onclick="showCreateVoteModal()" style="display:flex;align-items:center;justify-content:center;padding:14px 4px;background:var(--theme-lighter, #eef5ef);border-radius:12px;cursor:pointer;font-size:14px;color:#000000;">投票</div>
@@ -1839,6 +1882,52 @@ function getChat(id) {
     return r || null;
 }
 
+function getTodayDateKeyForChatTop() {
+    var now = new Date();
+    return now.getFullYear() + '.' + String(now.getMonth()+1).padStart(2,'0') + '.' + String(now.getDate()).padStart(2,'0');
+}
+
+function updateChatTopStatus(chatId) {
+    var statusEl = document.getElementById('chatTopStatus');
+    if (!statusEl) return;
+
+    if (!chatId) {
+        statusEl.classList.remove('show');
+        statusEl.innerHTML = '';
+        return;
+    }
+
+    var allFriends = DataHub.get('friends', []);
+    var friend = allFriends.find(function(f) { return f.id === chatId; });
+
+    if (!friend || !friend.couple || friend.couple.enabled !== true) {
+        statusEl.classList.remove('show');
+        statusEl.innerHTML = '';
+        return;
+    }
+
+    var todayKey = getTodayDateKeyForChatTop();
+    var cal = friend.couple.statusCalendar || {};
+    var dayData = cal[todayKey];
+
+    if (!dayData) {
+        statusEl.classList.remove('show');
+        statusEl.innerHTML = '';
+        return;
+    }
+
+    var statusDotColor = (dayData.status === 'online') ? '#4caf50' : '#bbbbbb';
+    var statusText = dayData.statusText || '';
+    var timeDiffText = formatTimeDiff(dayData.timeDiff);
+
+    statusEl.innerHTML =
+        '<span class="status-dot" style="background:' + statusDotColor + ';"></span>' +
+        statusText + ' ' + timeDiffText;
+    statusEl.classList.add('show');
+}
+
+window.updateChatTopStatus = updateChatTopStatus;
+
 function updateChatTopAvatar(chatId) {
     var avatarEl = document.getElementById('chatTopAvatar');
     if (!avatarEl || !chatId) return;
@@ -2020,13 +2109,15 @@ if (_changed) DataHub.set('messages', _allMsgs);
     } catch (e) {
         console.error('renderChatMessages 报错:', e);
     }
-    try {
+try {
         updateChatTopAvatar(chatId);
     } catch (e) {
         console.error('updateChatTopAvatar 报错:', e);
     }
 
     updateChatTopAvatar(chatId);
+    updateChatTopStatus(chatId);
+    startChatTopStatusTimer(chatId);
     startAutoStartTimer();
     startChatSessionTimer(chatId);
 }
@@ -2490,6 +2581,34 @@ function resetChatStorage(chatId) {
     closeSubPage();
 }
 
+var chatTopStatusTimer = null;
+
+function startChatTopStatusTimer(chatId) {
+    stopChatTopStatusTimer();
+    chatTopStatusTimer = setInterval(function() {
+        var chatPage = document.getElementById('chatPage');
+        if (!chatPage || !chatPage.classList.contains('active')) {
+            stopChatTopStatusTimer();
+            return;
+        }
+        if (currentChatId !== chatId) {
+            stopChatTopStatusTimer();
+            return;
+        }
+        updateChatTopStatus(chatId);
+    }, 60000);
+}
+
+function stopChatTopStatusTimer() {
+    if (chatTopStatusTimer) {
+        clearInterval(chatTopStatusTimer);
+        chatTopStatusTimer = null;
+    }
+}
+
+window.startChatTopStatusTimer = startChatTopStatusTimer;
+window.stopChatTopStatusTimer = stopChatTopStatusTimer;
+
 function closeChat() {
     closeChatBottomPanel();
     if (currentChatId) {
@@ -2517,6 +2636,12 @@ hideChatUnreadText();
     currentChatId = null;
     stopAutoStartTimer();
     stopChatSessionTimer();
+    stopChatTopStatusTimer();
+    var _chatTopStatusEl = document.getElementById('chatTopStatus');
+    if (_chatTopStatusEl) {
+        _chatTopStatusEl.classList.remove('show');
+        _chatTopStatusEl.innerHTML = '';
+    }
     renderMessages();
 }
 
@@ -6926,7 +7051,11 @@ function saveCoupleDateReply(chatId, dateKey) {
     showToast('已保存');
 }
 
-var COUPLE_STATUS_TEXTS = ['忙碌', '空闲', '无所事事', '发呆', '摸鱼', '学习中', '休息中', '玩手机', '吃饭中', '睡觉中'];
+var COUPLE_STATUS_ONLINE_TEXTS = ['玩手机', '空闲', '看书', '追剧', '听歌', '打游戏', '外出', '散步', '吃饭', '闲聊', '发呆', '健身', '逛店', '骑车', '绘画', '写作', '摄影', '拼模型', '养花', '撸猫', '喝茶', '逛街', '野餐', '打球', '游泳', '露营', '练字', '剪辑视频', '逛论坛', '刷短视频', '逛博物馆', '爬山', '钓鱼', '烘焙', '手工', '弹琴', '吹笛', '逛公园', '等车', '喝咖啡', '整理房间', '拼拼图', '看漫画', '养植物', '喂宠物', '逛市集', '轮滑', '滑板', '羽毛球', '台球', '跑步', '跳绳', '做手账', '拆盲盒', '看话剧', '听音乐会', '逛展', '看纪录片', '写日记', '折纸', '泥塑', '想你', '短途出行', '坐公交', '等地铁', '品尝小吃', '看晚霞', '拍风景', '养水草', '逗小动物', '组装积木', '试衣服', '整理相册', '听播客', '猜谜', '桌游', '卡牌游戏', '放风筝', '写随笔', '泡温泉', '摘果子', '看烟花', '堆雪人', '打雪仗', '观星', '观鸟', '写生', '录短视频', '做沙画', '雕刻', '收集邮票', '养绿植', '逛旧货市场', '玩密室逃脱', '剧本杀', '射箭', '保龄球', '飞盘', '滑滑板', '划船', '泛舟', '喂鸽子', '逛动物园', '逛水族馆', '写卡片', '做香薰', '蜡烛手工', '染布', '编织', '扎染', '撸狗', '泡书店', '品尝甜品', '逛花店', '观展拍照', '玩魔方', '在你身边'];
+
+var COUPLE_STATUS_OFFLINE_TEXTS = ['工作', '开会', '学习', '睡觉', '休息', '开车', '就医', '处理事务', '写报告', '做手术', '谈事情', '出差', '赶方案', '训练', '值班', '写论文', '做实验', '洽谈业务', '抢修设备', '照顾病人', '进行手术', '答辩', '线上会议', '写合同', '长途驾驶', '项目攻坚', '野外作业', '现场勘查', '手术准备', '客户面谈'];
+
+var COUPLE_STATUS_TEXTS = ['玩手机', '空闲', '看书', '追剧', '听歌', '打游戏', '外出', '散步', '吃饭', '闲聊', '发呆', '健身', '逛店', '骑车', '绘画', '写作', '摄影', '拼模型', '养花', '撸猫', '喝茶', '逛街', '野餐', '打球', '游泳', '露营', '练字', '剪辑视频', '逛论坛', '刷短视频', '逛博物馆', '爬山', '钓鱼', '烘焙', '手工', '弹琴', '吹笛', '逛公园', '等车', '喝咖啡', '整理房间', '拼拼图', '看漫画', '养植物', '喂宠物', '逛市集', '轮滑', '滑板', '羽毛球', '台球', '跑步', '跳绳', '做手账', '拆盲盒', '看话剧', '听音乐会', '逛展', '看纪录片', '写日记', '折纸', '泥塑', '想你', '短途出行', '坐公交', '等地铁', '品尝小吃', '看晚霞', '拍风景', '养水草', '逗小动物', '组装积木', '试衣服', '整理相册', '听播客', '猜谜', '桌游', '卡牌游戏', '放风筝', '写随笔', '泡温泉', '摘果子', '看烟花', '堆雪人', '打雪仗', '观星', '观鸟', '写生', '录短视频', '做沙画', '雕刻', '收集邮票', '养绿植', '逛旧货市场', '玩密室逃脱', '剧本杀', '射箭', '保龄球', '飞盘', '滑滑板', '划船', '泛舟', '喂鸽子', '逛动物园', '逛水族馆', '写卡片', '做香薰', '蜡烛手工', '染布', '编织', '扎染', '撸狗', '泡书店', '品尝甜品', '逛花店', '观展拍照', '玩魔方', '在你身边', '工作', '开会', '学习', '睡觉', '休息', '开车', '就医', '处理事务', '写报告', '做手术', '谈事情', '出差', '赶方案', '训练', '值班', '写论文', '做实验', '洽谈业务', '抢修设备', '照顾病人', '进行手术', '答辩', '线上会议', '写合同', '长途驾驶', '项目攻坚', '野外作业', '现场勘查', '手术准备', '客户面谈'];
 
 function getTodayDateKey() {
     var now = new Date();
@@ -6943,17 +7072,18 @@ function ensureCoupleDayData(chatId, dateKey) {
     var changed = false;
 
     if (!cal[dateKey]) {
-        cal[dateKey] = {
-            timeDiff: generateTimeDiff(),
-            status: generateStatus(),
-            statusText: generateStatusText(),
-            message: generateCoupleMessage(friend),
-            myReply: '',
-            myReplyLocked: false,
-            statusUpdatedAt: Date.now()
-        };
-        changed = true;
-    } else {
+    var _newStatusText = generateStatusText();
+    cal[dateKey] = {
+        timeDiff: generateTimeDiff(),
+        status: generateStatusByText(_newStatusText),
+        statusText: _newStatusText,
+        message: generateCoupleMessage(friend),
+        myReply: '',
+        myReplyLocked: false,
+        statusUpdatedAt: Date.now()
+    };
+    changed = true;
+} else {
         var d = cal[dateKey];
         if (d.timeDiff === undefined || d.timeDiff === null) {
             d.timeDiff = generateTimeDiff();
@@ -6981,14 +7111,15 @@ function ensureCoupleDayData(chatId, dateKey) {
         }
 
         if (isToday) {
-            var last = d.statusUpdatedAt || 0;
-            if (Date.now() - last >= 30 * 60 * 1000) {
-                d.status = generateStatus();
-                d.statusText = generateStatusText();
-                d.statusUpdatedAt = Date.now();
-                changed = true;
-            }
-        } else {
+    var last = d.statusUpdatedAt || 0;
+    if (Date.now() - last >= 30 * 60 * 1000) {
+        var _updStatusText = generateStatusText();
+        d.status = generateStatusByText(_updStatusText);
+        d.statusText = _updStatusText;
+        d.statusUpdatedAt = Date.now();
+        changed = true;
+    }
+} else {
             if (d.myReplyLocked !== true) {
                 d.myReplyLocked = true;
                 changed = true;
@@ -7007,7 +7138,13 @@ function generateTimeDiff() {
 }
 
 function generateStatus() {
-    return Math.random() < 0.5 ? 'online' : 'offline';
+    return generateStatusByText(generateStatusText());
+}
+
+function generateStatusByText(text) {
+    if (COUPLE_STATUS_ONLINE_TEXTS.indexOf(text) !== -1) return 'online';
+    if (COUPLE_STATUS_OFFLINE_TEXTS.indexOf(text) !== -1) return 'offline';
+    return 'online';
 }
 
 function generateStatusText() {
@@ -7151,10 +7288,11 @@ function checkCoupleStatusCalendar() {
         var d = cal[todayKey];
 
         if (!d) {
+            var _chkNewStatusText = generateStatusText();
             cal[todayKey] = {
                 timeDiff: generateTimeDiff(),
-                status: generateStatus(),
-                statusText: generateStatusText(),
+                status: generateStatusByText(_chkNewStatusText),
+                statusText: _chkNewStatusText,
                 message: generateCoupleMessage(friend),
                 myReply: '',
                 myReplyLocked: false,
@@ -7175,13 +7313,14 @@ function checkCoupleStatusCalendar() {
                 changed = true;
             }
             if (d.status === undefined) {
-                d.status = generateStatus();
+                d.status = generateStatusByText(d.statusText);
                 changed = true;
             }
             var last = d.statusUpdatedAt || 0;
             if (Date.now() - last >= 30 * 60 * 1000) {
-                d.status = generateStatus();
-                d.statusText = generateStatusText();
+                var _chkUpdStatusText = generateStatusText();
+                d.status = generateStatusByText(_chkUpdStatusText);
+                d.statusText = _chkUpdStatusText;
                 d.statusUpdatedAt = Date.now();
                 changed = true;
             }
@@ -21163,14 +21302,6 @@ function handleVisualViewport() {
         var keyboardHeight = window.innerHeight - viewport.height;
         if (keyboardHeight > 100) {
             app.style.height = viewport.height + 'px';
-            var chatInputArea = document.querySelector('.chat-input-area');
-            if (chatInputArea) {
-                chatInputArea.style.position = 'fixed';
-                chatInputArea.style.bottom = '0';
-                chatInputArea.style.left = '0';
-                chatInputArea.style.right = '0';
-                chatInputArea.style.zIndex = '100';
-            }
             var chatMessages = document.getElementById('chatMessages');
             if (chatMessages) {
                 setTimeout(function() {
@@ -21179,14 +21310,6 @@ function handleVisualViewport() {
             }
         } else {
             app.style.height = '';
-            var chatInputArea2 = document.querySelector('.chat-input-area');
-            if (chatInputArea2) {
-                chatInputArea2.style.position = '';
-                chatInputArea2.style.bottom = '';
-                chatInputArea2.style.left = '';
-                chatInputArea2.style.right = '';
-                chatInputArea2.style.zIndex = '';
-            }
         }
     }
 
