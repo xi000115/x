@@ -2120,6 +2120,9 @@ try {
     startChatTopStatusTimer(chatId);
     startAutoStartTimer();
     startChatSessionTimer(chatId);
+    if (window.visualViewport) {
+        handleVisualViewport();
+    }
 }
 // ====== 会话装扮独立设置（所有会话通用） ======
 function getChatStyle(chatId) {
@@ -3059,6 +3062,8 @@ if (m.isPayRequest && m.payRequestId) {
     }
 } else if (m.isHongbaoResult && m.hongbaoId) {
     msgContent = renderHongbaoResultCard(m.hongbaoId, m.resultType);
+} else if (m.isHelpRequest && m.helpRequestId) {
+    msgContent = renderHelpRequestCard(m.helpRequestId);
 } else if (m.isImage && m.imageData) {
     msgContent = '<img src="' + m.imageData + '" style="max-width:64px;max-height:64px;border-radius:8px;display:block;margin:0 auto;">';
 } else if (m.text && m.text.indexOf('<img') !== -1) {
@@ -3070,7 +3075,7 @@ if (m.isPayRequest && m.payRequestId) {
         var longPressAttr = ' oncontextmenu="return false;"';
 
         if (isMe) {
-            var isBubbleCard = (m.isHongbaoCard || m.isHongbaoResult);
+            var isBubbleCard = (m.isHongbaoCard || m.isHongbaoResult || m.isHelpRequest);
             if (isBubbleCard) {
                 html += '<div' + msgIdAttr + longPressAttr + ' class="chat-msg-row" data-from="me" style="display:flex;justify-content:flex-end;margin-bottom:14px;">' +
                     '<div style="display:flex;flex-direction:column;align-items:flex-end;max-width:100%;min-width:0;">' +
@@ -3103,7 +3108,7 @@ if (m.isPayRequest && m.payRequestId) {
             '</div>';
             }
         } else {
-            var isBubbleCardOther = (m.isHongbaoCard || m.isHongbaoResult);
+            var isBubbleCardOther = (m.isHongbaoCard || m.isHongbaoResult || m.isHelpRequest);
             if (isBubbleCardOther) {
                 html += '<div' + msgIdAttr + longPressAttr + ' class="chat-msg-row" data-from="other" style="display:flex;justify-content:flex-start;margin-bottom:14px;">' +
                     '<div style="display:flex;flex-direction:column;align-items:flex-start;max-width:100%;min-width:0;">' +
@@ -3896,12 +3901,13 @@ function runChatroomReplyRound(chatId, triggerProb) {
             var _minTotal = _count * 0.01;
             if (_friendBalance >= _minTotal && _friendBalance >= 1) {
                 var _mode = Math.random() < 0.5 ? 'lucky' : 'normal';
-                var _maxAmt = Math.min(_friendBalance, 200);
-                var _amount = Math.round((_minTotal + Math.random() * (_maxAmt - _minTotal)) * 100) / 100;
-                if (_amount >= _minTotal) {
-                    sendGroupRedpacketByFriend(chatId, memberId, _mode, _amount);
-                    return;
-                }
+var _amount = Math.round((0.01 + Math.random() * (_friendBalance - 0.01)) * 100) / 100;
+if (_amount < _minTotal) _amount = _minTotal;
+if (_amount > _friendBalance) _amount = Math.round(_friendBalance * 100) / 100;
+if (_amount >= _minTotal) {
+    sendGroupRedpacketByFriend(chatId, memberId, _mode, _amount);
+    return;
+}
             }
         }
 
@@ -6821,15 +6827,19 @@ function openCouplePiggyPage(chatId) {
             '</div>' +
             '<span>零钱罐</span>' +
         '</div>' +
-        '<div class="sub-content" style="padding:16px;overflow-y:auto;pointer-events:auto;flex:1;">' +
-            renderPiggyJar(balance) +
-            '<div style="text-align:center;margin:16px 0 4px 0;">' +
-                '<div style="font-size:13px;color:#999999;">余额</div>' +
-                '<div style="font-size:32px;font-weight:600;color:#000000;">¥' + balance.toFixed(2) + '</div>' +
+        '<div style="flex:1;min-height:0;position:relative;overflow:hidden;">' +
+            '<div style="position:absolute;top:0;left:0;right:0;bottom:110px;padding:8px 16px 0 16px;box-sizing:border-box;">' +
+                renderPiggyJar(balance) +
             '</div>' +
-            '<div style="display:flex;gap:8px;margin-top:16px;">' +
-                '<button class="btn-primary" onclick="showPiggyDepositModal(\'' + chatId + '\')" style="flex:1;padding:10px 0;">存入</button>' +
-                '<button class="btn-icon" onclick="openPiggyStatsPage(\'' + chatId + '\')" style="flex:1;padding:10px 0;">统计</button>' +
+            '<div style="position:absolute;left:0;right:0;bottom:0;height:110px;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:8px;padding:0 16px;box-sizing:border-box;">' +
+                '<div style="text-align:center;">' +
+                    '<span style="font-size:13px;color:#999999;">余额 </span>' +
+                    '<span style="font-size:22px;font-weight:600;color:#000000;">¥' + balance.toFixed(2) + '</span>' +
+                '</div>' +
+                '<div style="display:flex;gap:8px;width:100%;">' +
+                    '<button class="btn-primary" onclick="showPiggyDepositModal(\'' + chatId + '\')" style="flex:1;padding:10px 0;">存入</button>' +
+                    '<button class="btn-icon" onclick="openPiggyStatsPage(\'' + chatId + '\')" style="flex:1;padding:10px 0;">统计</button>' +
+                '</div>' +
             '</div>' +
         '</div>' +
     '</div>';
@@ -9100,6 +9110,35 @@ window.saveCustomBalance = saveCustomBalance;
 window.showCustomFlowModal = showCustomFlowModal;
 window.saveCustomFlow = saveCustomFlow;
 
+// 按概率抽随机收支金额，跟余额无关
+function getRandomDailyAmount() {
+    var tiers = [
+        { min: 0.01,        max: 100,             probMin: 0.20, probMax: 0.30 },
+        { min: 100,         max: 1000,            probMin: 0.15, probMax: 0.20 },
+        { min: 1000,        max: 1000000,         probMin: 0.10, probMax: 0.15 },
+        { min: 1000000,     max: 10000000,        probMin: 0.05, probMax: 0.10 },
+        { min: 10000000,    max: 10000000000,     probMin: 0.01, probMax: 0.05 },
+        { min: 10000000000, max: 1000000000000,   probMin: 0,    probMax: 0.01 }
+    ];
+
+    var hits = [];
+    for (var i = 0; i < tiers.length; i++) {
+        var t = tiers[i];
+        var prob = t.probMin + Math.random() * (t.probMax - t.probMin);
+        if (Math.random() < prob) {
+            hits.push(t);
+        }
+    }
+
+    if (hits.length === 0) return null;
+
+    var tier = hits[Math.floor(Math.random() * hits.length)];
+    var amount = tier.min + Math.random() * (tier.max - tier.min);
+    amount = Math.round(amount * 100) / 100;
+    if (amount < 0.01) amount = 0.01;
+    return amount;
+}
+
 function ensureFriendDailyRandomFlow(chatId) {
     if (!chatId) return;
     var friends = DataHub.get('friends', []);
@@ -9111,10 +9150,17 @@ function ensureFriendDailyRandomFlow(chatId) {
     if (!log[chatId]) log[chatId] = {};
     if (log[chatId].date === today) return;
 
-    var amount = Math.round((Math.random() * 2000 - 1000) * 100) / 100;
-    if (amount === 0) amount = 0.01;
+    var amount = getRandomDailyAmount();
+if (amount === null) {
+    log[chatId] = { date: today, flowId: null, amount: 0 };
+    DataHub.set('friendDailyRandomLog', log);
+    return;
+}
+var sign = Math.random() < 0.5 ? 1 : -1;
+amount = amount * sign;
+if (amount === 0) amount = 0.01;
 
-    var now = new Date();
+var now = new Date();
     var time = now.getFullYear() + '.' + String(now.getMonth()+1).padStart(2,'0') + '.' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
 
     var flow = {
@@ -14360,7 +14406,7 @@ function renderMallManagePage() {
         var chat = getChat(currentChatId);
         if (chat) friendName = chat.name || '';
     }
-    return '<div class="sub-page active" style="pointer-events:auto;display:flex;flex-direction:column;">' +
+    return '<div class="sub-page active" style="z-index:60;background:#ffffff;position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:auto;display:flex;flex-direction:column;">' +
         '<div class="sub-top">' +
             '<div class="back-btn" onclick="closeSubPage()">' +
                 '<svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>' +
@@ -14455,12 +14501,12 @@ function renderMallManageProducts() {
         var buyBtn = '';
         var collectBtn = '';
         if (currentChatId) {
-            buyBtn = '<button class="btn-primary" onclick="showBuyProductModal(\'' + p.id + '\')" style="padding:4px 16px;font-size:12px;">购买</button>';
+            buyBtn = '<button class="btn-primary mall-buy-btn" data-pid="' + p.id + '" style="padding:4px 16px;font-size:12px;">购买</button>';
             var collected = isProductCollectedByFriend(currentChatId, p.id);
             if (collected) {
-                collectBtn = '<button class="btn-icon" onclick="handleToggleCollect(\'' + p.id + '\')" style="padding:4px 12px;font-size:12px;">已收藏</button>';
+                collectBtn = '<button class="btn-icon mall-collect-btn" data-pid="' + p.id + '" style="padding:4px 12px;font-size:12px;">已收藏</button>';
             } else {
-                collectBtn = '<button class="btn-icon" onclick="handleToggleCollect(\'' + p.id + '\')" style="padding:4px 12px;font-size:12px;">收藏</button>';
+                collectBtn = '<button class="btn-icon mall-collect-btn" data-pid="' + p.id + '" style="padding:4px 12px;font-size:12px;">收藏</button>';
             }
         }
         html += '<div class="mall-product-item" data-id="' + p.id + '" style="background:#ffffff;border-radius:12px;padding:12px;margin-bottom:8px;border:1px solid #eef5ef;display:flex;gap:10px;">' +
@@ -14475,13 +14521,63 @@ function renderMallManageProducts() {
         '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">' +
             buyBtn +
             collectBtn +
-            '<button class="btn-icon" onclick="showEditProductModal(\'' + p.id + '\')" style="padding:4px 12px;font-size:12px;">编辑</button>' +
-            '<button class="btn-icon" onclick="confirmDeleteMallProduct(\'' + p.id + '\')" style="padding:4px 12px;font-size:12px;">删除</button>' +
+            '<button class="btn-icon mall-edit-btn" data-pid="' + p.id + '" style="padding:4px 12px;font-size:12px;">编辑</button>' +
+            '<button class="btn-icon mall-delete-btn" data-pid="' + p.id + '" style="padding:4px 12px;font-size:12px;">删除</button>' +
         '</div>' +
     '</div>' +
 '</div>';
     }
     container.innerHTML = html;
+
+    // 事件委托：购买
+    var buyBtns = container.querySelectorAll('.mall-buy-btn');
+    for (var bi = 0; bi < buyBtns.length; bi++) {
+        buyBtns[bi].addEventListener('click', function(e) {
+            e.stopPropagation();
+            var pid = this.getAttribute('data-pid');
+            if (typeof showBuyProductModal === 'function') {
+                showBuyProductModal(pid);
+            } else {
+                showToast('购买功能未加载');
+            }
+        });
+    }
+
+    // 事件委托：收藏/取消收藏
+    var collectBtns = container.querySelectorAll('.mall-collect-btn');
+    for (var ci = 0; ci < collectBtns.length; ci++) {
+        collectBtns[ci].addEventListener('click', function(e) {
+            e.stopPropagation();
+            var pid = this.getAttribute('data-pid');
+            if (typeof handleToggleCollect === 'function') {
+                handleToggleCollect(pid);
+            }
+        });
+    }
+
+    // 事件委托：编辑
+    var editBtns = container.querySelectorAll('.mall-edit-btn');
+    for (var ei = 0; ei < editBtns.length; ei++) {
+        editBtns[ei].addEventListener('click', function(e) {
+            e.stopPropagation();
+            var pid = this.getAttribute('data-pid');
+            if (typeof showEditProductModal === 'function') {
+                showEditProductModal(pid);
+            }
+        });
+    }
+
+    // 事件委托：删除
+    var delBtns = container.querySelectorAll('.mall-delete-btn');
+    for (var di = 0; di < delBtns.length; di++) {
+        delBtns[di].addEventListener('click', function(e) {
+            e.stopPropagation();
+            var pid = this.getAttribute('data-pid');
+            if (typeof confirmDeleteMallProduct === 'function') {
+                confirmDeleteMallProduct(pid);
+            }
+        });
+    }
 }
 
 // 处理收藏/取消收藏按钮点击
@@ -18407,19 +18503,126 @@ function piggyPayForPurchase(friendId, amount, payer, forWhom, productInfo, note
     return true;
 }
 
-// 罐子动画：彩色玻璃珠堆叠
+// 罐子动画：高胖玻璃罐（矮瓶口 + 圆饼木塞塞一半）+ 金色小金币从底部堆叠
 function renderPiggyJar(balance) {
-    var beadValue = 10;
-    var beadCount = Math.floor(balance / beadValue);
-    if (beadCount > 200) beadCount = 200;
-    if (beadCount < 0) beadCount = 0;
-    var colors = ['#e8a0a0', '#f0c8a0', '#f0e0a0', '#a8d8a0', '#a0d8d8', '#a0b8e8', '#c8a8e8', '#e8a8d8'];
-    var html = '<div style="width:100%;height:180px;background:linear-gradient(180deg, #f8fbf8 0%, #eef5ef 100%);border-radius:16px;position:relative;overflow:hidden;border:2px solid #d4e4d6;">';
-    html += '<div style="position:absolute;left:0;right:0;bottom:0;padding:6px;display:flex;flex-wrap:wrap-reverse;justify-content:center;gap:3px;align-content:flex-end;height:100%;box-sizing:border-box;">';
-    for (var i = 0; i < beadCount; i++) {
-        var c = colors[i % colors.length];
-        html += '<div style="width:14px;height:14px;border-radius:50%;background:' + c + ';box-shadow:inset -2px -2px 3px rgba(0,0,0,0.12), inset 2px 2px 3px rgba(255,255,255,0.6);flex-shrink:0;"></div>';
+    var coinCount = 0;
+    var b = balance || 0;
+    if (b > 0) {
+        if (b <= 10000) {
+            coinCount = Math.floor(b / 100);
+        } else {
+            coinCount = 100 + Math.floor((b - 10000) / 1000);
+        }
     }
+    if (coinCount > 200) coinCount = 200;
+    if (coinCount < 0) coinCount = 0;
+
+    // 画布 220 x 320（竖长，配合容器 slice 撑满）
+    // 木塞露在瓶口外 y 36~56；木塞插入瓶口内 y 56~76（透过玻璃可见，偏棕透绿）
+    // 瓶口外凸环 y 50~62（矮环）；短颈 y 62~80；圆肩 y 80~104；直筒瓶身 y 104~290（圆角平底）
+    // 金币从瓶底往上堆，瓶底中心 (110, 278)
+    var perRow = 14;
+    var coinR = 5;
+    var gapX = 11;
+    var gapY = 11;
+    var baseX = 110;
+    var baseY = 278;
+    var coinsSvg = '';
+    for (var i = 0; i < coinCount; i++) {
+        var row = Math.floor(i / perRow);
+        var col = i % perRow;
+        var rowCount = Math.min(perRow, coinCount - row * perRow);
+        var offsetX = (col - (rowCount - 1) / 2) * gapX;
+        var cx = baseX + offsetX;
+        var cy = baseY - row * gapY;
+        coinsSvg += '<circle cx="' + cx + '" cy="' + cy + '" r="' + coinR + '" fill="url(#piggyCoin)" stroke="#b8860b" stroke-width="0.6"/>';
+        coinsSvg += '<ellipse cx="' + (cx - 1.4) + '" cy="' + (cy - 1.6) + '" rx="1.6" ry="1.2" fill="rgba(255,255,255,0.85)"/>';
+    }
+
+    var html = '';
+    html += '<div style="width:100%;height:100%;position:relative;display:flex;align-items:center;justify-content:center;">';
+
+    // 淡绿色外发光跟随主题色
+html += '<div style="position:absolute;inset:0;filter:drop-shadow(0 0 14px var(--theme-main, #d4e9d6)) drop-shadow(0 0 28px var(--theme-lighter, #eef5ef));pointer-events:none;">';
+
+    html += '<svg viewBox="0 0 220 320" style="width:100%;height:100%;" preserveAspectRatio="none">';
+    html += '<defs>';
+    html += '<linearGradient id="piggyGlassBody" x1="0" y1="0" x2="1" y2="0">';
+    html += '<stop offset="0%" stop-color="rgba(215,235,222,0.85)"/>';
+    html += '<stop offset="14%" stop-color="rgba(248,253,250,0.50)"/>';
+    html += '<stop offset="40%" stop-color="rgba(235,247,240,0.30)"/>';
+    html += '<stop offset="72%" stop-color="rgba(225,242,232,0.35)"/>';
+    html += '<stop offset="100%" stop-color="rgba(195,225,208,0.85)"/>';
+    html += '</linearGradient>';
+    html += '<linearGradient id="piggyRim" x1="0" y1="0" x2="1" y2="0">';
+    html += '<stop offset="0%" stop-color="rgba(195,225,208,0.90)"/>';
+    html += '<stop offset="30%" stop-color="rgba(252,255,253,0.95)"/>';
+    html += '<stop offset="100%" stop-color="rgba(195,225,208,0.90)"/>';
+    html += '</linearGradient>';
+    html += '<linearGradient id="piggyCork" x1="0" y1="0" x2="1" y2="0">';
+    html += '<stop offset="0%" stop-color="#d9a86b"/>';
+    html += '<stop offset="22%" stop-color="#ecc088"/>';
+    html += '<stop offset="50%" stop-color="#f0cd9a"/>';
+    html += '<stop offset="78%" stop-color="#e0b078"/>';
+    html += '<stop offset="100%" stop-color="#c8945a"/>';
+    html += '</linearGradient>';
+    html += '<linearGradient id="piggyCorkUnderGlass" x1="0" y1="0" x2="1" y2="0">';
+    html += '<stop offset="0%" stop-color="rgba(180,150,110,0.90)"/>';
+    html += '<stop offset="30%" stop-color="rgba(210,185,145,0.85)"/>';
+    html += '<stop offset="60%" stop-color="rgba(200,180,140,0.80)"/>';
+    html += '<stop offset="100%" stop-color="rgba(165,140,100,0.90)"/>';
+    html += '</linearGradient>';
+    html += '<radialGradient id="piggyCoin" cx="35%" cy="30%" r="70%">';
+    html += '<stop offset="0%" stop-color="#fff0b0"/>';
+    html += '<stop offset="55%" stop-color="#f0c040"/>';
+    html += '<stop offset="100%" stop-color="#c8901a"/>';
+    html += '</radialGradient>';
+    html += '</defs>';
+
+    // 1. 瓶身（含短颈和圆肩，一体路径，圆角平底）
+    html += '<path d="M58 62 L58 80 Q58 92 40 104 Q22 120 22 146 L22 276 Q22 290 36 290 L184 290 Q198 290 198 276 L198 146 Q198 120 180 104 Q162 92 162 80 L162 62 Z" fill="url(#piggyGlassBody)" stroke="#a8c8b0" stroke-width="2.5"/>';
+
+    // 2. 金币层（画在瓶身内，从瓶底往上堆）
+    html += '<g>' + coinsSvg + '</g>';
+
+    // 3. 瓶口外凸环（矮环，一圈略粗的玻璃）
+    html += '<rect x="52" y="50" width="116" height="12" rx="5" fill="url(#piggyRim)" stroke="#a8c8b0" stroke-width="2"/>';
+
+    // 4. 木塞插入瓶口段（先画，会被外凸环和玻璃盖住一部分）：偏棕透绿
+    html += '<rect x="74" y="56" width="72" height="20" fill="url(#piggyCorkUnderGlass)"/>';
+    // 插入段的木纹（透过玻璃可见）
+    html += '<path d="M82 60 Q88 68 82 74" fill="none" stroke="rgba(120,85,45,0.30)" stroke-width="1" stroke-linecap="round"/>';
+    html += '<path d="M138 60 Q132 68 138 74" fill="none" stroke="rgba(120,85,45,0.30)" stroke-width="1" stroke-linecap="round"/>';
+
+    // 5. 木塞露出瓶口外段（画在上面，清晰可见）
+    // 木塞顶面
+    html += '<ellipse cx="110" cy="36" rx="36" ry="6" fill="url(#piggyCork)" stroke="#a87540" stroke-width="1.2"/>';
+    // 木塞侧面
+    html += '<rect x="74" y="36" width="72" height="22" fill="url(#piggyCork)" stroke="#a87540" stroke-width="1.2"/>';
+    // 木塞顶面木纹
+    html += '<path d="M84 34 Q96 31 108 35" fill="none" stroke="rgba(140,95,45,0.45)" stroke-width="1.1" stroke-linecap="round"/>';
+    html += '<path d="M112 36 Q124 33 136 37" fill="none" stroke="rgba(140,95,45,0.40)" stroke-width="1.1" stroke-linecap="round"/>';
+    html += '<path d="M90 39 Q102 36 114 40" fill="none" stroke="rgba(140,95,45,0.35)" stroke-width="1" stroke-linecap="round"/>';
+    html += '<path d="M98 43 Q110 40 122 44" fill="none" stroke="rgba(140,95,45,0.30)" stroke-width="1" stroke-linecap="round"/>';
+    // 木塞侧面木纹
+    html += '<path d="M82 42 Q88 48 82 54" fill="none" stroke="rgba(140,95,45,0.32)" stroke-width="1" stroke-linecap="round"/>';
+    html += '<path d="M138 42 Q132 48 138 54" fill="none" stroke="rgba(140,95,45,0.32)" stroke-width="1" stroke-linecap="round"/>';
+
+    // 6. 瓶口外凸环前侧的一条弧线（只这一条，前侧）
+    html += '<path d="M52 62 Q52 70 110 70 Q168 70 168 62" fill="none" stroke="#a8c8b0" stroke-width="2"/>';
+
+    // 7. 瓶身高光（左侧大反光，柔和）
+    html += '<path d="M42 150 Q36 200 44 265" fill="none" stroke="rgba(255,255,255,0.9)" stroke-width="9" stroke-linecap="round"/>';
+    // 瓶身高光（左侧小反光）
+    html += '<path d="M60 155 Q56 190 60 230" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="4" stroke-linecap="round"/>';
+    // 圆肩高光
+    html += '<path d="M64 108 Q52 124 46 144" fill="none" stroke="rgba(255,255,255,0.65)" stroke-width="3.5" stroke-linecap="round"/>';
+    // 瓶颈高光
+    html += '<path d="M64 74 L64 96" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="3" stroke-linecap="round"/>';
+    // 右侧暗面（直筒）
+    html += '<path d="M178 150 Q184 200 176 265" fill="none" stroke="rgba(150,190,165,0.30)" stroke-width="7" stroke-linecap="round"/>';
+
+    html += '</svg>';
     html += '</div>';
     html += '</div>';
     return html;
@@ -19214,6 +19417,76 @@ window.buyProduct = buyProduct;
 window.addPurchasedItem = addPurchasedItem;
 window.doFriendRandomShopping = doFriendRandomShopping;
 
+// ====== 求助请求数据操作 ======
+function getHelpRequests() {
+    var list = DataHub.get('helpRequests', null);
+    if (!list) {
+        list = [];
+        DataHub.set('helpRequests', list);
+    }
+    return list;
+}
+
+function saveHelpRequests(list) {
+    DataHub.set('helpRequests', list);
+}
+
+function findHelpRequest(id) {
+    if (!id) return null;
+    var list = getHelpRequests();
+    for (var i = 0; i < list.length; i++) {
+        if (list[i].id === id) return list[i];
+    }
+    return null;
+}
+
+window.getHelpRequests = getHelpRequests;
+window.findHelpRequest = findHelpRequest;
+
+// ====== 切换购买模式 ======
+function selectBuyMode(mode) {
+    if (!window._buyDraft) {
+        window._buyDraft = { mode: 'self', paidFrom: 'balance', paidFromFriendId: '' };
+    }
+    window._buyDraft.mode = mode;
+
+    if (mode === 'help') {
+        var mall = getMallData();
+        var pid = window._buyCurrentProductId || '';
+        closeModal();
+        setTimeout(function() {
+            showHelpRequestPreview(pid);
+        }, 200);
+        return;
+    }
+
+    if (mode === 'forfriend') {
+        window._buyDraft.paidFrom = 'balance';
+        window._buyDraft.paidFromFriendId = '';
+    } else {
+        window._buyDraft.paidFrom = 'balance';
+        window._buyDraft.paidFromFriendId = '';
+    }
+
+    var btns = document.querySelectorAll('.buy-mode-btn');
+    for (var i = 0; i < btns.length; i++) {
+        if (btns[i].getAttribute('data-mode') === mode) {
+            btns[i].style.border = '2px solid var(--theme-main, #d4e9d6)';
+            btns[i].style.background = 'var(--theme-lighter, #eef5ef)';
+        } else {
+            btns[i].style.border = '2px solid transparent';
+            btns[i].style.background = '#f8f8f8';
+        }
+    }
+
+    var payContainer = document.getElementById('buyPayOptions');
+    if (payContainer) {
+        payContainer.innerHTML = renderBuyPayOptions();
+    }
+}
+
+window.selectBuyMode = selectBuyMode;
+
 // ====== 购买弹窗 ======
 function showBuyProductModal(productId) {
     if (!currentChatId) {
@@ -19226,43 +19499,31 @@ function showBuyProductModal(productId) {
     var friends = DataHub.get('friends', []);
     var friend = friends.find(function(f) { return f.id === currentChatId; });
     if (!friend) return;
-    var friendName = friend.name || '好友';
-
-    var myBalance = getAccountBalance('my');
-    var friendBalance = getAccountBalance('friend:' + currentChatId);
-    var piggy = getPiggyData(currentChatId);
-    var piggyBalance = piggy.balance || 0;
+    var friendName = getFriendSpecialName(currentChatId);
 
     var price = product.price || 0;
-
     var imgHtml = renderProductImage(product);
 
     var html = '<div class="modal-title">购买 ' + (product.name || '') + '</div>' +
-    '<div style="display:flex;gap:10px;margin-bottom:12px;">' +
-        '<div style="width:80px;flex-shrink:0;">' + imgHtml + '</div>' +
-        '<div style="flex:1;min-width:0;">' +
-            '<div style="font-size:14px;font-weight:600;color:#000000;word-break:break-all;">' + (product.name || '') + '</div>' +
-            '<div style="font-size:16px;font-weight:600;color:#000000;margin-top:4px;">¥' + price.toFixed(2) + '</div>' +
-            (product.description ? '<div style="font-size:12px;color:#999999;margin-top:4px;word-break:break-word;">' + product.description + '</div>' : '') +
-        '</div>' +
-    '</div>' +
 
-        '<div style="font-size:13px;color:#999999;margin-bottom:6px;">谁来买</div>' +
-        '<div style="display:flex;gap:8px;margin-bottom:12px;">' +
-            '<div class="buy-option-buyer" data-buyer="me" onclick="selectBuyerOption(\'me\')" style="flex:1;padding:8px;text-align:center;border:2px solid var(--theme-main, #d4e9d6);border-radius:10px;cursor:pointer;background:var(--theme-lighter, #eef5ef);font-size:13px;color:#000000;">我买</div>' +
-            '<div class="buy-option-buyer" data-buyer="friend" onclick="selectBuyerOption(\'friend\')" style="flex:1;padding:8px;text-align:center;border:2px solid transparent;border-radius:10px;cursor:pointer;background:#f8f8f8;font-size:13px;color:#000000;">' + friendName + '买</div>' +
+        '<div style="display:flex;gap:10px;margin-bottom:16px;">' +
+            '<div style="width:80px;height:80px;flex-shrink:0;">' + imgHtml + '</div>' +
+            '<div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;">' +
+                '<div style="font-size:14px;font-weight:600;color:#000000;word-break:break-all;">' + (product.name || '') + '</div>' +
+                '<div style="font-size:16px;font-weight:600;color:#000000;margin-top:4px;">¥' + price.toFixed(2) + '</div>' +
+                (product.description ? '<div style="font-size:12px;color:#999999;margin-top:4px;word-break:break-word;">' + product.description + '</div>' : '') +
+            '</div>' +
         '</div>' +
 
-        '<div style="font-size:13px;color:#999999;margin-bottom:6px;">买给谁</div>' +
-        '<div style="display:flex;gap:8px;margin-bottom:12px;">' +
-            '<div class="buy-option-forwhom" data-forwhom="self" onclick="selectForWhomOption(\'self\')" style="flex:1;padding:8px;text-align:center;border:2px solid var(--theme-main, #d4e9d6);border-radius:10px;cursor:pointer;background:var(--theme-lighter, #eef5ef);font-size:13px;color:#000000;">给自己</div>' +
-            '<div class="buy-option-forwhom" data-forwhom="friend" onclick="selectForWhomOption(\'friend\')" style="flex:1;padding:8px;text-align:center;border:2px solid transparent;border-radius:10px;cursor:pointer;background:#f8f8f8;font-size:13px;color:#000000;">给' + friendName + '</div>' +
+        '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">' +
+            '<div class="buy-mode-btn" data-mode="self" onclick="selectBuyMode(\'self\')" style="padding:12px;text-align:center;border:2px solid var(--theme-main, #d4e9d6);border-radius:10px;cursor:pointer;background:var(--theme-lighter, #eef5ef);font-size:14px;color:#000000;font-weight:500;">自己购买</div>' +
+            '<div class="buy-mode-btn" data-mode="forfriend" onclick="selectBuyMode(\'forfriend\')" style="padding:12px;text-align:center;border:2px solid transparent;border-radius:10px;cursor:pointer;background:#f8f8f8;font-size:14px;color:#000000;font-weight:500;">买给' + friendName + '</div>' +
+            '<div class="buy-mode-btn" data-mode="help" onclick="selectBuyMode(\'help\')" style="padding:12px;text-align:center;border:2px solid transparent;border-radius:10px;cursor:pointer;background:#f8f8f8;font-size:14px;color:#000000;font-weight:500;">求助' + friendName + '</div>' +
         '</div>' +
 
-        '<div style="font-size:13px;color:#999999;margin-bottom:6px;">支付方式</div>' +
-        '<div id="buyPayOptions">' + renderBuyPayOptions() + '</div>' +
+        '<div id="buyPayOptions" style="margin-bottom:12px;">' + renderBuyPayOptions() + '</div>' +
 
-        '<div class="btn-row" style="margin-top:12px;">' +
+        '<div class="btn-row">' +
             '<button class="cancel" onclick="closeModal()">取消</button>' +
             '<button class="confirm" onclick="confirmBuyProduct(\'' + productId + '\')">确认购买</button>' +
         '</div>';
@@ -19270,112 +19531,538 @@ function showBuyProductModal(productId) {
     showModal(html);
 
     window._buyDraft = {
-        buyer: 'me',
-        forWhom: 'self',
+        mode: 'self',
         paidFrom: 'balance',
         paidFromFriendId: ''
     };
+    window._buyCurrentProductId = productId;
 }
 
-// 渲染支付方式选项（根据当前 buyer 和 forWhom 动态）
+window.showBuyProductModal = showBuyProductModal;
+
+// 渲染支付方式选项（根据当前购买模式动态）
 function renderBuyPayOptions() {
-    var draft = window._buyDraft || { buyer: 'me', forWhom: 'self', paidFrom: 'balance', paidFromFriendId: '' };
+    var draft = window._buyDraft || { mode: 'self', paidFrom: 'balance', paidFromFriendId: '' };
     if (!currentChatId) return '';
     var friends = DataHub.get('friends', []);
     var friend = friends.find(function(f) { return f.id === currentChatId; });
     if (!friend) return '';
-    var friendName = friend.name || '好友';
+    var friendName = getFriendSpecialName(currentChatId);
 
     var myBalance = getAccountBalance('my');
-    var friendBalance = getAccountBalance('friend:' + currentChatId);
     var piggy = getPiggyData(currentChatId);
     var piggyBalance = piggy.balance || 0;
 
+    if (draft.mode === 'forfriend') {
+        return '';
+    }
+
+    if (draft.mode === 'help') {
+        return '';
+    }
+
     var html = '';
-
-    if (draft.buyer === 'me') {
-        // 我买：我的余额 或 好友的零钱罐（替好友付？不，我买给自己/给他）
-        // 我给自己的话：我的余额 / 好友零钱罐（如果这罐子我存过钱）
-        // 我给他的时候：我的余额 / 好友零钱罐
-        // 简化：都显示我的余额 + 好友零钱罐
-        var activeBalance = (draft.paidFrom === 'balance');
-        html += '<div class="buy-option-pay" data-pay="balance" onclick="selectPayOption(\'balance\',\'\')" style="padding:10px;border:2px solid ' + (activeBalance ? 'var(--theme-main, #d4e9d6)' : 'transparent') + ';border-radius:10px;cursor:pointer;background:' + (activeBalance ? 'var(--theme-lighter, #eef5ef)' : '#f8f8f8') + ';margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;">' +
-            '<span style="font-size:13px;color:#000000;">我的余额</span>' +
-            '<span style="font-size:13px;color:#999999;">¥' + myBalance.toFixed(2) + '</span>' +
-        '</div>';
-        var activePiggy = (draft.paidFrom === 'piggy');
-        html += '<div class="buy-option-pay" data-pay="piggy" onclick="selectPayOption(\'piggy\',\'' + currentChatId + '\')" style="padding:10px;border:2px solid ' + (activePiggy ? 'var(--theme-main, #d4e9d6)' : 'transparent') + ';border-radius:10px;cursor:pointer;background:' + (activePiggy ? 'var(--theme-lighter, #eef5ef)' : '#f8f8f8') + ';margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;">' +
-            '<span style="font-size:13px;color:#000000;">' + friendName + '的零钱罐</span>' +
-            '<span style="font-size:13px;color:#999999;">¥' + piggyBalance.toFixed(2) + '</span>' +
-        '</div>';
-    } else {
-        // 好友买：他的余额 或 他的零钱罐
-        var activeBalance2 = (draft.paidFrom === 'balance');
-        html += '<div class="buy-option-pay" data-pay="balance" onclick="selectPayOption(\'balance\',\'\')" style="padding:10px;border:2px solid ' + (activeBalance2 ? 'var(--theme-main, #d4e9d6)' : 'transparent') + ';border-radius:10px;cursor:pointer;background:' + (activeBalance2 ? 'var(--theme-lighter, #eef5ef)' : '#f8f8f8') + ';margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;">' +
-            '<span style="font-size:13px;color:#000000;">' + friendName + '的余额</span>' +
-            '<span style="font-size:13px;color:#999999;">¥' + friendBalance.toFixed(2) + '</span>' +
-        '</div>';
-        var activePiggy2 = (draft.paidFrom === 'piggy');
-        html += '<div class="buy-option-pay" data-pay="piggy" onclick="selectPayOption(\'piggy\',\'' + currentChatId + '\')" style="padding:10px;border:2px solid ' + (activePiggy2 ? 'var(--theme-main, #d4e9d6)' : 'transparent') + ';border-radius:10px;cursor:pointer;background:' + (activePiggy2 ? 'var(--theme-lighter, #eef5ef)' : '#f8f8f8') + ';margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;">' +
-            '<span style="font-size:13px;color:#000000;">' + friendName + '的零钱罐</span>' +
-            '<span style="font-size:13px;color:#999999;">¥' + piggyBalance.toFixed(2) + '</span>' +
-        '</div>';
-    }
-
+    var activeBalance = (draft.paidFrom === 'balance');
+    html += '<div class="buy-option-pay" data-pay="balance" onclick="selectPayOption(\'balance\',\'\')" style="padding:10px;border:2px solid ' + (activeBalance ? 'var(--theme-main, #d4e9d6)' : 'transparent') + ';border-radius:10px;cursor:pointer;background:' + (activeBalance ? 'var(--theme-lighter, #eef5ef)' : '#f8f8f8') + ';margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;">' +
+        '<span style="font-size:13px;color:#000000;">账户</span>' +
+        '<span style="font-size:13px;color:#999999;">¥' + myBalance.toFixed(2) + '</span>' +
+    '</div>';
+    var activePiggy = (draft.paidFrom === 'piggy');
+    html += '<div class="buy-option-pay" data-pay="piggy" onclick="selectPayOption(\'piggy\',\'' + currentChatId + '\')" style="padding:10px;border:2px solid ' + (activePiggy ? 'var(--theme-main, #d4e9d6)' : 'transparent') + ';border-radius:10px;cursor:pointer;background:' + (activePiggy ? 'var(--theme-lighter, #eef5ef)' : '#f8f8f8') + ';margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;">' +
+        '<span style="font-size:13px;color:#000000;">零钱罐</span>' +
+        '<span style="font-size:13px;color:#999999;">¥' + piggyBalance.toFixed(2) + '</span>' +
+    '</div>';
     return html;
-}
-
-// 选择 buyer
-function selectBuyerOption(buyer) {
-    if (!window._buyDraft) window._buyDraft = { buyer: 'me', forWhom: 'self', paidFrom: 'balance', paidFromFriendId: '' };
-    window._buyDraft.buyer = buyer;
-    window._buyDraft.paidFrom = 'balance';
-    window._buyDraft.paidFromFriendId = '';
-    var buyerEls = document.querySelectorAll('.buy-option-buyer');
-    for (var i = 0; i < buyerEls.length; i++) {
-        var el = buyerEls[i];
-        if (el.getAttribute('data-buyer') === buyer) {
-            el.style.border = '2px solid var(--theme-main, #d4e9d6)';
-            el.style.background = 'var(--theme-lighter, #eef5ef)';
-        } else {
-            el.style.border = '2px solid transparent';
-            el.style.background = '#f8f8f8';
-        }
-    }
-    var payContainer = document.getElementById('buyPayOptions');
-    if (payContainer) payContainer.innerHTML = renderBuyPayOptions();
-}
-
-// 选择 forWhom
-function selectForWhomOption(forWhom) {
-    if (!window._buyDraft) window._buyDraft = { buyer: 'me', forWhom: 'self', paidFrom: 'balance', paidFromFriendId: '' };
-    window._buyDraft.forWhom = forWhom;
-    var els = document.querySelectorAll('.buy-option-forwhom');
-    for (var i = 0; i < els.length; i++) {
-        var el = els[i];
-        if (el.getAttribute('data-forwhom') === forWhom) {
-            el.style.border = '2px solid var(--theme-main, #d4e9d6)';
-            el.style.background = 'var(--theme-lighter, #eef5ef)';
-        } else {
-            el.style.border = '2px solid transparent';
-            el.style.background = '#f8f8f8';
-        }
-    }
 }
 
 // 选择支付方式
 function selectPayOption(paidFrom, paidFromFriendId) {
-    if (!window._buyDraft) window._buyDraft = { buyer: 'me', forWhom: 'self', paidFrom: 'balance', paidFromFriendId: '' };
+    if (!window._buyDraft) window._buyDraft = { mode: 'self', paidFrom: 'balance', paidFromFriendId: '' };
     window._buyDraft.paidFrom = paidFrom;
     window._buyDraft.paidFromFriendId = paidFromFriendId || '';
     var payContainer = document.getElementById('buyPayOptions');
     if (payContainer) payContainer.innerHTML = renderBuyPayOptions();
 }
 
+window.selectPayOption = selectPayOption;
+
+// ====== 求助卡片预览弹窗 ======
+function showHelpRequestPreview(productId) {
+    if (!currentChatId) {
+        showToast('请先进入聊天');
+        return;
+    }
+    var mall = getMallData();
+    var product = mall.products.find(function(p) { return p.id === productId; });
+    if (!product) return;
+    var friendName = getFriendSpecialName(currentChatId);
+    var price = product.price || 0;
+
+    var imgHtml = '';
+    if (product.imageType === 'upload' && product.image) {
+        imgHtml = '<img src="' + product.image + '" style="width:44px;height:44px;object-fit:cover;border-radius:6px;flex-shrink:0;">';
+    } else if (product.imageType === 'emoji' && product.image) {
+        imgHtml = '<div style="width:44px;height:44px;background:#f5f5f5;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">' + product.image + '</div>';
+    } else {
+        imgHtml = '<img src="' + getDefaultProductSvg() + '" style="width:44px;height:44px;object-fit:cover;border-radius:6px;flex-shrink:0;">';
+    }
+
+    var defaultText = '付一下';
+
+    var html = '<div class="modal-title">求助卡片预览</div>' +
+
+        '<div style="background:#ffffff;border:1px solid #e0e0e0;border-radius:12px;padding:12px 14px;margin-bottom:16px;">' +
+            '<div style="font-size:12px;color:#999999;margin-bottom:8px;">求助 ' + friendName + '</div>' +
+            '<div style="display:flex;gap:10px;align-items:center;margin-bottom:8px;">' +
+                imgHtml +
+                '<div style="flex:1;min-width:0;">' +
+                    '<div style="font-size:13px;color:#000000;word-break:break-all;margin-bottom:2px;">' + (product.name || '') + '</div>' +
+                    '<div style="font-size:13px;color:#000000;font-weight:600;">¥' + price.toFixed(2) + '</div>' +
+                '</div>' +
+            '</div>' +
+            '<div style="font-size:11px;color:#999999;">等待好友回应</div>' +
+        '</div>' +
+
+        '<div style="font-size:13px;color:#999999;margin-bottom:6px;">求助文案</div>' +
+        '<input type="text" id="helpRequestTextInput" value="' + defaultText + '" placeholder="' + defaultText + '" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:12px;">' +
+
+        '<div class="btn-row">' +
+            '<button class="cancel" onclick="closeModal()">取消</button>' +
+            '<button class="confirm" onclick="confirmSendHelpRequest(\'' + productId + '\')">发出求助</button>' +
+        '</div>';
+
+    showModal(html);
+}
+
+window.showHelpRequestPreview = showHelpRequestPreview;
+
+// ====== 确认发出求助 ======
+function confirmSendHelpRequest(productId) {
+    var input = document.getElementById('helpRequestTextInput');
+    var text = input ? input.value.trim() : '';
+    if (!text) text = '付一下';
+    closeModal();
+
+    var ok = sendHelpRequest(productId, text);
+    if (!ok) return;
+
+    var container = document.getElementById('subPageContainer');
+    if (container) {
+        container.innerHTML = '';
+    }
+    closeChatBottomPanel();
+
+    setTimeout(function() {
+        renderAll();
+        if (currentChatId) {
+            renderChatMessages();
+            jumpChatToBottom();
+        }
+    }, 100);
+}
+
+window.confirmSendHelpRequest = confirmSendHelpRequest;
+
+// ====== 求助好友：发求助卡片 ======
+function sendHelpRequest(productId, customText) {
+    if (!currentChatId) {
+        showToast('请先进入聊天');
+        return false;
+    }
+    var mall = getMallData();
+    var product = mall.products.find(function(p) { return p.id === productId; });
+    if (!product) {
+        showToast('商品不存在');
+        return false;
+    }
+    var friends = DataHub.get('friends', []);
+    var friend = friends.find(function(f) { return f.id === currentChatId; });
+    if (!friend) return false;
+    var friendName = getFriendSpecialName(currentChatId);
+
+    var helpText = customText || '付一下';
+
+    var productInfo = {
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        image: product.image,
+        imageType: product.imageType,
+        description: product.description,
+        category: product.category
+    };
+
+    var requestId = 'hr' + Date.now() + Math.random().toString(36).substr(2, 4);
+    var now = new Date();
+    var time = now.getFullYear() + '.' + String(now.getMonth()+1).padStart(2,'0') + '.' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
+
+    var list = getHelpRequests();
+    list.push({
+        id: requestId,
+        chatId: currentChatId,
+        productId: productId,
+        productInfo: productInfo,
+        helpText: helpText,
+        status: 'pending',
+        createdAt: Date.now(),
+        createdAtStr: time,
+        cardMsgId: null
+    });
+    saveHelpRequests(list);
+
+    var msgs = DataHub.get('messages', []);
+
+    var cardMsgId = 'm' + genId();
+    msgs.push({
+        id: cardMsgId,
+        chatId: currentChatId,
+        from: 'me',
+        text: '',
+        time: time,
+        timestamp: Date.now(),
+        unread: 0,
+        isHelpRequest: true,
+        helpRequestId: requestId
+    });
+
+    var textMsgId = 'm' + genId();
+    msgs.push({
+        id: textMsgId,
+        chatId: currentChatId,
+        from: 'me',
+        text: helpText,
+        time: time,
+        timestamp: Date.now() + 1,
+        unread: 0
+    });
+
+    DataHub.set('messages', msgs);
+
+    var l = getHelpRequests();
+    var target = l.find(function(x) { return x.id === requestId; });
+    if (target) target.cardMsgId = cardMsgId;
+    saveHelpRequests(l);
+
+    scheduleFriendHandleHelpRequest(requestId);
+
+    showToast('已向 ' + friendName + ' 求助');
+    return true;
+}
+
+// ====== 求助卡片渲染 ======
+function renderHelpRequestCard(requestId) {
+    var req = findHelpRequest(requestId);
+    if (!req) {
+        return '<div style="font-size:12px;color:#999999;padding:4px 0;">求助已失效</div>';
+    }
+    var p = req.productInfo || {};
+    var friendName = getFriendSpecialName(req.chatId);
+    var statusText = '';
+    if (req.status === 'pending') statusText = '等待好友回应';
+    else if (req.status === 'help_bought') statusText = '好友已购买';
+    else if (req.status === 'help_rejected') statusText = '好友已拒绝';
+    else if (req.status === 'help_redpacket') statusText = '好友已发红包';
+
+    var imgHtml = '';
+    if (p.imageType === 'upload' && p.image) {
+        imgHtml = '<img src="' + p.image + '" style="width:44px;height:44px;object-fit:cover;border-radius:6px;flex-shrink:0;">';
+    } else if (p.imageType === 'emoji' && p.image) {
+        imgHtml = '<div style="width:44px;height:44px;background:#f5f5f5;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">' + p.image + '</div>';
+    } else {
+        imgHtml = '<img src="' + getDefaultProductSvg() + '" style="width:44px;height:44px;object-fit:cover;border-radius:6px;flex-shrink:0;">';
+    }
+
+    return '<div onclick="openHelpRequestCard(\'' + requestId + '\')" style="cursor:pointer;background:#ffffff;border:1px solid #e0e0e0;border-radius:12px;padding:12px 14px;width:220px;box-sizing:border-box;">' +
+        '<div style="font-size:12px;color:#999999;margin-bottom:8px;">求助 ' + friendName + '</div>' +
+        '<div style="display:flex;gap:10px;align-items:center;margin-bottom:8px;">' +
+            imgHtml +
+            '<div style="flex:1;min-width:0;">' +
+                '<div style="font-size:13px;color:#000000;word-break:break-all;margin-bottom:2px;">' + (p.name || '') + '</div>' +
+                '<div style="font-size:13px;color:#000000;font-weight:600;">¥' + (p.price || 0).toFixed(2) + '</div>' +
+            '</div>' +
+        '</div>' +
+        '<div style="font-size:11px;color:#999999;">' + statusText + '</div>' +
+    '</div>';
+}
+
+// ====== 求助卡片详情弹窗 ======
+function openHelpRequestCard(requestId) {
+    var req = findHelpRequest(requestId);
+    if (!req) {
+        showToast('求助已失效');
+        return;
+    }
+    var p = req.productInfo || {};
+    var friendName = getFriendSpecialName(req.chatId);
+    var statusText = '';
+    if (req.status === 'pending') statusText = '等待好友回应';
+    else if (req.status === 'help_bought') statusText = '好友已购买';
+    else if (req.status === 'help_rejected') statusText = '好友已拒绝';
+    else if (req.status === 'help_redpacket') statusText = '好友已发红包';
+
+    var imgHtml = '';
+    if (p.imageType === 'upload' && p.image) {
+        imgHtml = '<img src="' + p.image + '" style="width:80px;height:80px;object-fit:cover;border-radius:8px;">';
+    } else if (p.imageType === 'emoji' && p.image) {
+        imgHtml = '<div style="width:80px;height:80px;background:#eef5ef;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:36px;">' + p.image + '</div>';
+    } else {
+        imgHtml = '<img src="' + getDefaultProductSvg() + '" style="width:80px;height:80px;object-fit:cover;border-radius:8px;">';
+    }
+
+    var html = '<div class="modal-title">求助好友</div>' +
+        '<div style="display:flex;gap:10px;margin-bottom:12px;">' +
+            '<div style="flex-shrink:0;">' + imgHtml + '</div>' +
+            '<div style="flex:1;min-width:0;">' +
+                '<div style="font-size:14px;font-weight:600;color:#000000;word-break:break-all;">' + (p.name || '') + '</div>' +
+                '<div style="font-size:16px;font-weight:600;color:#000000;margin-top:4px;">¥' + (p.price || 0).toFixed(2) + '</div>' +
+                (p.description ? '<div style="font-size:12px;color:#999999;margin-top:4px;word-break:break-word;">' + p.description + '</div>' : '') +
+            '</div>' +
+        '</div>' +
+        '<div style="text-align:center;font-size:13px;color:#999999;margin-bottom:12px;">' + statusText + '</div>' +
+        '<div class="btn-row"><button class="cancel" onclick="closeModal()">关闭</button></div>';
+
+    showModal(html);
+}
+
+// ====== 好友处理求助请求 ======
+function handleFriendHelpRequest(requestId) {
+    var req = findHelpRequest(requestId);
+    if (!req) return false;
+    if (req.status !== 'pending') return false;
+
+    var friendId = req.chatId;
+    var friendName = getFriendSpecialName(friendId);
+    var p = req.productInfo || {};
+    var price = p.price || 0;
+
+    var list = getHelpRequests();
+    var target = list.find(function(x) { return x.id === requestId; });
+    if (!target) return false;
+
+    var roll = Math.random();
+
+    if (roll < 0.33) {
+        // 好友购买：好友付钱，商品归我
+        var friends = DataHub.get('friends', []);
+        var friend = friends.find(function(f) { return f.id === friendId; });
+        if (!friend) return false;
+
+        var usePiggy = false;
+        if (friend.couple && friend.couple.enabled === true) {
+            var piggy = getPiggyData(friendId);
+            if ((piggy.balance || 0) >= price) {
+                usePiggy = Math.random() < 0.5;
+            }
+        }
+        var balance = friend.balance || 0;
+        if (!usePiggy && balance < price) {
+            var piggy2 = getPiggyData(friendId);
+            if ((piggy2.balance || 0) >= price) {
+                usePiggy = true;
+            } else {
+                target.status = 'help_rejected';
+                saveHelpRequests(list);
+                var msgs0 = DataHub.get('messages', []);
+                var m0 = msgs0.find(function(x) { return x.id === req.cardMsgId; });
+                if (m0) m0.helpRequestStatus = 'help_rejected';
+                DataHub.set('messages', msgs0);
+                if (currentChatId === friendId) renderChatMessages();
+                renderMessages();
+                showToast(friendName + ' 余额不足，拒绝了求助');
+                return true;
+            }
+        }
+
+        var paidAccountId = usePiggy ? ('piggy:' + friendId) : ('friend:' + friendId);
+        var category = usePiggy ? '零钱购物' : '商场购物';
+        var subCategory = usePiggy ? '零钱购物' : '余额支付';
+
+        addFlow(paidAccountId, {
+            amount: price,
+            direction: 'expense',
+            category: category,
+            subCategory: subCategory,
+            fromAccount: paidAccountId,
+            toAccount: '',
+            relatedFriendId: friendId,
+            relatedProductId: p.id,
+            note: friendName + '求助购买 ' + p.name,
+            forWhom: 'friend',
+            productInfo: p,
+            payer: 'friend'
+        });
+
+        // 商品归我
+        var myItems = getPurchasedItems('my');
+        myItems.unshift({
+            id: 'pi' + Date.now() + Math.random().toString(36).substr(2, 4),
+            productId: p.id,
+            name: p.name,
+            price: p.price,
+            image: p.image || '',
+            imageType: p.imageType || 'default',
+            description: p.description || '',
+            category: p.category || '默认',
+            boughtBy: 'friend',
+            forWhom: 'friend',
+            paidFrom: usePiggy ? 'piggy' : 'balance',
+            paidFromFriendId: friendId,
+            time: getNowTimeStringFull(),
+            isGift: false,
+            isSurprise: false
+        });
+        setPurchasedItems('my', myItems);
+
+        target.status = 'help_bought';
+        saveHelpRequests(list);
+
+        var msgs = DataHub.get('messages', []);
+        var m = msgs.find(function(x) { return x.id === req.cardMsgId; });
+        if (m) m.helpRequestStatus = 'help_bought';
+        DataHub.set('messages', msgs);
+        if (currentChatId === friendId) renderChatMessages();
+        renderMessages();
+        showToast(friendName + ' 帮你买了 ' + p.name);
+        return true;
+    } else if (roll < 0.66) {
+        // 好友拒绝
+        target.status = 'help_rejected';
+        saveHelpRequests(list);
+
+        var msgs2 = DataHub.get('messages', []);
+        var m2 = msgs2.find(function(x) { return x.id === req.cardMsgId; });
+        if (m2) m2.helpRequestStatus = 'help_rejected';
+        DataHub.set('messages', msgs2);
+        if (currentChatId === friendId) renderChatMessages();
+        renderMessages();
+        showToast(friendName + ' 拒绝了你的求助');
+        return true;
+    } else {
+        // 好友发红包：金额 = 商品价格 ± 5%
+        var amount = price * (0.95 + Math.random() * 0.1);
+        amount = Math.round(amount * 100) / 100;
+        if (amount < 0.01) amount = 0.01;
+
+        var friends2 = DataHub.get('friends', []);
+        var friend2 = friends2.find(function(f) { return f.id === friendId; });
+        if (!friend2) return false;
+        var friendBalance = friend2.balance || 0;
+        if (friendBalance < amount) amount = Math.round(friendBalance * 100) / 100;
+        if (amount < 0.01) {
+            target.status = 'help_rejected';
+            saveHelpRequests(list);
+            var msgs3 = DataHub.get('messages', []);
+            var m3 = msgs3.find(function(x) { return x.id === req.cardMsgId; });
+            if (m3) m3.helpRequestStatus = 'help_rejected';
+            DataHub.set('messages', msgs3);
+            if (currentChatId === friendId) renderChatMessages();
+            renderMessages();
+            showToast(friendName + ' 余额不足，拒绝了求助');
+            return true;
+        }
+
+        target.status = 'help_redpacket';
+        saveHelpRequests(list);
+
+        // 好友给我发普通红包
+        var hbId = 'hb' + Date.now() + Math.random().toString(36).substr(2, 4);
+        var now2 = Date.now();
+        var expireAt = now2 + 24 * 60 * 60 * 1000;
+        var hbList = getHongbaoList();
+        hbList.push({
+            id: hbId,
+            type: 'redpacket',
+            from: friendId,
+            to: 'me',
+            amount: amount,
+            note: '拿去自己买',
+            status: 'pending',
+            createdAt: now2,
+            expireAt: expireAt,
+            acceptedAt: null,
+            rejectedAt: null,
+            cardMsgId: null,
+            resultMsgId: null
+        });
+        saveHongbaoList(hbList);
+
+        addFlow('friend:' + friendId, {
+            amount: amount,
+            direction: 'expense',
+            category: '红包',
+            subCategory: friendName + '给我的红包',
+            fromAccount: 'friend:' + friendId,
+            toAccount: 'me',
+            relatedFriendId: friendId,
+            relatedHongbaoId: hbId,
+            note: '拿去自己买',
+            status: 'pending'
+        });
+
+        var now3 = new Date();
+        var time3 = now3.getFullYear() + '.' + String(now3.getMonth()+1).padStart(2,'0') + '.' + String(now3.getDate()).padStart(2,'0') + ' ' + String(now3.getHours()).padStart(2,'0') + ':' + String(now3.getMinutes()).padStart(2,'0') + ':' + String(now3.getSeconds()).padStart(2,'0');
+        var msgs4 = DataHub.get('messages', []);
+        var hbCardMsgId = 'm' + genId();
+        msgs4.push({
+            id: hbCardMsgId,
+            chatId: friendId,
+            from: friendId,
+            text: '',
+            time: time3,
+            timestamp: Date.now(),
+            unread: (currentChatId === friendId) ? 0 : 1,
+            isHongbaoCard: true,
+            hongbaoId: hbId
+        });
+        DataHub.set('messages', msgs4);
+
+        var hbList2 = getHongbaoList();
+        var hbTarget = hbList2.find(function(x) { return x.id === hbId; });
+        if (hbTarget) hbTarget.cardMsgId = hbCardMsgId;
+        saveHongbaoList(hbList2);
+
+        var msgs5 = DataHub.get('messages', []);
+        var m5 = msgs5.find(function(x) { return x.id === req.cardMsgId; });
+        if (m5) m5.helpRequestStatus = 'help_redpacket';
+        DataHub.set('messages', msgs5);
+
+        if (currentChatId === friendId) renderChatMessages();
+        renderMessages();
+        showToast(friendName + ' 给你发了一个红包');
+        return true;
+    }
+}
+
+function scheduleFriendHandleHelpRequest(requestId) {
+    var delay = (5 + Math.random() * 10) * 1000;
+    setTimeout(function() {
+        handleFriendHelpRequest(requestId);
+    }, delay);
+}
+
+window.sendHelpRequest = sendHelpRequest;
+window.renderHelpRequestCard = renderHelpRequestCard;
+window.openHelpRequestCard = openHelpRequestCard;
+window.handleFriendHelpRequest = handleFriendHelpRequest;
+
 // 确认购买
 function confirmBuyProduct(productId) {
-    var draft = window._buyDraft || { buyer: 'me', forWhom: 'self', paidFrom: 'balance', paidFromFriendId: '' };
-    var ok = buyProduct(productId, draft.buyer, draft.forWhom, draft.paidFrom, draft.paidFromFriendId);
+    var draft = window._buyDraft || { mode: 'self', paidFrom: 'balance', paidFromFriendId: '' };
+
+    if (draft.mode === 'help') {
+        closeModal();
+        setTimeout(function() {
+            showHelpRequestPreview(productId);
+        }, 200);
+        return;
+    }
+
+    var ok = false;
+    if (draft.mode === 'self') {
+        ok = buyProduct(productId, 'me', 'self', draft.paidFrom, draft.paidFromFriendId);
+    } else if (draft.mode === 'forfriend') {
+        ok = buyProduct(productId, 'me', 'friend', 'balance', '');
+    }
     if (ok) {
         closeModal();
         renderAll();
@@ -19386,12 +20073,6 @@ function confirmBuyProduct(productId) {
     }
 }
 
-// 挂载到 window
-window.showBuyProductModal = showBuyProductModal;
-window.renderBuyPayOptions = renderBuyPayOptions;
-window.selectBuyerOption = selectBuyerOption;
-window.selectForWhomOption = selectForWhomOption;
-window.selectPayOption = selectPayOption;
 window.confirmBuyProduct = confirmBuyProduct;
 
 // ====== 购物日记触发 ======
@@ -20349,9 +21030,9 @@ function tryFriendSendHongbao(chatId) {
     if (friendBalance < 1) return;
 
     // 随机金额（1 ~ min(好友余额, 200) 之间）
-    var maxAmt = Math.min(friendBalance, 200);
-    var amount = Math.round((1 + Math.random() * (maxAmt - 1)) * 100) / 100;
-    if (amount < 0.01) return;
+    var amount = Math.round((0.01 + Math.random() * (friendBalance - 0.01)) * 100) / 100;
+if (amount < 0.01) amount = 0.01;
+if (amount > friendBalance) amount = Math.round(friendBalance * 100) / 100;
 
     var isRedpacket = Math.random() < 0.5;
     var id = 'hb' + Date.now() + Math.random().toString(36).substr(2, 4);
@@ -20858,11 +21539,11 @@ function autoFriendSendGroupRedpacket() {
 
             var mode = Math.random() < 0.5 ? 'lucky' : 'normal';
             var minTotal = members.length * 0.01;
-            var maxAmt = Math.min(friendBalance, 200);
-            if (maxAmt < minTotal) continue;
+if (friendBalance < minTotal) continue;
 
-            var amount = Math.round((minTotal + Math.random() * (maxAmt - minTotal)) * 100) / 100;
-            if (amount < minTotal) continue;
+var amount = Math.round((0.01 + Math.random() * (friendBalance - 0.01)) * 100) / 100;
+if (amount < minTotal) amount = minTotal;
+if (amount > friendBalance) amount = Math.round(friendBalance * 100) / 100;
 
             var ok = sendGroupRedpacketByFriend(room.id, memberId, mode, amount);
             if (ok) {
@@ -21297,11 +21978,16 @@ function handleVisualViewport() {
     if (!window.visualViewport) return;
     var viewport = window.visualViewport;
     var app = document.getElementById('app');
+    var chatPage = document.getElementById('chatPage');
 
     function adjust() {
         var keyboardHeight = window.innerHeight - viewport.height;
         if (keyboardHeight > 100) {
             app.style.height = viewport.height + 'px';
+            if (chatPage && chatPage.classList.contains('active')) {
+                chatPage.style.height = viewport.height + 'px';
+                chatPage.style.bottom = 'auto';
+            }
             var chatMessages = document.getElementById('chatMessages');
             if (chatMessages) {
                 setTimeout(function() {
@@ -21310,6 +21996,10 @@ function handleVisualViewport() {
             }
         } else {
             app.style.height = '';
+            if (chatPage) {
+                chatPage.style.height = '';
+                chatPage.style.bottom = '';
+            }
         }
     }
 
@@ -21419,6 +22109,7 @@ setInterval(function() {
 startRandomDeleteChecker();
 startShoppingDiaryReplyScheduler();
 startMonthlyStatsChecker();
+startPiggyAutoDepositChecker();
 
     function initFriendAI() {
     var friends = DataHub.get('friends', []);
