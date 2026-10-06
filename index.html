@@ -15878,14 +15878,16 @@ function confirmAddProduct() {
         return;
     }
     var draft = window._productImageDraft || { image: '', imageType: 'default' };
+    var categoryName = catInput ? catInput.value : '默认';
+    var inheritedExclusive = getCategoryExclusiveFriendId(categoryName);
     var ok = addMallProduct({
         name: name,
         price: price,
         image: draft.image,
         imageType: draft.imageType,
-        category: catInput ? catInput.value : '默认',
+        category: categoryName,
         description: descInput ? descInput.value.trim() : '',
-        exclusiveFriendId: ''
+        exclusiveFriendId: inheritedExclusive
     });
     if (ok) {
         closeModal();
@@ -20267,12 +20269,29 @@ function renderProductImage(product) {
     return renderDefaultProductHtml();
 }
 
+function getCategoryExclusiveFriendId(categoryName) {
+    if (!categoryName) return '';
+    var mall = getMallData();
+    var cats = mall.categories || [];
+    for (var i = 0; i < cats.length; i++) {
+        if (cats[i].name === categoryName) {
+            return cats[i].exclusiveFriendId || '';
+        }
+    }
+    return '';
+}
+
 // 获取某好友可见的商品
 function getVisibleProductsForFriend(friendId) {
     var mall = getMallData();
     return mall.products.filter(function(p) {
-        if (!p.exclusiveFriendId) return true;
-        return p.exclusiveFriendId === friendId;
+        var productExclusive = p.exclusiveFriendId || '';
+        if (productExclusive && productExclusive !== friendId) return false;
+
+        var categoryExclusive = getCategoryExclusiveFriendId(p.category);
+        if (categoryExclusive && categoryExclusive !== friendId) return false;
+
+        return true;
     });
 }
 
@@ -20360,9 +20379,14 @@ function updateMallProduct(productId, data) {
     if (data.price !== undefined) p.price = parseFloat(data.price);
     if (data.image !== undefined) p.image = data.image;
     if (data.imageType !== undefined) p.imageType = data.imageType;
-    if (data.category !== undefined) p.category = data.category;
+    if (data.category !== undefined) {
+        p.category = data.category;
+        p.exclusiveFriendId = getCategoryExclusiveFriendId(data.category);
+    }
     if (data.description !== undefined) p.description = data.description;
-    if (data.exclusiveFriendId !== undefined) p.exclusiveFriendId = data.exclusiveFriendId;
+    if (data.exclusiveFriendId !== undefined && data.category === undefined) {
+        p.exclusiveFriendId = data.exclusiveFriendId;
+    }
     p.updatedAt = Date.now();
     saveMallData(mall);
     showToast('已保存');
