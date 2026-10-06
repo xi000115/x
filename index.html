@@ -1311,12 +1311,12 @@ color: #000000;
         </div>
 <div id="chatBottomPanel" style="display:none;position:relative;height:25%;background:#ffffff;border-top:1px solid var(--theme-border, #d4e9d6);z-index:60;flex-direction:column;padding:10px 12px;box-sizing:border-box;flex-shrink:0;">
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;overflow-y:auto;flex:1;align-content:start;">
-        <div onclick="openChatStyleSettings()" style="display:flex;align-items:center;justify-content:center;padding:14px 4px;background:var(--theme-lighter, #eef5ef);border-radius:12px;cursor:pointer;font-size:14px;color:#000000;">装扮</div>
-<div onclick="showCreateVoteModal()" style="display:flex;align-items:center;justify-content:center;padding:14px 4px;background:var(--theme-lighter, #eef5ef);border-radius:12px;cursor:pointer;font-size:14px;color:#000000;">投票</div>
-<div onclick="openChatStorageManage()" style="display:flex;align-items:center;justify-content:center;padding:14px 4px;background:var(--theme-lighter, #eef5ef);border-radius:12px;cursor:pointer;font-size:14px;color:#000000;">存储</div>
-<div onclick="openMallFromChat()" style="display:flex;align-items:center;justify-content:center;padding:14px 4px;background:var(--theme-lighter, #eef5ef);border-radius:12px;cursor:pointer;font-size:14px;color:#000000;">商场</div>
-<div onclick="showToast('问卷功能开发中')" style="display:flex;align-items:center;justify-content:center;padding:14px 4px;background:var(--theme-lighter, #eef5ef);border-radius:12px;cursor:pointer;font-size:14px;color:#000000;">问卷</div>
+        <div onclick="openChatStorageManage()" style="display:flex;align-items:center;justify-content:center;padding:14px 4px;background:var(--theme-lighter, #eef5ef);border-radius:12px;cursor:pointer;font-size:14px;color:#000000;">存储</div>
+<div onclick="openChatStyleSettings()" style="display:flex;align-items:center;justify-content:center;padding:14px 4px;background:var(--theme-lighter, #eef5ef);border-radius:12px;cursor:pointer;font-size:14px;color:#000000;">装扮</div>
 <div onclick="showToast('游戏功能开发中')" style="display:flex;align-items:center;justify-content:center;padding:14px 4px;background:var(--theme-lighter, #eef5ef);border-radius:12px;cursor:pointer;font-size:14px;color:#000000;">游戏</div>
+<div onclick="showToast('问卷功能开发中')" style="display:flex;align-items:center;justify-content:center;padding:14px 4px;background:var(--theme-lighter, #eef5ef);border-radius:12px;cursor:pointer;font-size:14px;color:#000000;">问卷</div>
+<div onclick="openMallFromChat()" style="display:flex;align-items:center;justify-content:center;padding:14px 4px;background:var(--theme-lighter, #eef5ef);border-radius:12px;cursor:pointer;font-size:14px;color:#000000;">商场</div>
+<div onclick="showCreateVoteModal()" style="display:flex;align-items:center;justify-content:center;padding:14px 4px;background:var(--theme-lighter, #eef5ef);border-radius:12px;cursor:pointer;font-size:14px;color:#000000;">投票</div>
     </div>
 </div>
         <div id="emojiPanel">
@@ -2474,6 +2474,172 @@ function resetChatStyle(chatId) {
     closeSubPage();
     showToast('已恢复全局默认');
 }
+
+// ====== 会话存储管理：内存估算 + 统计 ======
+function estimateSizeMB(obj) {
+    if (obj === null || obj === undefined) return 0;
+    try {
+        var str = JSON.stringify(obj);
+        if (!str) return 0;
+        return str.length / 1024 / 1024;
+    } catch (e) {
+        return 0;
+    }
+}
+
+function getTotalMemoryMB() {
+    return 100;
+}
+
+function getPrivateChatData(chatId) {
+    if (!chatId) return {};
+    var chat = getChat(chatId);
+    if (!chat) return {};
+    var isFriend = (DataHub.get('friends', []).some(function(f) { return f.id === chatId; }));
+    var data = {};
+
+    if (isFriend) {
+        var friend = DataHub.get('friends', []).find(function(f) { return f.id === chatId; });
+        if (friend) {
+            data.moments = friend.moments || [];
+            data.diary = friend.diary || [];
+            data.shoppingDiary = friend.shoppingDiary || [];
+            data.letters = friend.letters || { toHim: [], hisReply: [], fromHim: [], myReply: [] };
+            data.flows = friend.flows || [];
+            data.statusCalendar = (friend.couple && friend.couple.statusCalendar) ? friend.couple.statusCalendar : {};
+            data.privateAlbum = friend.privateAlbum || [];
+            data.privateLexicon = friend.privateLexicon || { groups: {}, items: [] };
+        }
+    } else {
+        var room = DataHub.get('chatrooms', []).find(function(c) { return c.id === chatId; });
+        if (room) {
+            data.room = room;
+        }
+    }
+
+    data.messages = DataHub.get('messages', []).filter(function(m) { return m.chatId === chatId; });
+    return data;
+}
+
+function getPrivateMemoryMB(chatId) {
+    var data = getPrivateChatData(chatId);
+    return estimateSizeMB(data);
+}
+
+function getTotalMemoryUsedMB() {
+    var all = DataHub.getAll();
+    return estimateSizeMB(all);
+}
+
+function formatMemoryMB(mb) {
+    if (mb < 0.01) return (mb * 1024).toFixed(1) + ' KB';
+    if (mb < 1) return (mb * 1024).toFixed(0) + ' KB';
+    return mb.toFixed(2) + ' MB';
+}
+
+function getTodayDateKeyForStorage() {
+    var now = new Date();
+    return now.getFullYear() + '.' + String(now.getMonth()+1).padStart(2,'0') + '.' + String(now.getDate()).padStart(2,'0');
+}
+
+function isDateBeforeDays(dateStr, days) {
+    if (!dateStr) return false;
+    var target = Date.now() - days * 24 * 60 * 60 * 1000;
+    var parts = dateStr.split(' ')[0].split('.');
+    if (parts.length < 3) return false;
+    var t = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])).getTime();
+    return t < target;
+}
+
+function getChatStorageStats(chatId) {
+    var data = getPrivateChatData(chatId);
+    var isFriend = (DataHub.get('friends', []).some(function(f) { return f.id === chatId; }));
+    var stats = {
+        msgImage: 0,
+        msgAll: 0,
+        momentImage: 0,
+        momentAll: 0,
+        diary90: 0, diary60: 0, diary30: 0, diaryAll: 0,
+        letter90: 0, letter60: 0, letter30: 0, letterAll: 0,
+        flow90: 0, flow60: 0, flow30: 0, flowAll: 0,
+        calendar90: 0, calendar60: 0, calendar30: 0, calendarAll: 0,
+        album90: 0, album60: 0, album30: 0, albumAll: 0,
+        privateLexicon: 0
+    };
+
+    var msgs = data.messages || [];
+    for (var i = 0; i < msgs.length; i++) {
+        var m = msgs[i];
+        stats.msgAll++;
+        if (m.isImage || (m.text && m.text.indexOf('<img') !== -1)) stats.msgImage++;
+    }
+
+    if (isFriend) {
+        var moments = data.moments || [];
+        for (var mi = 0; mi < moments.length; mi++) {
+            var mo = moments[mi];
+            stats.momentAll++;
+            if (mo.images && mo.images.length > 0) stats.momentImage++;
+        }
+
+        var diary = data.diary || [];
+        for (var di = 0; di < diary.length; di++) {
+            var d = diary[di];
+            var dDate = d.date || (d.time ? d.time.split(' ')[0] : '');
+            stats.diaryAll++;
+            if (isDateBeforeDays(dDate, 90)) stats.diary90++;
+            if (isDateBeforeDays(dDate, 60)) stats.diary60++;
+            if (isDateBeforeDays(dDate, 30)) stats.diary30++;
+        }
+
+        var letters = data.letters || {};
+        var allLetters = (letters.toHim || []).concat(letters.hisReply || []).concat(letters.fromHim || []).concat(letters.myReply || []);
+        for (var li = 0; li < allLetters.length; li++) {
+            var lt = allLetters[li];
+            var lDate = lt.time ? lt.time.split(' ')[0] : '';
+            stats.letterAll++;
+            if (isDateBeforeDays(lDate, 90)) stats.letter90++;
+            if (isDateBeforeDays(lDate, 60)) stats.letter60++;
+            if (isDateBeforeDays(lDate, 30)) stats.letter30++;
+        }
+
+        var flows = data.flows || [];
+        for (var fi = 0; fi < flows.length; fi++) {
+            var fl = flows[fi];
+            var fDate = fl.time ? fl.time.split(' ')[0] : '';
+            stats.flowAll++;
+            if (isDateBeforeDays(fDate, 90)) stats.flow90++;
+            if (isDateBeforeDays(fDate, 60)) stats.flow60++;
+            if (isDateBeforeDays(fDate, 30)) stats.flow30++;
+        }
+
+        var cal = data.statusCalendar || {};
+        var calKeys = Object.keys(cal);
+        for (var ci = 0; ci < calKeys.length; ci++) {
+            var ck = calKeys[ci];
+            stats.calendarAll++;
+            if (isDateBeforeDays(ck, 90)) stats.calendar90++;
+            if (isDateBeforeDays(ck, 60)) stats.calendar60++;
+            if (isDateBeforeDays(ck, 30)) stats.calendar30++;
+        }
+
+        var album = data.privateAlbum || [];
+        for (var ai = 0; ai < album.length; ai++) {
+            var al = album[ai];
+            var aDate = al.time ? al.time.split(' ')[0] : '';
+            stats.albumAll++;
+            if (isDateBeforeDays(aDate, 90)) stats.album90++;
+            if (isDateBeforeDays(aDate, 60)) stats.album60++;
+            if (isDateBeforeDays(aDate, 30)) stats.album30++;
+        }
+
+        var pl = data.privateLexicon || {};
+        stats.privateLexicon = (pl.items || []).length;
+    }
+
+    return stats;
+}
+
 // ====== 会话存储独立管理（所有会话通用） ======
 function getChatStorage(chatId) {
     var chat = getChat(chatId);
@@ -2513,50 +2679,115 @@ function openChatStorageManage(chatId) {
     if (!chatId) chatId = currentChatId;
     var chat = getChat(chatId);
     if (!chat) return;
-    if (!chat.storage) {
-        chat.storage = { messages: [] };
-        saveChatStorage(chatId, chat.storage);
-    }
-    var storage = chat.storage;
-    var msgs = storage.messages || [];
+    var isFriend = DataHub.get('friends', []).some(function(f) { return f.id === chatId; });
+    var stats = getChatStorageStats(chatId);
+    var privateMB = getPrivateMemoryMB(chatId);
+    var totalMB = getTotalMemoryUsedMB();
+    var maxMB = getTotalMemoryMB();
 
-    var html = '<div class="sub-page active" style="z-index:60;background:#ffffff;pointer-events:auto;">' +
+    var privatePct = Math.min(100, (privateMB / maxMB) * 100);
+    var totalPct = Math.min(100, (totalMB / maxMB) * 100);
+
+    var barHtml = '<div style="position:relative;width:100%;height:24px;border-radius:12px;overflow:hidden;background:#ffffff;border:1px solid #e0e0e0;">' +
+        '<div style="position:absolute;left:0;top:0;bottom:0;width:' + totalPct + '%;background:var(--theme-main, #d4e9d6);"></div>' +
+        '<div style="position:absolute;left:0;top:0;bottom:0;width:' + privatePct + '%;background:var(--theme-lighter, #eef5ef);"></div>' +
+    '</div>';
+
+    var memHtml = '<div style="display:flex;justify-content:space-between;font-size:12px;color:#999999;margin-top:6px;">' +
+        '<span>私人的 ' + formatMemoryMB(privateMB) + '</span>' +
+        '<span>全部的 ' + formatMemoryMB(totalMB) + '</span>' +
+        '<span>总内存 ' + maxMB + ' MB</span>' +
+    '</div>';
+
+    function rowHtml(label, count, action, disabled) {
+        if (disabled) {
+            return '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f0f0f0;">' +
+                '<span style="font-size:14px;color:#999999;">' + label + '</span>' +
+                '<span style="font-size:13px;color:#999999;">' + count + ' 条</span>' +
+            '</div>';
+        }
+        return '<div onclick="' + action + '" style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f0f0f0;cursor:pointer;">' +
+            '<span style="font-size:14px;color:#000000;">' + label + '</span>' +
+            '<span style="font-size:13px;color:#999999;">' + count + ' 条</span>' +
+        '</div>';
+    }
+
+    var html = '<div class="sub-page active" style="z-index:60;background:#ffffff;pointer-events:auto;display:flex;flex-direction:column;">' +
         '<div class="sub-top">' +
             '<div class="back-btn" onclick="closeSubPage()">' +
                 '<svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>' +
             '</div>' +
             '<span>' + chat.name + ' 的存储管理</span>' +
         '</div>' +
-        '<div class="sub-content" style="padding:16px;overflow-y:auto;pointer-events:auto;">' +
-            '<div class="setting-block no-click">' +
-                '<div style="font-size:14px;color:#666666;">会话独立存储</div>' +
-                '<div style="margin:8px 0;">' +
-                    '<div>存储消息数：' + msgs.length + ' 条</div>' +
-                '</div>' +
-                '<button class="btn-primary" onclick="clearChatStorage(\'' + chatId + '\')" style="margin-top:8px;">清除此会话存储</button>' +
-                '<button class="btn-icon" style="margin-left:8px;" onclick="resetChatStorage(\'' + chatId + '\')">恢复全局存储</button>' +
-            '</div>' +
-            '<div class="section-title">存储的消息</div>' +
-            '<div class="setting-block no-click">';
+        '<div class="sub-content" style="padding:16px;overflow-y:auto;pointer-events:auto;flex:1;">' +
 
-    if (msgs.length === 0) {
-        html += '<div style="color:#999999;text-align:center;padding:12px;">暂无独立存储的消息</div>';
-    } else {
-        for (var i = 0; i < Math.min(msgs.length, 20); i++) {
-            var m = msgs[i];
-            var isMe = m.from === 'me';
-            html += '<div style="padding:6px 0;border-bottom:1px solid var(--theme-lighter, #eef5ef);font-size:13px;color:#000000;">' +
-    '<span style="color:' + (isMe ? 'var(--theme-dark, #4a7a4e)' : '#888888') + ';">' + (isMe ? '我' : chat.name) + '</span>' +
-                ': ' + (m.text || '').substring(0, 30) + (m.text && m.text.length > 30 ? '...' : '') +
-                ' <span style="color:#999999;font-size:10px;">' + (m.time || '') + '</span>' +
+            '<div class="setting-block no-click" style="margin:0 0 16px 0;">' +
+                barHtml +
+                memHtml +
+            '</div>' +
+
+            '<div class="section-title">聊天记录</div>' +
+            '<div class="setting-block no-click" style="margin:0 0 12px 0;">' +
+                rowHtml('仅图片', stats.msgImage, 'confirmDeleteChatData(\'' + chatId + '\',\'msgImage\')', stats.msgImage === 0) +
+                rowHtml('文字+图片', stats.msgAll, 'confirmDeleteChatData(\'' + chatId + '\',\'msgAll\')', stats.msgAll === 0) +
             '</div>';
-        }
-        if (msgs.length > 20) {
-            html += '<div style="color:#999999;font-size:12px;text-align:center;padding:8px;">仅显示最近20条</div>';
-        }
+
+    if (isFriend) {
+        html +=
+            '<div class="section-title">朋友圈</div>' +
+            '<div class="setting-block no-click" style="margin:0 0 12px 0;">' +
+                rowHtml('仅图片', stats.momentImage, 'confirmDeleteChatData(\'' + chatId + '\',\'momentImage\')', stats.momentImage === 0) +
+                rowHtml('文字+图片', stats.momentAll, 'confirmDeleteChatData(\'' + chatId + '\',\'momentAll\')', stats.momentAll === 0) +
+            '</div>' +
+
+            '<div class="section-title">日记</div>' +
+            '<div class="setting-block no-click" style="margin:0 0 12px 0;">' +
+                rowHtml('90天前', stats.diary90, 'confirmDeleteChatData(\'' + chatId + '\',\'diary90\')', stats.diary90 === 0) +
+                rowHtml('60天前', stats.diary60, 'confirmDeleteChatData(\'' + chatId + '\',\'diary60\')', stats.diary60 === 0) +
+                rowHtml('30天前', stats.diary30, 'confirmDeleteChatData(\'' + chatId + '\',\'diary30\')', stats.diary30 === 0) +
+                rowHtml('全部', stats.diaryAll, 'confirmDeleteChatData(\'' + chatId + '\',\'diaryAll\')', stats.diaryAll === 0) +
+            '</div>' +
+
+            '<div class="section-title">信封</div>' +
+            '<div class="setting-block no-click" style="margin:0 0 12px 0;">' +
+                rowHtml('90天前', stats.letter90, 'confirmDeleteChatData(\'' + chatId + '\',\'letter90\')', stats.letter90 === 0) +
+                rowHtml('60天前', stats.letter60, 'confirmDeleteChatData(\'' + chatId + '\',\'letter60\')', stats.letter60 === 0) +
+                rowHtml('30天前', stats.letter30, 'confirmDeleteChatData(\'' + chatId + '\',\'letter30\')', stats.letter30 === 0) +
+                rowHtml('全部', stats.letterAll, 'confirmDeleteChatData(\'' + chatId + '\',\'letterAll\')', stats.letterAll === 0) +
+            '</div>' +
+
+            '<div class="section-title">收支</div>' +
+            '<div class="setting-block no-click" style="margin:0 0 12px 0;">' +
+                rowHtml('90天前', stats.flow90, 'confirmDeleteChatData(\'' + chatId + '\',\'flow90\')', stats.flow90 === 0) +
+                rowHtml('60天前', stats.flow60, 'confirmDeleteChatData(\'' + chatId + '\',\'flow60\')', stats.flow60 === 0) +
+                rowHtml('30天前', stats.flow30, 'confirmDeleteChatData(\'' + chatId + '\',\'flow30\')', stats.flow30 === 0) +
+                rowHtml('全部', stats.flowAll, 'confirmDeleteChatData(\'' + chatId + '\',\'flowAll\')', stats.flowAll === 0) +
+            '</div>' +
+
+            '<div class="section-title">状态日历</div>' +
+            '<div class="setting-block no-click" style="margin:0 0 12px 0;">' +
+                rowHtml('90天前', stats.calendar90, 'confirmDeleteChatData(\'' + chatId + '\',\'calendar90\')', stats.calendar90 === 0) +
+                rowHtml('60天前', stats.calendar60, 'confirmDeleteChatData(\'' + chatId + '\',\'calendar60\')', stats.calendar60 === 0) +
+                rowHtml('30天前', stats.calendar30, 'confirmDeleteChatData(\'' + chatId + '\',\'calendar30\')', stats.calendar30 === 0) +
+                rowHtml('全部', stats.calendarAll, 'confirmDeleteChatData(\'' + chatId + '\',\'calendarAll\')', stats.calendarAll === 0) +
+            '</div>' +
+
+            '<div class="section-title">相册</div>' +
+            '<div class="setting-block no-click" style="margin:0 0 12px 0;">' +
+                rowHtml('90天前', stats.album90, 'confirmDeleteChatData(\'' + chatId + '\',\'album90\')', stats.album90 === 0) +
+                rowHtml('60天前', stats.album60, 'confirmDeleteChatData(\'' + chatId + '\',\'album60\')', stats.album60 === 0) +
+                rowHtml('30天前', stats.album30, 'confirmDeleteChatData(\'' + chatId + '\',\'album30\')', stats.album30 === 0) +
+                rowHtml('全部', stats.albumAll, 'confirmDeleteChatData(\'' + chatId + '\',\'albumAll\')', stats.albumAll === 0) +
+            '</div>' +
+
+            '<div class="section-title">词条库（受保护）</div>' +
+            '<div class="setting-block no-click" style="margin:0 0 12px 0;">' +
+                rowHtml('私人词条库', stats.privateLexicon, '', true) +
+                '<div style="font-size:12px;color:#999999;padding:8px 0 0 0;">仅全局清除所有数据可删</div>' +
+            '</div>';
     }
 
-    html += '</div></div></div>';
+    html += '</div></div>';
 
     var container = document.getElementById('subPageContainer');
     container.innerHTML = html;
@@ -2567,21 +2798,407 @@ function openChatStorageManage(chatId) {
     }
 }
 
-function clearChatStorage(chatId) {
-    if (!confirm('确定清除此会话的独立存储吗？')) return;
-    var storage = { messages: [] };
-    saveChatStorage(chatId, storage);
-    showToast('已清除');
-    openChatStorageManage(chatId);
+// ====== 全局存储统计（所有会话总和） ======
+function getGlobalStorageStats() {
+    var friends = DataHub.get('friends', []);
+    var chatrooms = DataHub.get('chatrooms', []);
+    var stats = {
+        msgImage: 0,
+        msgAll: 0,
+        momentImage: 0,
+        momentAll: 0,
+        diary90: 0, diary60: 0, diary30: 0, diaryAll: 0,
+        letter90: 0, letter60: 0, letter30: 0, letterAll: 0,
+        flow90: 0, flow60: 0, flow30: 0, flowAll: 0,
+        calendar90: 0, calendar60: 0, calendar30: 0, calendarAll: 0,
+        album90: 0, album60: 0, album30: 0, albumAll: 0,
+        publicLexicon: 0
+    };
+
+    var msgs = DataHub.get('messages', []);
+    for (var i = 0; i < msgs.length; i++) {
+        var m = msgs[i];
+        stats.msgAll++;
+        if (m.isImage || (m.text && m.text.indexOf('<img') !== -1)) stats.msgImage++;
+    }
+
+    for (var fi = 0; fi < friends.length; fi++) {
+        var friend = friends[fi];
+
+        var moments = friend.moments || [];
+        for (var mi = 0; mi < moments.length; mi++) {
+            var mo = moments[mi];
+            stats.momentAll++;
+            if (mo.images && mo.images.length > 0) stats.momentImage++;
+        }
+
+        var diary = friend.diary || [];
+        for (var di = 0; di < diary.length; di++) {
+            var d = diary[di];
+            var dDate = d.date || (d.time ? d.time.split(' ')[0] : '');
+            stats.diaryAll++;
+            if (isDateBeforeDays(dDate, 90)) stats.diary90++;
+            if (isDateBeforeDays(dDate, 60)) stats.diary60++;
+            if (isDateBeforeDays(dDate, 30)) stats.diary30++;
+        }
+
+        var letters = friend.letters || {};
+        var allLetters = (letters.toHim || []).concat(letters.hisReply || []).concat(letters.fromHim || []).concat(letters.myReply || []);
+        for (var li = 0; li < allLetters.length; li++) {
+            var lt = allLetters[li];
+            var lDate = lt.time ? lt.time.split(' ')[0] : '';
+            stats.letterAll++;
+            if (isDateBeforeDays(lDate, 90)) stats.letter90++;
+            if (isDateBeforeDays(lDate, 60)) stats.letter60++;
+            if (isDateBeforeDays(lDate, 30)) stats.letter30++;
+        }
+
+        var flows = friend.flows || [];
+        for (var fli = 0; fli < flows.length; fli++) {
+            var fl = flows[fli];
+            var fDate = fl.time ? fl.time.split(' ')[0] : '';
+            stats.flowAll++;
+            if (isDateBeforeDays(fDate, 90)) stats.flow90++;
+            if (isDateBeforeDays(fDate, 60)) stats.flow60++;
+            if (isDateBeforeDays(fDate, 30)) stats.flow30++;
+        }
+
+        var cal = (friend.couple && friend.couple.statusCalendar) ? friend.couple.statusCalendar : {};
+        var calKeys = Object.keys(cal);
+        for (var ci = 0; ci < calKeys.length; ci++) {
+            var ck = calKeys[ci];
+            stats.calendarAll++;
+            if (isDateBeforeDays(ck, 90)) stats.calendar90++;
+            if (isDateBeforeDays(ck, 60)) stats.calendar60++;
+            if (isDateBeforeDays(ck, 30)) stats.calendar30++;
+        }
+
+        var album = friend.privateAlbum || [];
+        for (var ai = 0; ai < album.length; ai++) {
+            var al = album[ai];
+            var aDate = al.time ? al.time.split(' ')[0] : '';
+            stats.albumAll++;
+            if (isDateBeforeDays(aDate, 90)) stats.album90++;
+            if (isDateBeforeDays(aDate, 60)) stats.album60++;
+            if (isDateBeforeDays(aDate, 30)) stats.album30++;
+        }
+    }
+
+    var wallet = DataHub.get('wallet', { flows: [] });
+    var myFlows = wallet.flows || [];
+    for (var mfi = 0; mfi < myFlows.length; mfi++) {
+        var mf = myFlows[mfi];
+        var mfDate = mf.time ? mf.time.split(' ')[0] : '';
+        stats.flowAll++;
+        if (isDateBeforeDays(mfDate, 90)) stats.flow90++;
+        if (isDateBeforeDays(mfDate, 60)) stats.flow60++;
+        if (isDateBeforeDays(mfDate, 30)) stats.flow30++;
+    }
+
+    var publicData = DataHub.get('lexiconData', null);
+    if (publicData && publicData.items) {
+        stats.publicLexicon = publicData.items.length;
+    }
+
+    return stats;
 }
 
-function resetChatStorage(chatId) {
-    var chat = getChat(chatId);
-    if (!chat) return;
-    chat.storage = null;
-    saveChatStorage(chatId, null);
-    showToast('已恢复全局存储');
-    closeSubPage();
+function getGlobalMemoryUsedMB() {
+    var all = DataHub.getAll();
+    return estimateSizeMB(all);
+}
+
+function confirmDeleteGlobalData(type) {
+    if (!type) return;
+    var stats = getGlobalStorageStats();
+    var label = '';
+    var count = 0;
+
+    if (type === 'msgImage') { label = '图片消息'; count = stats.msgImage; }
+    else if (type === 'msgAll') { label = '全部聊天记录'; count = stats.msgAll; }
+    else if (type === 'momentImage') { label = '带图片的朋友圈'; count = stats.momentImage; }
+    else if (type === 'momentAll') { label = '全部朋友圈'; count = stats.momentAll; }
+    else if (type === 'diary90') { label = '90天前的日记'; count = stats.diary90; }
+    else if (type === 'diary60') { label = '60天前的日记'; count = stats.diary60; }
+    else if (type === 'diary30') { label = '30天前的日记'; count = stats.diary30; }
+    else if (type === 'diaryAll') { label = '全部日记'; count = stats.diaryAll; }
+    else if (type === 'letter90') { label = '90天前的信件'; count = stats.letter90; }
+    else if (type === 'letter60') { label = '60天前的信件'; count = stats.letter60; }
+    else if (type === 'letter30') { label = '30天前的信件'; count = stats.letter30; }
+    else if (type === 'letterAll') { label = '全部信件'; count = stats.letterAll; }
+    else if (type === 'flow90') { label = '90天前的收支'; count = stats.flow90; }
+    else if (type === 'flow60') { label = '60天前的收支'; count = stats.flow60; }
+    else if (type === 'flow30') { label = '30天前的收支'; count = stats.flow30; }
+    else if (type === 'flowAll') { label = '全部收支'; count = stats.flowAll; }
+    else if (type === 'calendar90') { label = '90天前的状态日历'; count = stats.calendar90; }
+    else if (type === 'calendar60') { label = '60天前的状态日历'; count = stats.calendar60; }
+    else if (type === 'calendar30') { label = '30天前的状态日历'; count = stats.calendar30; }
+    else if (type === 'calendarAll') { label = '全部状态日历'; count = stats.calendarAll; }
+    else if (type === 'album90') { label = '90天前的相册'; count = stats.album90; }
+    else if (type === 'album60') { label = '60天前的相册'; count = stats.album60; }
+    else if (type === 'album30') { label = '30天前的相册'; count = stats.album30; }
+    else if (type === 'albumAll') { label = '全部相册'; count = stats.albumAll; }
+
+    var html = '<div class="modal-title">删除' + label + '</div>' +
+        '<div style="text-align:center;padding:12px 0;font-size:14px;color:#000000;">确定删除所有会话里的 ' + count + ' 条' + label + '吗？</div>' +
+        '<div class="btn-row">' +
+            '<button class="cancel" onclick="closeModal()">取消</button>' +
+            '<button class="confirm" onclick="closeModal();doDeleteGlobalData(\'' + type + '\')">确认删除</button>' +
+        '</div>';
+    showModal(html);
+}
+
+function doDeleteGlobalData(type) {
+    if (!type) return;
+    var friends = DataHub.get('friends', []);
+
+    if (type === 'msgImage') {
+        var msgs = DataHub.get('messages', []);
+        msgs = msgs.filter(function(m) {
+            var isImg = m.isImage || (m.text && m.text.indexOf('<img') !== -1);
+            return !isImg;
+        });
+        DataHub.set('messages', msgs);
+    } else if (type === 'msgAll') {
+        DataHub.set('messages', []);
+    } else {
+        for (var fi = 0; fi < friends.length; fi++) {
+            var friend = friends[fi];
+
+            if (type === 'momentImage') {
+                friend.moments = (friend.moments || []).filter(function(m) {
+                    return !(m.images && m.images.length > 0);
+                });
+            } else if (type === 'momentAll') {
+                friend.moments = [];
+            } else if (type === 'diary90' || type === 'diary60' || type === 'diary30' || type === 'diaryAll') {
+                var days = 0;
+                if (type === 'diary90') days = 90;
+                else if (type === 'diary60') days = 60;
+                else if (type === 'diary30') days = 30;
+                friend.diary = (friend.diary || []).filter(function(d) {
+                    if (type === 'diaryAll') return false;
+                    var dDate = d.date || (d.time ? d.time.split(' ')[0] : '');
+                    return !isDateBeforeDays(dDate, days);
+                });
+            } else if (type === 'letter90' || type === 'letter60' || type === 'letter30' || type === 'letterAll') {
+                var ldays = 0;
+                if (type === 'letter90') ldays = 90;
+                else if (type === 'letter60') ldays = 60;
+                else if (type === 'letter30') ldays = 30;
+                if (!friend.letters) friend.letters = { toHim: [], hisReply: [], fromHim: [], myReply: [] };
+                var tabs = ['toHim', 'hisReply', 'fromHim', 'myReply'];
+                for (var ti = 0; ti < tabs.length; ti++) {
+                    var arr = friend.letters[tabs[ti]] || [];
+                    if (type === 'letterAll') {
+                        friend.letters[tabs[ti]] = [];
+                    } else {
+                        friend.letters[tabs[ti]] = arr.filter(function(item) {
+                            var iDate = item.time ? item.time.split(' ')[0] : '';
+                            return !isDateBeforeDays(iDate, ldays);
+                        });
+                    }
+                }
+            } else if (type === 'flow90' || type === 'flow60' || type === 'flow30' || type === 'flowAll') {
+                var fdays = 0;
+                if (type === 'flow90') fdays = 90;
+                else if (type === 'flow60') fdays = 60;
+                else if (type === 'flow30') fdays = 30;
+                friend.flows = (friend.flows || []).filter(function(fl) {
+                    if (type === 'flowAll') return false;
+                    var fDate = fl.time ? fl.time.split(' ')[0] : '';
+                    return !isDateBeforeDays(fDate, fdays);
+                });
+            } else if (type === 'calendar90' || type === 'calendar60' || type === 'calendar30' || type === 'calendarAll') {
+                var cdays = 0;
+                if (type === 'calendar90') cdays = 90;
+                else if (type === 'calendar60') cdays = 60;
+                else if (type === 'calendar30') cdays = 30;
+                if (!friend.couple) friend.couple = {};
+                if (!friend.couple.statusCalendar) friend.couple.statusCalendar = {};
+                var cal = friend.couple.statusCalendar;
+                var keys = Object.keys(cal);
+                for (var ki = 0; ki < keys.length; ki++) {
+                    var k = keys[ki];
+                    if (type === 'calendarAll' || isDateBeforeDays(k, cdays)) {
+                        delete cal[k];
+                    }
+                }
+            } else if (type === 'album90' || type === 'album60' || type === 'album30' || type === 'albumAll') {
+                var adays = 0;
+                if (type === 'album90') adays = 90;
+                else if (type === 'album60') adays = 60;
+                else if (type === 'album30') adays = 30;
+                friend.privateAlbum = (friend.privateAlbum || []).filter(function(al) {
+                    if (type === 'albumAll') return false;
+                    var aDate = al.time ? al.time.split(' ')[0] : '';
+                    return !isDateBeforeDays(aDate, adays);
+                });
+            }
+        }
+        DataHub.set('friends', friends);
+
+        if (type === 'flow90' || type === 'flow60' || type === 'flow30' || type === 'flowAll') {
+            var wallet = DataHub.get('wallet', { balance: 0, flows: [] });
+            var fdays2 = 0;
+            if (type === 'flow90') fdays2 = 90;
+            else if (type === 'flow60') fdays2 = 60;
+            else if (type === 'flow30') fdays2 = 30;
+            wallet.flows = (wallet.flows || []).filter(function(mf) {
+                if (type === 'flowAll') return false;
+                var mfDate = mf.time ? mf.time.split(' ')[0] : '';
+                return !isDateBeforeDays(mfDate, fdays2);
+            });
+            DataHub.set('wallet', wallet);
+        }
+    }
+
+    showToast('已删除');
+    openSubPage('storage');
+}
+
+function confirmDeleteChatData(chatId, type) {
+    if (!chatId || !type) return;
+    var stats = getChatStorageStats(chatId);
+    var label = '';
+    var count = 0;
+    var isFriend = DataHub.get('friends', []).some(function(f) { return f.id === chatId; });
+
+    if (type === 'msgImage') { label = '图片消息'; count = stats.msgImage; }
+    else if (type === 'msgAll') { label = '全部聊天记录'; count = stats.msgAll; }
+    else if (type === 'momentImage') { label = '带图片的朋友圈'; count = stats.momentImage; }
+    else if (type === 'momentAll') { label = '全部朋友圈'; count = stats.momentAll; }
+    else if (type === 'diary90') { label = '90天前的日记'; count = stats.diary90; }
+    else if (type === 'diary60') { label = '60天前的日记'; count = stats.diary60; }
+    else if (type === 'diary30') { label = '30天前的日记'; count = stats.diary30; }
+    else if (type === 'diaryAll') { label = '全部日记'; count = stats.diaryAll; }
+    else if (type === 'letter90') { label = '90天前的信件'; count = stats.letter90; }
+    else if (type === 'letter60') { label = '60天前的信件'; count = stats.letter60; }
+    else if (type === 'letter30') { label = '30天前的信件'; count = stats.letter30; }
+    else if (type === 'letterAll') { label = '全部信件'; count = stats.letterAll; }
+    else if (type === 'flow90') { label = '90天前的收支'; count = stats.flow90; }
+    else if (type === 'flow60') { label = '60天前的收支'; count = stats.flow60; }
+    else if (type === 'flow30') { label = '30天前的收支'; count = stats.flow30; }
+    else if (type === 'flowAll') { label = '全部收支'; count = stats.flowAll; }
+    else if (type === 'calendar90') { label = '90天前的状态日历'; count = stats.calendar90; }
+    else if (type === 'calendar60') { label = '60天前的状态日历'; count = stats.calendar60; }
+    else if (type === 'calendar30') { label = '30天前的状态日历'; count = stats.calendar30; }
+    else if (type === 'calendarAll') { label = '全部状态日历'; count = stats.calendarAll; }
+    else if (type === 'album90') { label = '90天前的相册'; count = stats.album90; }
+    else if (type === 'album60') { label = '60天前的相册'; count = stats.album60; }
+    else if (type === 'album30') { label = '30天前的相册'; count = stats.album30; }
+    else if (type === 'albumAll') { label = '全部相册'; count = stats.albumAll; }
+
+    var html = '<div class="modal-title">删除' + label + '</div>' +
+        '<div style="text-align:center;padding:12px 0;font-size:14px;color:#000000;">确定删除 ' + count + ' 条' + label + '吗？</div>' +
+        '<div class="btn-row">' +
+            '<button class="cancel" onclick="closeModal()">取消</button>' +
+            '<button class="confirm" onclick="closeModal();doDeleteChatData(\'' + chatId + '\',\'' + type + '\')">确认删除</button>' +
+        '</div>';
+    showModal(html);
+}
+
+function doDeleteChatData(chatId, type) {
+    if (!chatId || !type) return;
+    var isFriend = DataHub.get('friends', []).some(function(f) { return f.id === chatId; });
+
+    if (type === 'msgImage') {
+        var msgs = DataHub.get('messages', []);
+        msgs = msgs.filter(function(m) {
+            if (m.chatId !== chatId) return true;
+            var isImg = m.isImage || (m.text && m.text.indexOf('<img') !== -1);
+            return !isImg;
+        });
+        DataHub.set('messages', msgs);
+    } else if (type === 'msgAll') {
+        var msgs2 = DataHub.get('messages', []);
+        msgs2 = msgs2.filter(function(m) { return m.chatId !== chatId; });
+        DataHub.set('messages', msgs2);
+    } else if (isFriend) {
+        var friends = DataHub.get('friends', []);
+        var fi = -1;
+        for (var i = 0; i < friends.length; i++) {
+            if (friends[i].id === chatId) { fi = i; break; }
+        }
+        if (fi < 0) return;
+        var friend = friends[fi];
+
+        if (type === 'momentImage') {
+            friend.moments = (friend.moments || []).filter(function(m) {
+                return !(m.images && m.images.length > 0);
+            });
+        } else if (type === 'momentAll') {
+            friend.moments = [];
+        } else if (type === 'diary90' || type === 'diary60' || type === 'diary30' || type === 'diaryAll') {
+            var days = 0;
+            if (type === 'diary90') days = 90;
+            else if (type === 'diary60') days = 60;
+            else if (type === 'diary30') days = 30;
+            friend.diary = (friend.diary || []).filter(function(d) {
+                if (type === 'diaryAll') return false;
+                var dDate = d.date || (d.time ? d.time.split(' ')[0] : '');
+                return !isDateBeforeDays(dDate, days);
+            });
+        } else if (type === 'letter90' || type === 'letter60' || type === 'letter30' || type === 'letterAll') {
+            var ldays = 0;
+            if (type === 'letter90') ldays = 90;
+            else if (type === 'letter60') ldays = 60;
+            else if (type === 'letter30') ldays = 30;
+            if (!friend.letters) friend.letters = { toHim: [], hisReply: [], fromHim: [], myReply: [] };
+            var tabs = ['toHim', 'hisReply', 'fromHim', 'myReply'];
+            for (var ti = 0; ti < tabs.length; ti++) {
+                var arr = friend.letters[tabs[ti]] || [];
+                if (type === 'letterAll') {
+                    friend.letters[tabs[ti]] = [];
+                } else {
+                    friend.letters[tabs[ti]] = arr.filter(function(item) {
+                        var iDate = item.time ? item.time.split(' ')[0] : '';
+                        return !isDateBeforeDays(iDate, ldays);
+                    });
+                }
+            }
+        } else if (type === 'flow90' || type === 'flow60' || type === 'flow30' || type === 'flowAll') {
+            var fdays = 0;
+            if (type === 'flow90') fdays = 90;
+            else if (type === 'flow60') fdays = 60;
+            else if (type === 'flow30') fdays = 30;
+            friend.flows = (friend.flows || []).filter(function(fl) {
+                if (type === 'flowAll') return false;
+                var fDate = fl.time ? fl.time.split(' ')[0] : '';
+                return !isDateBeforeDays(fDate, fdays);
+            });
+        } else if (type === 'calendar90' || type === 'calendar60' || type === 'calendar30' || type === 'calendarAll') {
+            var cdays = 0;
+            if (type === 'calendar90') cdays = 90;
+            else if (type === 'calendar60') cdays = 60;
+            else if (type === 'calendar30') cdays = 30;
+            if (!friend.couple) friend.couple = {};
+            if (!friend.couple.statusCalendar) friend.couple.statusCalendar = {};
+            var cal = friend.couple.statusCalendar;
+            var keys = Object.keys(cal);
+            for (var ki = 0; ki < keys.length; ki++) {
+                var k = keys[ki];
+                if (type === 'calendarAll' || isDateBeforeDays(k, cdays)) {
+                    delete cal[k];
+                }
+            }
+        } else if (type === 'album90' || type === 'album60' || type === 'album30' || type === 'albumAll') {
+            var adays = 0;
+            if (type === 'album90') adays = 90;
+            else if (type === 'album60') adays = 60;
+            else if (type === 'album30') adays = 30;
+            friend.privateAlbum = (friend.privateAlbum || []).filter(function(al) {
+                if (type === 'albumAll') return false;
+                var aDate = al.time ? al.time.split(' ')[0] : '';
+                return !isDateBeforeDays(aDate, adays);
+            });
+        }
+
+        DataHub.set('friends', friends);
+    }
+
+    showToast('已删除');
+    openChatStorageManage(chatId);
 }
 
 var chatTopStatusTimer = null;
@@ -3062,6 +3679,8 @@ if (m.isPayRequest && m.payRequestId) {
     }
 } else if (m.isHongbaoResult && m.hongbaoId) {
     msgContent = renderHongbaoResultCard(m.hongbaoId, m.resultType);
+} else if (m.isCollectionCard && m.collectionProduct) {
+    msgContent = renderCollectionCard(m);
 } else if (m.isHelpRequest && m.helpRequestId) {
     msgContent = renderHelpRequestCard(m.helpRequestId);
 } else if (m.isImage && m.imageData) {
@@ -3075,7 +3694,7 @@ if (m.isPayRequest && m.payRequestId) {
         var longPressAttr = ' oncontextmenu="return false;"';
 
         if (isMe) {
-            var isBubbleCard = (m.isHongbaoCard || m.isHongbaoResult || m.isHelpRequest);
+            var isBubbleCard = (m.isHongbaoCard || m.isHongbaoResult || m.isHelpRequest || m.isCollectionCard);
             if (isBubbleCard) {
                 html += '<div' + msgIdAttr + longPressAttr + ' class="chat-msg-row" data-from="me" style="display:flex;justify-content:flex-end;margin-bottom:14px;">' +
                     '<div style="display:flex;flex-direction:column;align-items:flex-end;max-width:100%;min-width:0;">' +
@@ -3108,7 +3727,7 @@ if (m.isPayRequest && m.payRequestId) {
             '</div>';
             }
         } else {
-            var isBubbleCardOther = (m.isHongbaoCard || m.isHongbaoResult || m.isHelpRequest);
+            var isBubbleCardOther = (m.isHongbaoCard || m.isHongbaoResult || m.isHelpRequest || m.isCollectionCard);
             if (isBubbleCardOther) {
                 html += '<div' + msgIdAttr + longPressAttr + ' class="chat-msg-row" data-from="other" style="display:flex;justify-content:flex-start;margin-bottom:14px;">' +
                     '<div style="display:flex;flex-direction:column;align-items:flex-start;max-width:100%;min-width:0;">' +
@@ -8163,25 +8782,14 @@ function renderCollectionDetail(accountId, tabKey) {
     var html = '';
 
     if (tabKey === 'collection') {
-        var friends = DataHub.get('friends', []);
-        var list = [];
-        for (var i = 0; i < friends.length; i++) {
-            var collections = getFriendCollections(friends[i].id);
-            for (var j = 0; j < collections.length; j++) {
-                list.push({
-                    friendId: friends[i].id,
-                    friendName: friends[i].name,
-                    item: collections[j]
-                });
-            }
-        }
-        if (list.length === 0) {
+        var myCollections = DataHub.get('myCollections', []);
+        if (myCollections.length === 0) {
             return '<div style="color:#999999;text-align:center;padding:20px;font-size:13px;">暂无收藏</div>';
         }
         html += '<div style="display:flex;flex-wrap:wrap;gap:8px;">';
-        for (var k = 0; k < list.length; k++) {
-            var entry = list[k];
-            var p = entry.item.productInfo || {};
+        for (var k = 0; k < myCollections.length; k++) {
+            var entry = myCollections[k];
+            var p = entry.productInfo || {};
             var imgHtml = '';
             if (p.imageType === 'upload' && p.image) {
                 imgHtml = '<img src="' + p.image + '" style="width:100%;height:80px;object-fit:cover;border-radius:8px;">';
@@ -8191,11 +8799,12 @@ function renderCollectionDetail(accountId, tabKey) {
                 imgHtml = '<img src="' + getDefaultProductSvg() + '" style="width:100%;height:80px;object-fit:cover;border-radius:8px;">';
             }
             html += '<div style="width:calc(50% - 4px);box-sizing:border-box;background:#ffffff;border-radius:10px;padding:6px;border:1px solid #eef5ef;">' +
-    imgHtml +
-    '<div style="font-size:13px;color:#000000;margin-top:4px;word-break:break-all;">' + (p.name || '') + '</div>' +
-    '<div style="font-size:12px;color:#000000;font-weight:600;">¥' + (p.price || 0).toFixed(2) + '</div>' +
-    '<div style="font-size:11px;color:#888888;margin-top:2px;">来自 ' + entry.friendName + '</div>' +
-'</div>';
+                imgHtml +
+                '<div style="font-size:13px;color:#000000;margin-top:4px;word-break:break-all;">' + (p.name || '') + '</div>' +
+                '<div style="font-size:12px;color:#000000;font-weight:600;">¥' + (p.price || 0).toFixed(2) + '</div>' +
+                '<button class="btn-primary" onclick="buyFromMyCollection(\'' + entry.productId + '\')" style="width:100%;margin-top:6px;padding:4px 0;font-size:12px;">买</button>' +
+                '<button class="btn-icon" onclick="removeMyCollection(\'' + entry.productId + '\')" style="width:100%;margin-top:4px;padding:4px 0;font-size:12px;">取消收藏</button>' +
+            '</div>';
         }
         html += '</div>';
         return html;
@@ -8228,6 +8837,75 @@ function renderCollectionDetail(accountId, tabKey) {
     }
 
     return html;
+}
+
+function buyFromMyCollection(productId) {
+    if (!productId) return;
+    var mall = getMallData();
+    var product = mall.products.find(function(p) { return p.id === productId; });
+    if (!product) {
+        showToast('商品不存在');
+        return;
+    }
+    var myBalance = getAccountBalance('my');
+    if (myBalance < product.price) {
+        showToast('余额不足');
+        return;
+    }
+
+    addFlow('my', {
+        amount: product.price,
+        direction: 'expense',
+        category: '商场购物',
+        subCategory: '余额支付',
+        fromAccount: 'my',
+        toAccount: '',
+        relatedFriendId: '',
+        relatedProductId: product.id,
+        note: '我购买了 ' + product.name,
+        forWhom: 'self',
+        productInfo: product,
+        payer: 'me'
+    });
+
+    var myItems = getPurchasedItems('my');
+    myItems.unshift({
+        id: 'pi' + Date.now() + Math.random().toString(36).substr(2, 4),
+        productId: product.id,
+        name: product.name,
+        price: product.price,
+        image: product.image || '',
+        imageType: product.imageType || 'default',
+        description: product.description || '',
+        category: product.category || '默认',
+        boughtBy: 'me',
+        forWhom: 'self',
+        paidFrom: 'balance',
+        paidFromFriendId: '',
+        time: getNowTimeStringFull(),
+        isGift: false,
+        isSurprise: false
+    });
+    setPurchasedItems('my', myItems);
+
+    removeMyCollection(productId);
+
+    if (Math.random() < 0.01) {
+        triggerShoppingDiary('me', '', product);
+    }
+
+    showToast('购买成功');
+    renderAll();
+    var container = document.getElementById('accountTabContent');
+    if (container) {
+        container.innerHTML = renderAccountTabContent(window._currentAccountId || 'my', window._accountCurrentTab || 'income_expense');
+    }
+}
+
+function removeMyCollection(productId) {
+    var myCollections = DataHub.get('myCollections', []);
+    myCollections = myCollections.filter(function(c) { return c.productId !== productId; });
+    DataHub.set('myCollections', myCollections);
 }
 
 function switchCollectionMainTab(accountId, tabKey) {
@@ -8428,6 +9106,294 @@ function autoRandomDeleteFriendItems() {
 }
 
 window.autoRandomDeleteFriendItems = autoRandomDeleteFriendItems;
+
+function autoFriendCollectProduct() {
+    var today = getTodayDateStr();
+    var log = DataHub.get('friendCollectLog', {});
+    if (!log[today]) log[today] = {};
+
+    var friends = DataHub.get('friends', []);
+    if (friends.length === 0) return;
+
+    var mall = getMallData();
+    if (!mall.products || mall.products.length === 0) return;
+
+    var changed = false;
+
+    for (var i = 0; i < friends.length; i++) {
+        var f = friends[i];
+        var todayCount = log[today][f.id] || 0;
+        if (todayCount >= 3) continue;
+
+        if (Math.random() >= 0.01) continue;
+
+        var visible = getVisibleProductsForFriend(f.id);
+        if (visible.length === 0) continue;
+
+        if (!f.collections) f.collections = [];
+
+        var picked = visible[Math.floor(Math.random() * visible.length)];
+        if (!picked) continue;
+
+        var exists = f.collections.some(function(c) { return c.productId === picked.id; });
+        if (exists) continue;
+
+        var productInfo = {
+            id: picked.id,
+            name: picked.name,
+            price: picked.price,
+            image: picked.image,
+            imageType: picked.imageType,
+            description: picked.description,
+            category: picked.category
+        };
+
+        f.collections.unshift({
+            id: 'col' + Date.now() + Math.random().toString(36).substr(2, 4),
+            productId: picked.id,
+            productInfo: productInfo,
+            collectedAt: Date.now(),
+            collectedAtStr: getNowTimeStringFull()
+        });
+
+        log[today][f.id] = todayCount + 1;
+        changed = true;
+    }
+
+    if (changed) {
+        DataHub.set('friends', friends);
+        DataHub.set('friendCollectLog', log);
+    }
+}
+
+function startFriendCollectChecker() {
+    autoFriendCollectProduct();
+    setInterval(function() {
+        autoFriendCollectProduct();
+    }, 60 * 60 * 1000);
+}
+
+function autoFriendBuyFromMyCollection() {
+    var today = getTodayDateStr();
+    var log = DataHub.get('friendBuyMyCollectionLog', {});
+    if (!log[today]) log[today] = {};
+
+    var myCollections = DataHub.get('myCollections', []);
+    if (myCollections.length === 0) return;
+
+    var friends = DataHub.get('friends', []);
+    if (friends.length === 0) return;
+
+    var changed = false;
+    var friendsChanged = false;
+
+    for (var i = 0; i < friends.length; i++) {
+        var f = friends[i];
+        var todayCount = log[today][f.id] || 0;
+        if (todayCount >= 3) continue;
+
+        if (Math.random() >= 0.01) continue;
+
+        var picked = myCollections[Math.floor(Math.random() * myCollections.length)];
+        if (!picked) continue;
+
+        var p = picked.productInfo || {};
+        var price = p.price || 0;
+        if (price <= 0) continue;
+
+        var usePiggy = false;
+        if (f.couple && f.couple.enabled === true) {
+            var piggy = getPiggyData(f.id);
+            if ((piggy.balance || 0) >= price) {
+                usePiggy = Math.random() < 0.5;
+            }
+        }
+
+        var balance = f.balance || 0;
+        if (!usePiggy && balance < price) {
+            var piggy2 = getPiggyData(f.id);
+            if ((piggy2.balance || 0) >= price) {
+                usePiggy = true;
+            } else {
+                continue;
+            }
+        }
+
+        var paidAccountId = usePiggy ? ('piggy:' + f.id) : ('friend:' + f.id);
+        var category = usePiggy ? '零钱购物' : '商场购物';
+        var subCategory = usePiggy ? '零钱购物' : '余额支付';
+
+        addFlow(paidAccountId, {
+            amount: price,
+            direction: 'expense',
+            category: category,
+            subCategory: subCategory,
+            fromAccount: paidAccountId,
+            toAccount: '',
+            relatedFriendId: f.id,
+            relatedProductId: p.id,
+            note: f.name + '购买了 ' + p.name,
+            forWhom: 'friend',
+            productInfo: p,
+            payer: 'friend'
+        });
+
+        addMyCollectionIncomeFromFriend(f.id, p, usePiggy);
+
+        var myItems = getPurchasedItems('my');
+        myItems.unshift({
+            id: 'pi' + Date.now() + Math.random().toString(36).substr(2, 4),
+            productId: p.id,
+            name: p.name,
+            price: p.price,
+            image: p.image || '',
+            imageType: p.imageType || 'default',
+            description: p.description || '',
+            category: p.category || '默认',
+            boughtBy: 'friend',
+            forWhom: 'friend',
+            paidFrom: usePiggy ? 'piggy' : 'balance',
+            paidFromFriendId: f.id,
+            time: getNowTimeStringFull(),
+            isGift: true,
+            isSurprise: false
+        });
+        setPurchasedItems('my', myItems);
+
+        sendCollectionBoughtCard(f.id, p);
+
+        log[today][f.id] = todayCount + 1;
+        changed = true;
+        friendsChanged = true;
+    }
+
+    if (changed) {
+        DataHub.set('friendBuyMyCollectionLog', log);
+    }
+    if (friendsChanged) {
+        DataHub.set('friends', friends);
+    }
+}
+
+function startFriendBuyMyCollectionChecker() {
+    autoFriendBuyFromMyCollection();
+    setInterval(function() {
+        autoFriendBuyFromMyCollection();
+    }, 60 * 60 * 1000);
+}
+
+function addMyCollectionIncomeFromFriend(friendId, productInfo, usePiggy) {
+    if (!friendId || !productInfo) return;
+    var friends = DataHub.get('friends', []);
+    var friend = friends.find(function(f) { return f.id === friendId; });
+    if (!friend) return;
+    var friendName = friend.name || '好友';
+
+    addFlow('my', {
+        amount: productInfo.price,
+        direction: 'income',
+        category: '心意礼物',
+        subCategory: friendName + '买给我的',
+        fromAccount: 'friend:' + friendId,
+        toAccount: 'my',
+        relatedFriendId: friendId,
+        relatedProductId: productInfo.id,
+        note: '收到 ' + friendName + ' 的心意礼物：' + productInfo.name,
+        forWhom: 'self',
+        productInfo: productInfo,
+        payer: 'friend'
+    });
+}
+
+function addFriendCollectionIncomeFromMe(friendId, productInfo) {
+    if (!friendId || !productInfo) return;
+    var myProfile = DataHub.get('myProfile', { nickname: '我' });
+    var myName = myProfile.nickname || '我';
+
+    addFlow('friend:' + friendId, {
+        amount: productInfo.price,
+        direction: 'income',
+        category: '心意礼物',
+        subCategory: '我买给他的',
+        fromAccount: 'my',
+        toAccount: 'friend:' + friendId,
+        relatedFriendId: friendId,
+        relatedProductId: productInfo.id,
+        note: '收到 ' + myName + ' 的心意礼物：' + productInfo.name,
+        forWhom: 'friend',
+        productInfo: productInfo,
+        payer: 'me'
+    });
+}
+
+function sendCollectionBoughtCard(friendId, productInfo) {
+    if (!friendId || !productInfo) return;
+    var now = new Date();
+    var time = now.getFullYear() + '.' + String(now.getMonth()+1).padStart(2,'0') + '.' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
+
+    var msgs = DataHub.get('messages', []);
+    msgs.push({
+        id: 'm' + genId(),
+        chatId: friendId,
+        from: 'me',
+        text: '',
+        time: time,
+        timestamp: Date.now(),
+        unread: 0,
+        isCollectionCard: true,
+        collectionProduct: {
+            id: productInfo.id,
+            name: productInfo.name,
+            price: productInfo.price,
+            image: productInfo.image,
+            imageType: productInfo.imageType,
+            description: productInfo.description,
+            category: productInfo.category
+        }
+    });
+    DataHub.set('messages', msgs);
+
+    if (currentChatId === friendId) {
+        renderChatMessages();
+    }
+    renderMessages();
+}
+
+function renderCollectionCard(msg) {
+    if (!msg || !msg.collectionProduct) {
+        return '<div style="font-size:12px;color:#999999;padding:4px 0;">收藏卡片已失效</div>';
+    }
+    var p = msg.collectionProduct;
+    var friendName = getFriendSpecialName(msg.chatId);
+
+    var imgHtml = '';
+    if (p.imageType === 'upload' && p.image) {
+        imgHtml = '<img src="' + p.image + '" style="width:80px;height:80px;object-fit:cover;border-radius:8px;">';
+    } else if (p.imageType === 'emoji' && p.image) {
+        imgHtml = '<div style="width:80px;height:80px;background:#eef5ef;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:36px;">' + p.image + '</div>';
+    } else {
+        imgHtml = '<img src="' + getDefaultProductSvg() + '" style="width:80px;height:80px;object-fit:cover;border-radius:8px;">';
+    }
+
+    var fromMe = (msg.from === 'me');
+    var bottomText = fromMe ? '你的心意已送达' : (friendName + ' 的心意已送达');
+
+    return '<div style="background:#ffffff;border:1px solid #e0e0e0;border-radius:12px;padding:14px;width:220px;box-sizing:border-box;text-align:center;">' +
+        '<div style="display:flex;justify-content:center;margin-bottom:8px;">' + imgHtml + '</div>' +
+        '<div style="font-size:13px;color:#000000;word-break:break-all;margin-bottom:4px;">' + (p.name || '') + '</div>' +
+        '<div style="font-size:13px;color:#000000;font-weight:600;margin-bottom:4px;">¥' + (p.price || 0).toFixed(2) + '</div>' +
+        '<div style="font-size:12px;color:#666666;margin-bottom:8px;word-break:break-word;">' + (p.description || '') + '</div>' +
+        '<div style="font-size:12px;color:#999999;text-align:left;">' + bottomText + '</div>' +
+    '</div>';
+}
+
+window.buyFromMyCollection = buyFromMyCollection;
+window.removeMyCollection = removeMyCollection;
+window.buyForFriendFromCollection = buyForFriendFromCollection;
+window.collectProductToMyCollections = collectProductToMyCollections;
+window.uncollectProductFromMyCollections = uncollectProductFromMyCollections;
+window.isProductCollectedByMe = isProductCollectedByMe;
+window.renderCollectionCard = renderCollectionCard;
 
 // 启动随机删除定时器
 function startRandomDeleteChecker() {
@@ -8702,6 +9668,54 @@ function collectProduct(friendId, productId) {
     setFriendCollections(friendId, list);
     showToast('已收藏');
     return true;
+}
+
+function collectProductToMyCollections(productId) {
+    if (!productId) return false;
+    var myCollections = DataHub.get('myCollections', []);
+    var exists = myCollections.some(function(c) { return c.productId === productId; });
+    if (exists) {
+        showToast('已收藏');
+        return false;
+    }
+    var mall = getMallData();
+    var product = mall.products.find(function(p) { return p.id === productId; });
+    if (!product) return false;
+
+    var productInfo = {
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        image: product.image,
+        imageType: product.imageType,
+        description: product.description,
+        category: product.category
+    };
+
+    myCollections.unshift({
+        id: 'mcol' + Date.now() + Math.random().toString(36).substr(2, 4),
+        productId: productId,
+        productInfo: productInfo,
+        collectedAt: Date.now(),
+        collectedAtStr: getNowTimeStringFull()
+    });
+    DataHub.set('myCollections', myCollections);
+    showToast('已收藏');
+    return true;
+}
+
+function uncollectProductFromMyCollections(productId) {
+    if (!productId) return false;
+    var myCollections = DataHub.get('myCollections', []);
+    myCollections = myCollections.filter(function(c) { return c.productId !== productId; });
+    DataHub.set('myCollections', myCollections);
+    showToast('已取消收藏');
+    return true;
+}
+
+function isProductCollectedByMe(productId) {
+    var myCollections = DataHub.get('myCollections', []);
+    return myCollections.some(function(c) { return c.productId === productId; });
 }
 
 // 取消收藏
@@ -9284,10 +10298,11 @@ function renderFriendCollectionDetail(accountId, tabKey) {
                 imgHtml = '<img src="' + getDefaultProductSvg() + '" style="width:100%;height:80px;object-fit:cover;border-radius:8px;">';
             }
             html += '<div style="width:calc(50% - 4px);box-sizing:border-box;background:#ffffff;border-radius:10px;padding:6px;border:1px solid #eef5ef;">' +
-    imgHtml +
-    '<div style="font-size:13px;color:#000000;margin-top:4px;word-break:break-all;">' + (p.name || '') + '</div>' +
-    '<div style="font-size:12px;color:#000000;font-weight:600;">¥' + (p.price || 0).toFixed(2) + '</div>' +
-'</div>';
+                imgHtml +
+                '<div style="font-size:13px;color:#000000;margin-top:4px;word-break:break-all;">' + (p.name || '') + '</div>' +
+                '<div style="font-size:12px;color:#000000;font-weight:600;">¥' + (p.price || 0).toFixed(2) + '</div>' +
+                '<button class="btn-primary" onclick="buyForFriendFromCollection(\'' + fid + '\',\'' + collections[k].productId + '\')" style="width:100%;margin-top:6px;padding:4px 0;font-size:12px;">买给他</button>' +
+            '</div>';
         }
         html += '</div>';
         return html;
@@ -9320,6 +10335,78 @@ function renderFriendCollectionDetail(accountId, tabKey) {
     }
 
     return html;
+}
+
+function buyForFriendFromCollection(friendId, productId) {
+    if (!friendId || !productId) return;
+    var friends = DataHub.get('friends', []);
+    var friend = friends.find(function(f) { return f.id === friendId; });
+    if (!friend) return;
+    var mall = getMallData();
+    var product = mall.products.find(function(p) { return p.id === productId; });
+    if (!product) {
+        showToast('商品不存在');
+        return;
+    }
+    var myBalance = getAccountBalance('my');
+    if (myBalance < product.price) {
+        showToast('余额不足');
+        return;
+    }
+
+    addFlow('my', {
+        amount: product.price,
+        direction: 'expense',
+        category: '商场购物',
+        subCategory: '余额支付',
+        fromAccount: 'my',
+        toAccount: '',
+        relatedFriendId: friendId,
+        relatedProductId: product.id,
+        note: '我购买了 ' + product.name,
+        forWhom: 'friend',
+        productInfo: product,
+        payer: 'me'
+    });
+
+    var fItems = getPurchasedItems('friend:' + friendId);
+    fItems.unshift({
+        id: 'pi' + Date.now() + Math.random().toString(36).substr(2, 4),
+        productId: product.id,
+        name: product.name,
+        price: product.price,
+        image: product.image || '',
+        imageType: product.imageType || 'default',
+        description: product.description || '',
+        category: product.category || '默认',
+        boughtBy: 'me',
+        forWhom: 'friend',
+        paidFrom: 'balance',
+        paidFromFriendId: '',
+        time: getNowTimeStringFull(),
+        isGift: true,
+        isSurprise: false
+    });
+    setPurchasedItems('friend:' + friendId, fItems);
+
+    addFriendCollectionIncomeFromMe(friendId, product);
+
+    var friendCollections = getFriendCollections(friendId);
+    friendCollections = friendCollections.filter(function(c) { return c.productId !== productId; });
+    setFriendCollections(friendId, friendCollections);
+
+    sendCollectionBoughtCard(friendId, product);
+
+    if (Math.random() < 0.01) {
+        triggerShoppingDiary('me', friendId, product);
+    }
+
+    showToast('购买成功');
+    renderAll();
+    var container = document.getElementById('accountTabContent');
+    if (container) {
+        container.innerHTML = renderFriendAccountTabContent('friend:' + friendId, window._accountCurrentTab || 'income_expense');
+    }
 }
 
 function renderFriendAccountPiggyTab(accountId) {
@@ -14586,7 +15673,13 @@ function handleToggleCollect(productId) {
         showToast('请先进入聊天');
         return;
     }
-    toggleCollectProduct(currentChatId, productId);
+    var collected = isProductCollectedByFriend(currentChatId, productId);
+    if (collected) {
+        uncollectProduct(currentChatId, productId);
+        renderMallManageProducts();
+        return;
+    }
+    collectProductToMyCollections(productId);
     renderMallManageProducts();
 }
 
@@ -14670,10 +15763,19 @@ function showAddProductModal() {
 }
 
 function pickProductImageUpload() {
+    var overlay = document.getElementById('modalOverlay');
+    var oldHandler = overlay ? overlay.onclick : null;
+    if (overlay) {
+        overlay.onclick = function(e) {
+            if (e.target === overlay) return;
+            if (oldHandler) oldHandler.call(overlay, e);
+        };
+    }
     var input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
     input.onchange = function(e) {
+        if (overlay) overlay.onclick = oldHandler;
         var files = e.target.files;
         if (!files || files.length === 0) return;
         var reader = new FileReader();
@@ -14688,17 +15790,52 @@ function pickProductImageUpload() {
         };
         reader.readAsDataURL(files[0]);
     };
-    input.click();
+    input.oncancel = function() {
+        if (overlay) overlay.onclick = oldHandler;
+    };
+    setTimeout(function() {
+        input.click();
+    }, 100);
 }
 
 function pickProductImageEmoji() {
-    var html = '<div class="modal-title">输入 emoji</div>' +
-        '<input type="text" id="productEmojiInput" placeholder="如：一束花、礼物" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;">' +
-        '<div class="btn-row">' +
-            '<button class="cancel" onclick="closeModal()">取消</button>' +
-            '<button class="confirm" onclick="confirmProductEmoji()">确定</button>' +
-        '</div>';
-    showModal(html);
+    var existing = document.getElementById('productEmojiOverlay');
+    if (existing) existing.remove();
+
+    var overlay = document.createElement('div');
+    overlay.id = 'productEmojiOverlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;z-index:300;';
+    overlay.innerHTML = '<div style="background:#ffffff;border-radius:20px;padding:24px;max-width:320px;width:85%;box-sizing:border-box;">' +
+        '<div style="font-weight:600;font-size:18px;margin-bottom:16px;text-align:center;color:#000000;">输入 emoji</div>' +
+        '<input type="text" id="productEmojiInput" placeholder="如：一束花、礼物" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:12px;">' +
+        '<div style="display:flex;gap:12px;justify-content:flex-end;">' +
+            '<button onclick="document.getElementById(\'productEmojiOverlay\').remove()" style="padding:8px 20px;border:none;border-radius:30px;cursor:pointer;font-size:14px;font-weight:500;background:#eef5ef;color:#000000;">取消</button>' +
+            '<button onclick="confirmProductEmojiInline()" style="padding:8px 20px;border:none;border-radius:30px;cursor:pointer;font-size:14px;font-weight:500;background:#d4e9d6;color:#000000;">确定</button>' +
+        '</div>' +
+    '</div>';
+    document.body.appendChild(overlay);
+
+    var input = document.getElementById('productEmojiInput');
+    if (input) {
+        input.value = window._productImageDraft && window._productImageDraft.imageType === 'emoji' ? (window._productImageDraft.image || '') : '';
+        setTimeout(function() { input.focus(); }, 100);
+    }
+}
+
+function confirmProductEmojiInline() {
+    var input = document.getElementById('productEmojiInput');
+    if (!input || !input.value.trim()) {
+        showToast('请输入内容');
+        return;
+    }
+    var val = input.value.trim();
+    window._productImageDraft = { image: val, imageType: 'emoji' };
+    var overlay = document.getElementById('productEmojiOverlay');
+    if (overlay) overlay.remove();
+    var preview = document.getElementById('newProductImagePreview');
+    if (preview) {
+        preview.innerHTML = '<div style="font-size:32px;">' + val + '</div>';
+    }
 }
 
 function confirmProductEmoji() {
@@ -14828,6 +15965,7 @@ window.clearProductImage = clearProductImage;
 window.confirmAddProduct = confirmAddProduct;
 window.showEditProductModal = showEditProductModal;
 window.confirmEditProduct = confirmEditProduct;
+window.confirmProductEmojiInline = confirmProductEmojiInline;
 
 function openSubPage(type) {
     const container = document.getElementById('subPageContainer');
@@ -16616,42 +17754,115 @@ function clearChatOnly() {
 }
 
 function renderStoragePage() {
-    const totalFriends = DataHub.get('friends', []).length;
-    const totalChatrooms = DataHub.get('chatrooms', []).length;
-    const totalMessages = DataHub.get('messages', []).length;
-    const totalDiary = DataHub.get('diary', []).length;
-    const totalMoments = DataHub.get('moments', []).length;
-    const totalItems = totalFriends + totalChatrooms + totalMessages + totalDiary + totalMoments;
-    const estimatedKB = Math.max(1, Math.round(totalItems * 0.8));
-    const estimatedMB = (estimatedKB / 1024).toFixed(2);
-    return `
-        <div class="sub-page active" style="pointer-events:auto;">
-            <div class="sub-top">
-                <div class="back-btn" onclick="closeSubPage()">
-                    <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
-                </div>
-                <span>存储显示</span>
-            </div>
-            <div class="sub-content" style="pointer-events:auto;">
-                <div class="setting-block no-click">
-                    <div style="font-size:14px;color:#666666;">数据统计</div>
-                    <div style="margin:8px 0;">
-                        <div>好友: ${totalFriends} 人</div>
-                        <div>群聊: ${totalChatrooms} 个</div>
-                        <div>消息: ${totalMessages} 条</div>
-                        <div>日记: ${totalDiary} 篇</div>
-                        <div>朋友圈: ${totalMoments} 条</div>
-                    </div>
-                    <div style="font-size:13px;color:#999999;">预估占用: 约 ${estimatedKB} KB (${estimatedMB} MB)</div>
-                </div>
-                <div class="setting-block no-click">
-                    <div style="font-weight:500;color:#000000;margin-bottom:8px;">数据清理</div>
-                    <button class="btn-primary" onclick="clearAllData()">清除所有数据</button>
-<button class="btn-icon" style="margin-left:8px;" onclick="clearChatOnly()">仅清除聊天</button>
-                </div>
-            </div>
-        </div>
-    `;
+    var stats = getGlobalStorageStats();
+    var globalMB = getGlobalMemoryUsedMB();
+    var maxMB = getTotalMemoryMB();
+    var globalPct = Math.min(100, (globalMB / maxMB) * 100);
+
+    var barHtml = '<div style="position:relative;width:100%;height:24px;border-radius:12px;overflow:hidden;background:#ffffff;border:1px solid #e0e0e0;">' +
+        '<div style="position:absolute;left:0;top:0;bottom:0;width:' + globalPct + '%;background:var(--theme-main, #d4e9d6);"></div>' +
+    '</div>';
+
+    var memHtml = '<div style="display:flex;justify-content:space-between;font-size:12px;color:#999999;margin-top:6px;">' +
+        '<span>全局 ' + formatMemoryMB(globalMB) + '</span>' +
+        '<span>总内存 ' + maxMB + ' MB</span>' +
+    '</div>';
+
+    function rowHtml(label, count, action, disabled) {
+        if (disabled) {
+            return '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f0f0f0;">' +
+                '<span style="font-size:14px;color:#999999;">' + label + '</span>' +
+                '<span style="font-size:13px;color:#999999;">' + count + ' 条</span>' +
+            '</div>';
+        }
+        return '<div onclick="' + action + '" style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f0f0f0;cursor:pointer;">' +
+            '<span style="font-size:14px;color:#000000;">' + label + '</span>' +
+            '<span style="font-size:13px;color:#999999;">' + count + ' 条</span>' +
+        '</div>';
+    }
+
+    var html = '<div class="sub-page active" style="pointer-events:auto;display:flex;flex-direction:column;">' +
+        '<div class="sub-top">' +
+            '<div class="back-btn" onclick="closeSubPage()">' +
+                '<svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>' +
+            '</div>' +
+            '<span>存储显示</span>' +
+        '</div>' +
+        '<div class="sub-content" style="padding:16px;overflow-y:auto;pointer-events:auto;flex:1;">' +
+
+            '<div class="setting-block no-click" style="margin:0 0 12px 0;">' +
+                barHtml +
+                memHtml +
+            '</div>' +
+
+            '<div class="setting-block no-click" style="margin:0 0 16px 0;">' +
+                '<div style="font-weight:600;color:#000000;font-size:15px;margin-bottom:6px;">恢复默认设置</div>' +
+                '<div style="font-size:12px;color:#999999;margin-bottom:10px;">清除所有数据，回到初始状态</div>' +
+                '<button class="btn-primary" onclick="clearAllData()">恢复默认设置</button>' +
+            '</div>' +
+
+            '<div class="section-title">聊天记录</div>' +
+            '<div class="setting-block no-click" style="margin:0 0 12px 0;">' +
+                rowHtml('仅图片', stats.msgImage, 'confirmDeleteGlobalData(\'msgImage\')', stats.msgImage === 0) +
+                rowHtml('文字+图片', stats.msgAll, 'confirmDeleteGlobalData(\'msgAll\')', stats.msgAll === 0) +
+            '</div>' +
+
+            '<div class="section-title">朋友圈</div>' +
+            '<div class="setting-block no-click" style="margin:0 0 12px 0;">' +
+                rowHtml('仅图片', stats.momentImage, 'confirmDeleteGlobalData(\'momentImage\')', stats.momentImage === 0) +
+                rowHtml('文字+图片', stats.momentAll, 'confirmDeleteGlobalData(\'momentAll\')', stats.momentAll === 0) +
+            '</div>' +
+
+            '<div class="section-title">日记</div>' +
+            '<div class="setting-block no-click" style="margin:0 0 12px 0;">' +
+                rowHtml('90天前', stats.diary90, 'confirmDeleteGlobalData(\'diary90\')', stats.diary90 === 0) +
+                rowHtml('60天前', stats.diary60, 'confirmDeleteGlobalData(\'diary60\')', stats.diary60 === 0) +
+                rowHtml('30天前', stats.diary30, 'confirmDeleteGlobalData(\'diary30\')', stats.diary30 === 0) +
+                rowHtml('全部', stats.diaryAll, 'confirmDeleteGlobalData(\'diaryAll\')', stats.diaryAll === 0) +
+            '</div>' +
+
+            '<div class="section-title">信封</div>' +
+            '<div class="setting-block no-click" style="margin:0 0 12px 0;">' +
+                rowHtml('90天前', stats.letter90, 'confirmDeleteGlobalData(\'letter90\')', stats.letter90 === 0) +
+                rowHtml('60天前', stats.letter60, 'confirmDeleteGlobalData(\'letter60\')', stats.letter60 === 0) +
+                rowHtml('30天前', stats.letter30, 'confirmDeleteGlobalData(\'letter30\')', stats.letter30 === 0) +
+                rowHtml('全部', stats.letterAll, 'confirmDeleteGlobalData(\'letterAll\')', stats.letterAll === 0) +
+            '</div>' +
+
+            '<div class="section-title">收支</div>' +
+            '<div class="setting-block no-click" style="margin:0 0 12px 0;">' +
+                rowHtml('90天前', stats.flow90, 'confirmDeleteGlobalData(\'flow90\')', stats.flow90 === 0) +
+                rowHtml('60天前', stats.flow60, 'confirmDeleteGlobalData(\'flow60\')', stats.flow60 === 0) +
+                rowHtml('30天前', stats.flow30, 'confirmDeleteGlobalData(\'flow30\')', stats.flow30 === 0) +
+                rowHtml('全部', stats.flowAll, 'confirmDeleteGlobalData(\'flowAll\')', stats.flowAll === 0) +
+            '</div>' +
+
+            '<div class="section-title">状态日历</div>' +
+            '<div class="setting-block no-click" style="margin:0 0 12px 0;">' +
+                rowHtml('90天前', stats.calendar90, 'confirmDeleteGlobalData(\'calendar90\')', stats.calendar90 === 0) +
+                rowHtml('60天前', stats.calendar60, 'confirmDeleteGlobalData(\'calendar60\')', stats.calendar60 === 0) +
+                rowHtml('30天前', stats.calendar30, 'confirmDeleteGlobalData(\'calendar30\')', stats.calendar30 === 0) +
+                rowHtml('全部', stats.calendarAll, 'confirmDeleteGlobalData(\'calendarAll\')', stats.calendarAll === 0) +
+            '</div>' +
+
+            '<div class="section-title">相册</div>' +
+            '<div class="setting-block no-click" style="margin:0 0 12px 0;">' +
+                rowHtml('90天前', stats.album90, 'confirmDeleteGlobalData(\'album90\')', stats.album90 === 0) +
+                rowHtml('60天前', stats.album60, 'confirmDeleteGlobalData(\'album60\')', stats.album60 === 0) +
+                rowHtml('30天前', stats.album30, 'confirmDeleteGlobalData(\'album30\')', stats.album30 === 0) +
+                rowHtml('全部', stats.albumAll, 'confirmDeleteGlobalData(\'albumAll\')', stats.albumAll === 0) +
+            '</div>' +
+
+            '<div class="section-title">词条库（受保护）</div>' +
+            '<div class="setting-block no-click" style="margin:0 0 12px 0;">' +
+                rowHtml('公共词条库', stats.publicLexicon, '', true) +
+                '<div style="font-size:12px;color:#999999;padding:8px 0 0 0;">仅恢复默认设置可清</div>' +
+            '</div>' +
+
+        '</div>' +
+    '</div>';
+
+    return html;
 }
 function renderExportImportPage() {
     return `
@@ -19322,13 +20533,31 @@ function doFriendRandomShopping(friendId) {
     var friend = friends.find(function(f) { return f.id === friendId; });
     if (!friend) return false;
 
-    // 获取好友可见商品
-    var visible = getVisibleProductsForFriend(friendId);
-    if (visible.length === 0) return false;
+    // 优先从好友自己的收藏里挑，没有再从商场挑
+    var product = null;
+    var fromCollection = false;
+    var friendCollections = getFriendCollections(friendId);
+    if (friendCollections && friendCollections.length > 0) {
+        var pickedCol = friendCollections[Math.floor(Math.random() * friendCollections.length)];
+        if (pickedCol && pickedCol.productInfo) {
+            product = pickedCol.productInfo;
+            fromCollection = true;
+        }
+    }
 
-    // 随机挑一个
-    var product = visible[Math.floor(Math.random() * visible.length)];
+    if (!product) {
+        var visible = getVisibleProductsForFriend(friendId);
+        if (visible.length === 0) return false;
+        product = visible[Math.floor(Math.random() * visible.length)];
+    }
+
     if (!product) return false;
+
+    if (fromCollection) {
+        var colList = getFriendCollections(friendId);
+        colList = colList.filter(function(c) { return c.productId !== product.id; });
+        setFriendCollections(friendId, colList);
+    }
 
     var price = product.price || 0;
     if (price <= 0) return false;
@@ -19373,38 +20602,44 @@ function doFriendRandomShopping(friendId) {
     }
 
     // 扣款
-    var paidAccountId = usePiggy ? ('piggy:' + friendId) : ('friend:' + friendId);
-    var category = usePiggy ? '零钱购物' : '商场购物';
-    var subCategory = usePiggy ? '零钱购物' : '余额支付';
+var paidAccountId = usePiggy ? ('piggy:' + friendId) : ('friend:' + friendId);
+var category = usePiggy ? '零钱购物' : '商场购物';
+var subCategory = usePiggy ? '零钱购物' : '余额支付';
 
-    addFlow(paidAccountId, {
-        amount: price,
-        direction: 'expense',
-        category: category,
-        subCategory: subCategory,
-        fromAccount: paidAccountId,
-        toAccount: '',
-        relatedFriendId: friendId,
-        relatedProductId: product.id,
-        note: friend.name + '购买了 ' + product.name,
-        forWhom: forWhom,
-        productInfo: productSnapshot,
-        payer: 'friend'
-    });
+addFlow(paidAccountId, {
+    amount: price,
+    direction: 'expense',
+    category: category,
+    subCategory: subCategory,
+    fromAccount: paidAccountId,
+    toAccount: '',
+    relatedFriendId: friendId,
+    relatedProductId: product.id,
+    note: friend.name + '购买了 ' + product.name,
+    forWhom: forWhom,
+    productInfo: productSnapshot,
+    payer: 'friend'
+});
 
-    // 写入购买记录
-    addPurchasedItem('friend', forWhom, productSnapshot, usePiggy ? 'piggy' : 'balance', friendId, isSurprise);
+// 写入购买记录
+addPurchasedItem('friend', forWhom, productSnapshot, usePiggy ? 'piggy' : 'balance', friendId, isSurprise);
+
+// 如果买给我，我的账户记一笔心意礼物收入
+if (forWhom === 'friend') {
+    addMyCollectionIncomeFromFriend(friendId, productSnapshot, usePiggy);
+}
 
     // 购物日记 1%
     if (Math.random() < 0.01) {
         triggerShoppingDiary('friend', friendId, productSnapshot);
     }
 
-    if (isSurprise) {
-        showToast(friend.name + ' 给你买了 ' + product.name);
-    } else {
-        showToast(friend.name + ' 购买了 ' + product.name);
-    }
+    if (forWhom === 'friend') {
+    sendCollectionBoughtCard(friendId, productSnapshot);
+    showToast(friend.name + ' 给你买了 ' + product.name);
+} else {
+    showToast(friend.name + ' 购买了 ' + product.name);
+}
 
     // 每次好友购物后，1% 概率随机删除一件好友账户里的商品
     tryRandomDeleteFriendItem(friendId);
@@ -19765,23 +21000,25 @@ function renderHelpRequestCard(requestId) {
 
     var imgHtml = '';
     if (p.imageType === 'upload' && p.image) {
-        imgHtml = '<img src="' + p.image + '" style="width:44px;height:44px;object-fit:cover;border-radius:6px;flex-shrink:0;">';
+        imgHtml = '<img src="' + p.image + '" style="width:80px;height:80px;object-fit:cover;border-radius:8px;">';
     } else if (p.imageType === 'emoji' && p.image) {
-        imgHtml = '<div style="width:44px;height:44px;background:#f5f5f5;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">' + p.image + '</div>';
+        imgHtml = '<div style="width:80px;height:80px;background:#eef5ef;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:36px;">' + p.image + '</div>';
     } else {
-        imgHtml = '<img src="' + getDefaultProductSvg() + '" style="width:44px;height:44px;object-fit:cover;border-radius:6px;flex-shrink:0;">';
+        imgHtml = '<img src="' + getDefaultProductSvg() + '" style="width:80px;height:80px;object-fit:cover;border-radius:8px;">';
     }
 
-    return '<div onclick="openHelpRequestCard(\'' + requestId + '\')" style="cursor:pointer;background:#ffffff;border:1px solid #e0e0e0;border-radius:12px;padding:12px 14px;width:220px;box-sizing:border-box;">' +
+    var descHtml = '';
+    if (p.description) {
+        descHtml = '<div style="font-size:12px;color:#666666;margin-bottom:8px;word-break:break-word;">' + p.description + '</div>';
+    }
+
+    return '<div onclick="openHelpRequestCard(\'' + requestId + '\')" style="cursor:pointer;background:#ffffff;border:1px solid #e0e0e0;border-radius:12px;padding:14px;width:220px;box-sizing:border-box;text-align:center;">' +
         '<div style="font-size:12px;color:#999999;margin-bottom:8px;">求助 ' + friendName + '</div>' +
-        '<div style="display:flex;gap:10px;align-items:center;margin-bottom:8px;">' +
-            imgHtml +
-            '<div style="flex:1;min-width:0;">' +
-                '<div style="font-size:13px;color:#000000;word-break:break-all;margin-bottom:2px;">' + (p.name || '') + '</div>' +
-                '<div style="font-size:13px;color:#000000;font-weight:600;">¥' + (p.price || 0).toFixed(2) + '</div>' +
-            '</div>' +
-        '</div>' +
-        '<div style="font-size:11px;color:#999999;">' + statusText + '</div>' +
+        '<div style="display:flex;justify-content:center;margin-bottom:8px;">' + imgHtml + '</div>' +
+        '<div style="font-size:13px;color:#000000;word-break:break-all;margin-bottom:4px;">' + (p.name || '') + '</div>' +
+        '<div style="font-size:13px;color:#000000;font-weight:600;margin-bottom:4px;">¥' + (p.price || 0).toFixed(2) + '</div>' +
+        descHtml +
+        '<div style="font-size:11px;color:#999999;text-align:left;">' + statusText + '</div>' +
     '</div>';
 }
 
@@ -22085,6 +23322,10 @@ DataHub.set('friends', friends);
     DataHub.set('votes', []);
 }
 
+if (!DataHub.get('myCollections', null)) {
+    DataHub.set('myCollections', []);
+}
+
 initAccountSystem();
 DataHub.set('pendingTransfers', []);
 var _walletClean = DataHub.get('wallet', { balance: 0, flows: [] });
@@ -22110,6 +23351,8 @@ startRandomDeleteChecker();
 startShoppingDiaryReplyScheduler();
 startMonthlyStatsChecker();
 startPiggyAutoDepositChecker();
+startFriendCollectChecker();
+startFriendBuyMyCollectionChecker();
 
     function initFriendAI() {
     var friends = DataHub.get('friends', []);
@@ -22227,6 +23470,18 @@ window.updateChatBgCustomCss = updateChatBgCustomCss;
 window.updateChatThemeColor = updateChatThemeColor;
 window.applyChatThemeColor = applyChatThemeColor;
 window.openChatStyleSettings = openChatStyleSettings;
+window.getChatStorageStats = getChatStorageStats;
+window.getPrivateMemoryMB = getPrivateMemoryMB;
+window.getTotalMemoryUsedMB = getTotalMemoryUsedMB;
+window.getTotalMemoryMB = getTotalMemoryMB;
+window.formatMemoryMB = formatMemoryMB;
+window.openChatStorageManage = openChatStorageManage;
+window.confirmDeleteChatData = confirmDeleteChatData;
+window.getGlobalStorageStats = getGlobalStorageStats;
+window.getGlobalMemoryUsedMB = getGlobalMemoryUsedMB;
+window.confirmDeleteGlobalData = confirmDeleteGlobalData;
+window.doDeleteGlobalData = doDeleteGlobalData;
+window.doDeleteChatData = doDeleteChatData;
 window.resetChatStyle = resetChatStyle;
 window.openSubPage = openSubPage;
 window.closeSubPage = closeSubPage;
