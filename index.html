@@ -8796,7 +8796,7 @@ function renderCollectionDetail(accountId, tabKey) {
             } else if (p.imageType === 'emoji' && p.image) {
                 imgHtml = '<div style="width:100%;height:80px;background:#eef5ef;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:36px;">' + p.image + '</div>';
             } else {
-                imgHtml = '<img src="' + getDefaultProductSvg() + '" style="width:100%;height:80px;object-fit:cover;border-radius:8px;">';
+                imgHtml = renderDefaultProductHtml();
             }
             html += '<div style="width:calc(50% - 4px);box-sizing:border-box;background:#ffffff;border-radius:10px;padding:6px;border:1px solid #eef5ef;">' +
                 imgHtml +
@@ -9372,7 +9372,7 @@ function renderCollectionCard(msg) {
     } else if (p.imageType === 'emoji' && p.image) {
         imgHtml = '<div style="width:80px;height:80px;background:#eef5ef;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:36px;">' + p.image + '</div>';
     } else {
-        imgHtml = '<img src="' + getDefaultProductSvg() + '" style="width:80px;height:80px;object-fit:cover;border-radius:8px;">';
+        imgHtml = '<div style="width:80px;height:80px;">' + renderDefaultProductHtml() + '</div>';
     }
 
     var fromMe = (msg.from === 'me');
@@ -9788,7 +9788,7 @@ function renderAccountPurchasedItemsTab(accountId) {
         } else if (it.imageType === 'emoji' && it.image) {
             imgHtml = '<div style="width:100%;height:80px;background:#eef5ef;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:36px;">' + it.image + '</div>';
         } else {
-            imgHtml = '<img src="' + getDefaultProductSvg() + '" style="width:100%;height:80px;object-fit:cover;border-radius:8px;">';
+            imgHtml = renderDefaultProductHtml();
         }
 
         // 来源标注
@@ -10295,7 +10295,7 @@ function renderFriendCollectionDetail(accountId, tabKey) {
             } else if (p.imageType === 'emoji' && p.image) {
                 imgHtml = '<div style="width:100%;height:80px;background:#eef5ef;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:36px;">' + p.image + '</div>';
             } else {
-                imgHtml = '<img src="' + getDefaultProductSvg() + '" style="width:100%;height:80px;object-fit:cover;border-radius:8px;">';
+                imgHtml = renderDefaultProductHtml();
             }
             html += '<div style="width:calc(50% - 4px);box-sizing:border-box;background:#ffffff;border-radius:10px;padding:6px;border:1px solid #eef5ef;">' +
                 imgHtml +
@@ -10791,7 +10791,7 @@ function renderFriendAccountPurchasedItemsTab(accountId) {
         } else if (it.imageType === 'emoji' && it.image) {
             imgHtml = '<div style="width:100%;height:80px;background:#eef5ef;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:36px;">' + it.image + '</div>';
         } else {
-            imgHtml = '<img src="' + getDefaultProductSvg() + '" style="width:100%;height:80px;object-fit:cover;border-radius:8px;">';
+            imgHtml = renderDefaultProductHtml();
         }
 
         var fromLabel = '';
@@ -10957,7 +10957,7 @@ function renderFriendShoppingDiaryCard(friendId, item) {
     } else if (item.productImageType === 'emoji' && item.productImage) {
         imgHtml = '<div style="width:100%;height:80px;background:#eef5ef;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:36px;">' + item.productImage + '</div>';
     } else {
-        imgHtml = '<img src="' + getDefaultProductSvg() + '" style="width:100%;height:80px;object-fit:cover;border-radius:8px;">';
+        imgHtml = renderDefaultProductHtml();
     }
 
     var repliesHtml = '';
@@ -20238,6 +20238,18 @@ function saveMallData(mall) {
     DataHub.set('mall', mall);
 }
 
+function renderDefaultProductHtml() {
+    return '<div style="width:100%;height:80px;border-radius:8px;background:var(--theme-lighter, #eef5ef);display:flex;align-items:center;justify-content:center;overflow:hidden;">' +
+        '<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 80 80" style="width:60%;height:60%;max-width:60px;max-height:60px;">' +
+            '<rect x="20" y="34" width="40" height="28" rx="2" fill="none" stroke="var(--theme-dark, #8aaa8e)" stroke-width="2"/>' +
+            '<rect x="16" y="26" width="48" height="10" rx="2" fill="none" stroke="var(--theme-dark, #8aaa8e)" stroke-width="2"/>' +
+            '<line x1="40" y1="26" x2="40" y2="62" stroke="var(--theme-dark, #8aaa8e)" stroke-width="2"/>' +
+            '<path d="M40 26 Q32 18 26 22 Q30 27 40 26 Z" fill="none" stroke="var(--theme-dark, #8aaa8e)" stroke-width="2"/>' +
+            '<path d="M40 26 Q48 18 54 22 Q50 27 40 26 Z" fill="none" stroke="var(--theme-dark, #8aaa8e)" stroke-width="2"/>' +
+        '</svg>' +
+    '</div>';
+}
+
 // 默认商品 SVG 图（内存小）
 function getDefaultProductSvg() {
     return 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 80 80"><rect width="80" height="80" fill="#eef5ef"/><path d="M20 32h40v30H20z" fill="#d4e9d6"/><path d="M28 32l12-12 12 12" fill="none" stroke="#8aaa8e" stroke-width="3"/><circle cx="40" cy="46" r="6" fill="#8aaa8e"/></svg>');
@@ -20245,14 +20257,14 @@ function getDefaultProductSvg() {
 
 // 渲染商品图片
 function renderProductImage(product) {
-    if (!product) return '<div style="width:100%;height:80px;background:#eef5ef;border-radius:8px;"></div>';
+    if (!product) return renderDefaultProductHtml();
     if (product.imageType === 'upload' && product.image) {
         return '<img src="' + product.image + '" style="width:100%;height:80px;object-fit:cover;border-radius:8px;">';
     }
     if (product.imageType === 'emoji' && product.image) {
         return '<div style="width:100%;height:80px;background:#eef5ef;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:40px;">' + product.image + '</div>';
     }
-    return '<img src="' + getDefaultProductSvg() + '" style="width:100%;height:80px;object-fit:cover;border-radius:8px;">';
+    return renderDefaultProductHtml();
 }
 
 // 获取某好友可见的商品
@@ -20371,6 +20383,7 @@ function deleteMallProduct(productId) {
 window.getMallData = getMallData;
 window.saveMallData = saveMallData;
 window.getDefaultProductSvg = getDefaultProductSvg;
+window.renderDefaultProductHtml = renderDefaultProductHtml;
 window.renderProductImage = renderProductImage;
 window.getVisibleProductsForFriend = getVisibleProductsForFriend;
 window.getVisibleCategoriesForFriend = getVisibleCategoriesForFriend;
@@ -20839,7 +20852,7 @@ function showHelpRequestPreview(productId) {
     } else if (product.imageType === 'emoji' && product.image) {
         imgHtml = '<div style="width:44px;height:44px;background:#f5f5f5;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">' + product.image + '</div>';
     } else {
-        imgHtml = '<img src="' + getDefaultProductSvg() + '" style="width:44px;height:44px;object-fit:cover;border-radius:6px;flex-shrink:0;">';
+        imgHtml = '<div style="width:44px;height:44px;flex-shrink:0;">' + renderDefaultProductHtml() + '</div>';
     }
 
     var defaultText = '付一下';
@@ -21004,7 +21017,7 @@ function renderHelpRequestCard(requestId) {
     } else if (p.imageType === 'emoji' && p.image) {
         imgHtml = '<div style="width:80px;height:80px;background:#eef5ef;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:36px;">' + p.image + '</div>';
     } else {
-        imgHtml = '<img src="' + getDefaultProductSvg() + '" style="width:80px;height:80px;object-fit:cover;border-radius:8px;">';
+        imgHtml = '<div style="width:80px;height:80px;">' + renderDefaultProductHtml() + '</div>';
     }
 
     var descHtml = '';
@@ -21043,7 +21056,7 @@ function openHelpRequestCard(requestId) {
     } else if (p.imageType === 'emoji' && p.image) {
         imgHtml = '<div style="width:80px;height:80px;background:#eef5ef;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:36px;">' + p.image + '</div>';
     } else {
-        imgHtml = '<img src="' + getDefaultProductSvg() + '" style="width:80px;height:80px;object-fit:cover;border-radius:8px;">';
+        imgHtml = '<div style="width:80px;height:80px;">' + renderDefaultProductHtml() + '</div>';
     }
 
     var html = '<div class="modal-title">求助好友</div>' +
@@ -21059,6 +21072,18 @@ function openHelpRequestCard(requestId) {
         '<div class="btn-row"><button class="cancel" onclick="closeModal()">关闭</button></div>';
 
     showModal(html);
+}
+
+function getFriendHelpRedpacketNote() {
+    var notes = [
+        '在生气，你自己买去吧',
+        '暂时有事哦，给你红包',
+        '给你红包，快收',
+        '资助一下^_^',
+        '你让我买我就买？',
+        '好嘛，给你……红包'
+    ];
+    return notes[Math.floor(Math.random() * notes.length)];
 }
 
 // ====== 好友处理求助请求 ======
@@ -21205,36 +21230,37 @@ function handleFriendHelpRequest(requestId) {
         var hbId = 'hb' + Date.now() + Math.random().toString(36).substr(2, 4);
         var now2 = Date.now();
         var expireAt = now2 + 24 * 60 * 60 * 1000;
-        var hbList = getHongbaoList();
-        hbList.push({
-            id: hbId,
-            type: 'redpacket',
-            from: friendId,
-            to: 'me',
-            amount: amount,
-            note: '拿去自己买',
-            status: 'pending',
-            createdAt: now2,
-            expireAt: expireAt,
-            acceptedAt: null,
-            rejectedAt: null,
-            cardMsgId: null,
-            resultMsgId: null
-        });
-        saveHongbaoList(hbList);
+        var friendHelpNote = getFriendHelpRedpacketNote();
+var hbList = getHongbaoList();
+hbList.push({
+    id: hbId,
+    type: 'redpacket',
+    from: friendId,
+    to: 'me',
+    amount: amount,
+    note: friendHelpNote,
+    status: 'pending',
+    createdAt: now2,
+    expireAt: expireAt,
+    acceptedAt: null,
+    rejectedAt: null,
+    cardMsgId: null,
+    resultMsgId: null
+});
+saveHongbaoList(hbList);
 
         addFlow('friend:' + friendId, {
-            amount: amount,
-            direction: 'expense',
-            category: '红包',
-            subCategory: friendName + '给我的红包',
-            fromAccount: 'friend:' + friendId,
-            toAccount: 'me',
-            relatedFriendId: friendId,
-            relatedHongbaoId: hbId,
-            note: '拿去自己买',
-            status: 'pending'
-        });
+    amount: amount,
+    direction: 'expense',
+    category: '红包',
+    subCategory: friendName + '给我的红包',
+    fromAccount: 'friend:' + friendId,
+    toAccount: 'me',
+    relatedFriendId: friendId,
+    relatedHongbaoId: hbId,
+    note: friendHelpNote,
+    status: 'pending'
+});
 
         var now3 = new Date();
         var time3 = now3.getFullYear() + '.' + String(now3.getMonth()+1).padStart(2,'0') + '.' + String(now3.getDate()).padStart(2,'0') + ' ' + String(now3.getHours()).padStart(2,'0') + ':' + String(now3.getMinutes()).padStart(2,'0') + ':' + String(now3.getSeconds()).padStart(2,'0');
@@ -21277,6 +21303,7 @@ function scheduleFriendHandleHelpRequest(requestId) {
     }, delay);
 }
 
+window.getFriendHelpRedpacketNote = getFriendHelpRedpacketNote;
 window.sendHelpRequest = sendHelpRequest;
 window.renderHelpRequestCard = renderHelpRequestCard;
 window.openHelpRequestCard = openHelpRequestCard;
@@ -21582,7 +21609,7 @@ function showPayForRequestModal(requestId) {
     } else if (req.productInfo.imageType === 'emoji' && req.productInfo.image) {
         imgHtml = '<div style="width:80px;height:80px;background:#eef5ef;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:36px;">' + req.productInfo.image + '</div>';
     } else {
-        imgHtml = '<img src="' + getDefaultProductSvg() + '" style="width:80px;height:80px;object-fit:cover;border-radius:8px;">';
+        imgHtml = '<div style="width:80px;height:80px;">' + renderDefaultProductHtml() + '</div>';
     }
 
     var html = '<div class="modal-title">帮 ' + friendName + ' 支付</div>' +
