@@ -1241,6 +1241,13 @@ color: #000000;
 #chatUnreadText.show {
     display: flex;
 }
+@keyframes monopolyDiceSpin {
+    0% { transform: rotate(0deg) scale(1); }
+    25% { transform: rotate(90deg) scale(1.15); }
+    50% { transform: rotate(180deg) scale(1); }
+    75% { transform: rotate(270deg) scale(1.15); }
+    100% { transform: rotate(360deg) scale(1); }
+}
     </style>
     </head>
 <body>
@@ -1313,7 +1320,7 @@ color: #000000;
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;overflow-y:auto;flex:1;align-content:start;">
         <div onclick="openChatStorageManage()" style="display:flex;align-items:center;justify-content:center;padding:14px 4px;background:var(--theme-lighter, #eef5ef);border-radius:12px;cursor:pointer;font-size:14px;color:#000000;">存储</div>
 <div onclick="openChatStyleSettings()" style="display:flex;align-items:center;justify-content:center;padding:14px 4px;background:var(--theme-lighter, #eef5ef);border-radius:12px;cursor:pointer;font-size:14px;color:#000000;">装扮</div>
-<div onclick="showToast('游戏功能开发中')" style="display:flex;align-items:center;justify-content:center;padding:14px 4px;background:var(--theme-lighter, #eef5ef);border-radius:12px;cursor:pointer;font-size:14px;color:#000000;">游戏</div>
+<div onclick="openMonopolyHome()" style="display:flex;align-items:center;justify-content:center;padding:14px 4px;background:var(--theme-lighter, #eef5ef);border-radius:12px;cursor:pointer;font-size:14px;color:#000000;">游戏</div>
 <div onclick="showToast('问卷功能开发中')" style="display:flex;align-items:center;justify-content:center;padding:14px 4px;background:var(--theme-lighter, #eef5ef);border-radius:12px;cursor:pointer;font-size:14px;color:#000000;">问卷</div>
 <div onclick="openMallFromChat()" style="display:flex;align-items:center;justify-content:center;padding:14px 4px;background:var(--theme-lighter, #eef5ef);border-radius:12px;cursor:pointer;font-size:14px;color:#000000;">商场</div>
 <div onclick="showCreateVoteModal()" style="display:flex;align-items:center;justify-content:center;padding:14px 4px;background:var(--theme-lighter, #eef5ef);border-radius:12px;cursor:pointer;font-size:14px;color:#000000;">投票</div>
@@ -15486,6 +15493,1792 @@ function openMallFromChat() {
 
 window.openMallFromChat = openMallFromChat;
 
+// ====== 大富翁：主页 ======
+function openMonopolyHome() {
+    closeChatBottomPanel();
+    var container = document.getElementById('subPageContainer');
+    var html = '<div class="sub-page active" id="monopolyHomePage" style="z-index:60;background:#ffffff;pointer-events:auto;display:flex;flex-direction:column;">' +
+        '<div class="sub-top">' +
+            '<div class="back-btn" onclick="closeSubPage()">' +
+                '<svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>' +
+            '</div>' +
+            '<span>游戏</span>' +
+        '</div>' +
+        '<div class="sub-content" style="padding:16px;overflow-y:auto;pointer-events:auto;flex:1;">' +
+            '<div class="setting-block clickable" onclick="openMonopolyMain()" style="margin:8px 0;">' +
+                '<div class="title">大富翁</div>' +
+                '<div style="font-size:12px;color:#999999;margin-top:4px;">单人 / 双人 / 战绩 / 自定义</div>' +
+            '</div>' +
+        '</div>' +
+    '</div>';
+    container.innerHTML = html;
+    var subPage = container.querySelector('#monopolyHomePage');
+    if (subPage) {
+        subPage.classList.add('active');
+        subPage.style.pointerEvents = 'auto';
+    }
+}
+
+function openMonopolyMain() {
+    var container = document.getElementById('subPageContainer');
+    var html = '<div class="sub-page active" id="monopolyMainPage" style="z-index:60;background:#ffffff;pointer-events:auto;display:flex;flex-direction:column;">' +
+        '<div class="sub-top">' +
+            '<div class="back-btn" onclick="openMonopolyHome()">' +
+                '<svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>' +
+            '</div>' +
+            '<span>大富翁</span>' +
+        '</div>' +
+        '<div class="sub-content" style="padding:16px;overflow-y:auto;pointer-events:auto;flex:1;">' +
+            '<div class="setting-block clickable" onclick="invitePlayMonopoly(\'single\')" style="margin:8px 0;">' +
+                '<div class="title">单人模式</div>' +
+                '<div style="font-size:12px;color:#999999;margin-top:4px;">我 VS 好友</div>' +
+            '</div>' +
+            '<div class="setting-block clickable" onclick="invitePlayMonopoly(\'double\')" style="margin:8px 0;">' +
+                '<div class="title">双人模式</div>' +
+                '<div style="font-size:12px;color:#999999;margin-top:4px;">我和好友 VS NPC1和NPC2</div>' +
+            '</div>' +
+            '<div class="setting-block clickable" onclick="openMonopolyRecords()" style="margin:8px 0;">' +
+                '<div class="title">过往战绩</div>' +
+            '</div>' +
+            '<div class="setting-block clickable" onclick="openMonopolyCustom()" style="margin:8px 0;">' +
+                '<div class="title">自定义</div>' +
+                '<div style="font-size:12px;color:#999999;margin-top:4px;">棋子颜色 / 机会题库</div>' +
+            '</div>' +
+        '</div>' +
+    '</div>';
+    container.innerHTML = html;
+    var subPage = container.querySelector('#monopolyMainPage');
+    if (subPage) {
+        subPage.classList.add('active');
+        subPage.style.pointerEvents = 'auto';
+    }
+}
+
+// ====== 大富翁：邀请流程 ======
+var MONOPOLY_ACCEPT_TEXTS = [
+    '好啊，来玩！',
+    '可以呀，我正好有空',
+    '来！谁怕谁',
+    '行，陪你玩一局',
+    '好呀，输了别哭哦',
+    '来来来，我准备好了',
+    '嗯，开始吧',
+    '好，我接招',
+    '可以，让我赢一局',
+    '玩就玩，我不怕',
+    '好呀，一起玩',
+    '来吧，我等着呢',
+    '没问题，开始吧',
+    '好，陪你玩',
+    '可以，正好无聊'
+];
+
+var MONOPOLY_REJECT_TEXTS = [
+    '不了，我现在有点忙',
+    '下次吧，现在有点忙',
+    '不太想玩，改天吧',
+    '算了吧，今天有点累',
+    '我现在有事，下次再玩',
+    '改天吧，今天不想动',
+    '不玩了，有点困',
+    '抱歉，现在不方便',
+    '不啦，我在忙别的',
+    '改天陪你玩',
+    '不了，我在工作',
+    '下次吧，今天状态不好'
+];
+
+function getMonopolyAcceptText() {
+    return MONOPOLY_ACCEPT_TEXTS[Math.floor(Math.random() * MONOPOLY_ACCEPT_TEXTS.length)];
+}
+
+function getMonopolyRejectText() {
+    return MONOPOLY_REJECT_TEXTS[Math.floor(Math.random() * MONOPOLY_REJECT_TEXTS.length)];
+}
+
+function invitePlayMonopoly(mode) {
+    if (!currentChatId) {
+        showToast('请先进入聊天');
+        return;
+    }
+    var friends = DataHub.get('friends', []);
+    var friend = friends.find(function(f) { return f.id === currentChatId; });
+    if (!friend) {
+        showToast('请先选择好友');
+        return;
+    }
+    var modeText = (mode === 'single') ? '单人模式' : '双人模式';
+    var friendName = friend.name || '好友';
+
+    var html = '<div class="modal-title">邀请好友</div>' +
+        '<div style="text-align:center;padding:8px 0 16px;font-size:14px;color:#000000;">邀请 ' + friendName + ' 一起玩大富翁（' + modeText + '）？</div>' +
+        '<div class="btn-row">' +
+            '<button class="cancel" onclick="closeModal()">取消</button>' +
+            '<button class="confirm" onclick="closeModal();confirmInviteMonopoly(\'' + mode + '\')">邀请</button>' +
+        '</div>';
+    showModal(html);
+}
+
+function confirmInviteMonopoly(mode) {
+    if (!currentChatId) return;
+    var friends = DataHub.get('friends', []);
+    var friend = friends.find(function(f) { return f.id === currentChatId; });
+    if (!friend) return;
+    var modeText = (mode === 'single') ? '单人模式' : '双人模式';
+    var friendName = friend.name || '好友';
+
+    // 先关掉大富翁页面，回到聊天页
+    var container = document.getElementById('subPageContainer');
+    if (container) container.innerHTML = '';
+
+    var now = new Date();
+    var time = now.getFullYear() + '.' + String(now.getMonth()+1).padStart(2,'0') + '.' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
+
+    var msgs = DataHub.get('messages', []);
+    msgs.push({
+        id: 'm' + genId(),
+        chatId: currentChatId,
+        from: 'me',
+        text: '我邀请 ' + friendName + ' 一起玩大富翁（' + modeText + '）',
+        time: time,
+        timestamp: Date.now(),
+        unread: 0
+    });
+    DataHub.set('messages', msgs);
+    if (currentChatId) renderChatMessages();
+    renderMessages();
+
+    // 滚到底部
+    if (typeof jumpChatToBottom === 'function') {
+        setTimeout(function() { jumpChatToBottom(); }, 100);
+    }
+
+    setTimeout(function() {
+        var accept = Math.random() < 0.5;
+        var replyText = accept ? getMonopolyAcceptText() : getMonopolyRejectText();
+
+        var now2 = new Date();
+        var time2 = now2.getFullYear() + '.' + String(now2.getMonth()+1).padStart(2,'0') + '.' + String(now2.getDate()).padStart(2,'0') + ' ' + String(now2.getHours()).padStart(2,'0') + ':' + String(now2.getMinutes()).padStart(2,'0') + ':' + String(now2.getSeconds()).padStart(2,'0');
+
+        var msgs2 = DataHub.get('messages', []);
+        msgs2.push({
+            id: 'm' + genId(),
+            chatId: currentChatId,
+            from: friend.id,
+            text: replyText,
+            time: time2,
+            timestamp: Date.now(),
+            unread: (currentChatId === friend.id) ? 0 : 1
+        });
+        DataHub.set('messages', msgs2);
+        if (currentChatId) renderChatMessages();
+        renderMessages();
+
+        if (typeof jumpChatToBottom === 'function') {
+            setTimeout(function() { jumpChatToBottom(); }, 100);
+        }
+
+        if (accept) {
+            setTimeout(function() {
+                openMonopolyGame(mode);
+            }, 1000);
+        } else {
+            var rejectHtml = '<div class="modal-title">好友拒绝了</div>' +
+                '<div style="text-align:center;padding:8px 0 16px;font-size:14px;color:#000000;">' + friendName + ' 拒绝了邀请，要再邀请一次吗？</div>' +
+                '<div class="btn-row">' +
+                    '<button class="cancel" onclick="closeModal()">返回</button>' +
+                    '<button class="confirm" onclick="closeModal();confirmInviteMonopoly(\'' + mode + '\')">再邀请</button>' +
+                '</div>';
+            showModal(rejectHtml);
+        }
+    }, 2000 + Math.random() * 3000);
+}
+
+// ====== 大富翁：自定义（颜色 + 题库） ======
+var MONOPOLY_COLOR_OPTIONS = [
+    '#4a90d9',
+    '#9b6bc4',
+    '#e8732a',
+    '#4caf50',
+    '#e05a5a',
+    '#e0a800',
+    '#3aa6a6',
+    '#d96ba0'
+];
+
+function openMonopolyCustom() {
+    var container = document.getElementById('subPageContainer');
+    var monopoly = DataHub.get('monopoly', { colors: { me: '#4a90d9', friend: '#9b6bc4' }, questions: [] });
+    var myColor = monopoly.colors.me || '#4a90d9';
+    var friendColor = monopoly.colors.friend || '#9b6bc4';
+
+    var myColorsHtml = '';
+    for (var i = 0; i < MONOPOLY_COLOR_OPTIONS.length; i++) {
+        var c = MONOPOLY_COLOR_OPTIONS[i];
+        var active = (c === myColor);
+        myColorsHtml += '<div onclick="setMonopolyColor(\'me\',\'' + c + '\')" style="width:36px;height:36px;border-radius:50%;cursor:pointer;background:' + c + ';border:3px solid ' + (active ? '#333333' : 'transparent') + ';box-sizing:border-box;"></div>';
+    }
+
+    var friendColorsHtml = '';
+    for (var j = 0; j < MONOPOLY_COLOR_OPTIONS.length; j++) {
+        var c2 = MONOPOLY_COLOR_OPTIONS[j];
+        var active2 = (c2 === friendColor);
+        friendColorsHtml += '<div onclick="setMonopolyColor(\'friend\',\'' + c2 + '\')" style="width:36px;height:36px;border-radius:50%;cursor:pointer;background:' + c2 + ';border:3px solid ' + (active2 ? '#333333' : 'transparent') + ';box-sizing:border-box;"></div>';
+    }
+
+    var questions = monopoly.questions || [];
+    var questionsHtml = '';
+    if (questions.length === 0) {
+        questionsHtml = '<div style="text-align:center;color:#999999;padding:20px 0;font-size:13px;">暂无题目</div>';
+    } else {
+        for (var k = 0; k < questions.length; k++) {
+            var q = questions[k];
+            questionsHtml += '<div style="background:#ffffff;border:1px solid #e0e0e0;border-radius:10px;padding:10px 12px;margin-bottom:8px;">' +
+                '<div style="font-size:14px;color:#000000;word-break:break-word;margin-bottom:6px;">' + (k + 1) + '. ' + (q.question || '') + '</div>' +
+                '<div style="font-size:12px;color:#666666;line-height:1.7;">';
+            for (var oi = 0; oi < (q.options || []).length; oi++) {
+                var isAnswer = (oi === q.answer);
+                questionsHtml += '<div style="color:' + (isAnswer ? '#4caf50' : '#666666') + ';">' + String.fromCharCode(65 + oi) + '. ' + q.options[oi] + (isAnswer ? '（正确答案）' : '') + '</div>';
+            }
+            questionsHtml += '</div>' +
+                '<div style="display:flex;gap:8px;margin-top:8px;">' +
+                    '<button class="btn-icon" onclick="editMonopolyQuestion(\'' + q.id + '\')" style="padding:4px 12px;font-size:12px;">编辑</button>' +
+                    '<button class="btn-icon" onclick="deleteMonopolyQuestion(\'' + q.id + '\')" style="padding:4px 12px;font-size:12px;">删除</button>' +
+                '</div>' +
+            '</div>';
+        }
+    }
+
+    var html = '<div class="sub-page active" id="monopolyCustomPage" style="z-index:60;background:#ffffff;pointer-events:auto;display:flex;flex-direction:column;">' +
+        '<div class="sub-top">' +
+            '<div class="back-btn" onclick="openMonopolyMain()">' +
+                '<svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>' +
+            '</div>' +
+            '<span>自定义</span>' +
+        '</div>' +
+        '<div class="sub-content" style="padding:16px;overflow-y:auto;pointer-events:auto;flex:1;">' +
+
+            '<div class="section-title">棋子颜色</div>' +
+            '<div class="setting-block no-click" style="margin:0 0 12px 0;">' +
+                '<div style="font-size:13px;color:#000000;margin-bottom:8px;">我的棋子</div>' +
+                '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">' + myColorsHtml + '</div>' +
+                '<div style="font-size:13px;color:#000000;margin-bottom:8px;">好友的棋子</div>' +
+                '<div style="display:flex;gap:10px;flex-wrap:wrap;">' + friendColorsHtml + '</div>' +
+                '<div style="font-size:12px;color:#999999;margin-top:12px;">NPC 固定灰色，不可修改</div>' +
+            '</div>' +
+
+            '<div class="section-title">机会题库</div>' +
+            '<div class="setting-block no-click" style="margin:0 0 12px 0;">' +
+                '<button class="btn-primary" onclick="showAddMonopolyQuestion()" style="width:100%;padding:8px 0;">新增题目</button>' +
+            '</div>' +
+            '<div>' + questionsHtml + '</div>' +
+
+        '</div>' +
+    '</div>';
+    container.innerHTML = html;
+    var subPage = container.querySelector('#monopolyCustomPage');
+    if (subPage) {
+        subPage.classList.add('active');
+        subPage.style.pointerEvents = 'auto';
+    }
+}
+
+function setMonopolyColor(who, color) {
+    var monopoly = DataHub.get('monopoly', { colors: { me: '#4a90d9', friend: '#9b6bc4' }, questions: [], records: { single: [], double: [] } });
+    if (!monopoly.colors) monopoly.colors = { me: '#4a90d9', friend: '#9b6bc4' };
+    if (who === 'me') monopoly.colors.me = color;
+    else if (who === 'friend') monopoly.colors.friend = color;
+    DataHub.set('monopoly', monopoly);
+    showToast('已保存');
+    openMonopolyCustom();
+}
+
+function showAddMonopolyQuestion() {
+    var html = '<div class="modal-title">新增题目</div>' +
+        '<input type="text" id="mqQuestionInput" placeholder="题目" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
+        '<input type="text" id="mqOptionA" placeholder="选项 A" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
+        '<input type="text" id="mqOptionB" placeholder="选项 B" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
+        '<input type="text" id="mqOptionC" placeholder="选项 C" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
+        '<input type="text" id="mqOptionD" placeholder="选项 D" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
+        '<div style="font-size:13px;color:#000000;margin-bottom:6px;">正确答案</div>' +
+        '<select id="mqAnswerSelect" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
+            '<option value="0">A</option>' +
+            '<option value="1">B</option>' +
+            '<option value="2">C</option>' +
+            '<option value="3">D</option>' +
+        '</select>' +
+        '<div class="btn-row">' +
+            '<button class="cancel" onclick="closeModal()">取消</button>' +
+            '<button class="confirm" onclick="saveMonopolyQuestion()">保存</button>' +
+        '</div>';
+    showModal(html);
+}
+
+function saveMonopolyQuestion() {
+    var qInput = document.getElementById('mqQuestionInput');
+    var aInput = document.getElementById('mqOptionA');
+    var bInput = document.getElementById('mqOptionB');
+    var cInput = document.getElementById('mqOptionC');
+    var dInput = document.getElementById('mqOptionD');
+    var ansSelect = document.getElementById('mqAnswerSelect');
+    if (!qInput || !aInput || !bInput || !cInput || !dInput) return;
+    var question = qInput.value.trim();
+    var options = [aInput.value.trim(), bInput.value.trim(), cInput.value.trim(), dInput.value.trim()];
+    if (!question) {
+        showToast('请输入题目');
+        return;
+    }
+    for (var i = 0; i < options.length; i++) {
+        if (!options[i]) {
+            showToast('请填写所有选项');
+            return;
+        }
+    }
+    var answer = parseInt(ansSelect.value) || 0;
+
+    var monopoly = DataHub.get('monopoly', { colors: { me: '#4a90d9', friend: '#9b6bc4' }, questions: [], records: { single: [], double: [] } });
+    if (!monopoly.questions) monopoly.questions = [];
+    monopoly.questions.push({
+        id: 'mq' + Date.now() + Math.random().toString(36).substr(2, 4),
+        question: question,
+        options: options,
+        answer: answer
+    });
+    DataHub.set('monopoly', monopoly);
+    closeModal();
+    showToast('已新增');
+    openMonopolyCustom();
+}
+
+function editMonopolyQuestion(qid) {
+    var monopoly = DataHub.get('monopoly', { questions: [] });
+    var q = (monopoly.questions || []).find(function(x) { return x.id === qid; });
+    if (!q) return;
+    var opts = q.options || ['', '', '', ''];
+    var html = '<div class="modal-title">编辑题目</div>' +
+        '<input type="text" id="mqQuestionInput" value="' + (q.question || '').replace(/"/g, '&quot;') + '" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
+        '<input type="text" id="mqOptionA" value="' + (opts[0] || '').replace(/"/g, '&quot;') + '" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
+        '<input type="text" id="mqOptionB" value="' + (opts[1] || '').replace(/"/g, '&quot;') + '" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
+        '<input type="text" id="mqOptionC" value="' + (opts[2] || '').replace(/"/g, '&quot;') + '" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
+        '<input type="text" id="mqOptionD" value="' + (opts[3] || '').replace(/"/g, '&quot;') + '" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
+        '<div style="font-size:13px;color:#000000;margin-bottom:6px;">正确答案</div>' +
+        '<select id="mqAnswerSelect" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
+            '<option value="0"' + (q.answer === 0 ? ' selected' : '') + '>A</option>' +
+            '<option value="1"' + (q.answer === 1 ? ' selected' : '') + '>B</option>' +
+            '<option value="2"' + (q.answer === 2 ? ' selected' : '') + '>C</option>' +
+            '<option value="3"' + (q.answer === 3 ? ' selected' : '') + '>D</option>' +
+        '</select>' +
+        '<div class="btn-row">' +
+            '<button class="cancel" onclick="closeModal()">取消</button>' +
+            '<button class="confirm" onclick="updateMonopolyQuestion(\'' + qid + '\')">保存</button>' +
+        '</div>';
+    showModal(html);
+}
+
+function updateMonopolyQuestion(qid) {
+    var qInput = document.getElementById('mqQuestionInput');
+    var aInput = document.getElementById('mqOptionA');
+    var bInput = document.getElementById('mqOptionB');
+    var cInput = document.getElementById('mqOptionC');
+    var dInput = document.getElementById('mqOptionD');
+    var ansSelect = document.getElementById('mqAnswerSelect');
+    if (!qInput || !aInput || !bInput || !cInput || !dInput) return;
+    var question = qInput.value.trim();
+    var options = [aInput.value.trim(), bInput.value.trim(), cInput.value.trim(), dInput.value.trim()];
+    if (!question) {
+        showToast('请输入题目');
+        return;
+    }
+    for (var i = 0; i < options.length; i++) {
+        if (!options[i]) {
+            showToast('请填写所有选项');
+            return;
+        }
+    }
+    var answer = parseInt(ansSelect.value) || 0;
+
+    var monopoly = DataHub.get('monopoly', { questions: [] });
+    var q = (monopoly.questions || []).find(function(x) { return x.id === qid; });
+    if (!q) return;
+    q.question = question;
+    q.options = options;
+    q.answer = answer;
+    DataHub.set('monopoly', monopoly);
+    closeModal();
+    showToast('已保存');
+    openMonopolyCustom();
+}
+
+function deleteMonopolyQuestion(qid) {
+    if (!confirm('确定删除这道题吗？')) return;
+    var monopoly = DataHub.get('monopoly', { questions: [] });
+    monopoly.questions = (monopoly.questions || []).filter(function(x) { return x.id !== qid; });
+    DataHub.set('monopoly', monopoly);
+    showToast('已删除');
+    openMonopolyCustom();
+}
+
+var MONOPOLY_SPIRAL_POS = [
+    { x: 0,  y: 0,  w: 10, h: 10 },  // 0  开始
+    { x: 10, y: 0,  w: 10, h: 10 },  // 1
+    { x: 20, y: 0,  w: 10, h: 10 },  // 2
+    { x: 30, y: 0,  w: 10, h: 10 },  // 3
+    { x: 40, y: 0,  w: 10, h: 10 },  // 4
+    { x: 50, y: 0,  w: 10, h: 10 },  // 5
+    { x: 60, y: 0,  w: 10, h: 10 },  // 6
+    { x: 70, y: 0,  w: 10, h: 10 },  // 7
+    { x: 80, y: 0,  w: 10, h: 10 },  // 8
+    { x: 90, y: 0,  w: 10, h: 10 },  // 9
+    { x: 90, y: 10, w: 10, h: 10 },  // 10
+    { x: 90, y: 20, w: 10, h: 10 },  // 11
+    { x: 90, y: 30, w: 10, h: 10 },  // 12
+    { x: 90, y: 40, w: 10, h: 10 },  // 13
+    { x: 90, y: 50, w: 10, h: 10 },  // 14
+    { x: 90, y: 60, w: 10, h: 10 },  // 15
+    { x: 90, y: 70, w: 10, h: 10 },  // 16
+    { x: 90, y: 80, w: 10, h: 10 },  // 17
+    { x: 90, y: 90, w: 10, h: 10 },  // 18
+    { x: 80, y: 90, w: 10, h: 10 },  // 19
+    { x: 70, y: 90, w: 10, h: 10 },  // 20
+    { x: 60, y: 90, w: 10, h: 10 },  // 21
+    { x: 50, y: 90, w: 10, h: 10 },  // 22
+    { x: 40, y: 90, w: 10, h: 10 },  // 23
+    { x: 30, y: 90, w: 10, h: 10 },  // 24
+    { x: 20, y: 90, w: 10, h: 10 },  // 25
+    { x: 10, y: 90, w: 10, h: 10 },  // 26
+    { x: 0,  y: 90, w: 10, h: 10 },  // 27
+    { x: 0,  y: 80, w: 10, h: 10 },  // 28
+    { x: 0,  y: 70, w: 10, h: 10 },  // 29
+    { x: 0,  y: 60, w: 10, h: 10 },  // 30
+    { x: 0,  y: 50, w: 10, h: 10 },  // 31
+    { x: 0,  y: 40, w: 10, h: 10 },  // 32
+    { x: 0,  y: 30, w: 10, h: 10 },  // 33
+    { x: 0,  y: 20, w: 10, h: 10 },  // 34
+    { x: 10, y: 20, w: 10, h: 10 },  // 35
+    { x: 20, y: 20, w: 10, h: 10 },  // 36
+    { x: 30, y: 20, w: 10, h: 10 },  // 37
+    { x: 40, y: 20, w: 10, h: 10 },  // 38
+    { x: 50, y: 20, w: 10, h: 10 },  // 39
+    { x: 60, y: 20, w: 10, h: 10 },  // 40
+    { x: 70, y: 20, w: 10, h: 10 },  // 41
+    { x: 70, y: 30, w: 10, h: 10 },  // 42
+    { x: 70, y: 40, w: 10, h: 10 },  // 43
+    { x: 70, y: 50, w: 10, h: 10 },  // 44
+    { x: 70, y: 60, w: 10, h: 10 },  // 45
+    { x: 70, y: 70, w: 10, h: 10 },  // 46
+    { x: 60, y: 70, w: 10, h: 10 },  // 47
+    { x: 50, y: 70, w: 10, h: 10 },  // 48
+    { x: 40, y: 70, w: 10, h: 10 },  // 49
+    { x: 30, y: 70, w: 10, h: 10 },  // 50
+    { x: 20, y: 70, w: 10, h: 10 },  // 51
+    { x: 20, y: 60, w: 10, h: 10 },  // 52
+    { x: 20, y: 50, w: 10, h: 10 },  // 53
+    { x: 20, y: 40, w: 10, h: 10 },  // 54
+    { x: 30, y: 40, w: 10, h: 10 },  // 55
+    { x: 30, y: 50, w: 10, h: 10 }   // 56
+];
+
+var MONOPOLY_DICE_CELL = { x: 40, y: 40, w: 20, h: 20 };
+
+// 灰色通道：所有不属于上述格子的位置
+// 用于渲染背景灰底，可以不单独定义，靠棋盘底色即可
+
+// 格子类型：0=起点，1=空地/房产，2=机会，3=监狱
+// 58 格，按螺旋顺序
+// 类型数组运行时随机生成，保证起点固定为 0，机会和监狱各约 6 个
+var MONOPOLY_CELL_TYPES = [];
+
+function generateMonopolyCellTypes() {
+    var total = MONOPOLY_SPIRAL_POS.length;
+    var types = new Array(total);
+    // 起点固定为 0
+    types[0] = 0;
+    for (var i = 1; i < total; i++) {
+        types[i] = 1;
+    }
+
+    var candidateIndexes = [];
+    for (var j = 1; j < total; j++) {
+        candidateIndexes.push(j);
+    }
+    // 打乱候选位置
+    for (var k = candidateIndexes.length - 1; k > 0; k--) {
+        var r = Math.floor(Math.random() * (k + 1));
+        var tmp = candidateIndexes[k];
+        candidateIndexes[k] = candidateIndexes[r];
+        candidateIndexes[r] = tmp;
+    }
+
+    // 机会 10 个，监狱 6 个
+var chanceCount = 10;
+var jailCount = 6;
+    var used = {};
+
+    function isTooCloseToSameType(idx, type) {
+    // 检查相邻 1 格内是否有同类型，避免连续出现
+    for (var d = -1; d <= 1; d++) {
+        if (d === 0) continue;
+        var ni = idx + d;
+        if (ni < 0 || ni >= total) continue;
+        if (types[ni] === type) return true;
+    }
+    return false;
+}
+
+    var pointer = 0;
+// 放机会
+var placedChance = 0;
+while (placedChance < chanceCount && pointer < candidateIndexes.length) {
+    var ci = candidateIndexes[pointer];
+    pointer++;
+    if (types[ci] !== 1) continue;
+    if (isTooCloseToSameType(ci, 2)) continue;
+    types[ci] = 2;
+    used[ci] = true;
+    placedChance++;
+}
+// 兜底：还没放满就放宽限制补满
+if (placedChance < chanceCount) {
+    for (var ci2 = 0; ci2 < candidateIndexes.length && placedChance < chanceCount; ci2++) {
+        var cj = candidateIndexes[ci2];
+        if (types[cj] !== 1) continue;
+        types[cj] = 2;
+        used[cj] = true;
+        placedChance++;
+    }
+}
+
+// 放监狱
+var placedJail = 0;
+while (placedJail < jailCount && pointer < candidateIndexes.length) {
+    var ji = candidateIndexes[pointer];
+    pointer++;
+    if (types[ji] !== 1) continue;
+    if (isTooCloseToSameType(ji, 3)) continue;
+    types[ji] = 3;
+    used[ji] = true;
+    placedJail++;
+}
+// 兜底：还没放满就放宽限制补满
+if (placedJail < jailCount) {
+    for (var ji2 = 0; ji2 < candidateIndexes.length && placedJail < jailCount; ji2++) {
+        var jj = candidateIndexes[ji2];
+        if (types[jj] !== 1) continue;
+        types[jj] = 3;
+        used[jj] = true;
+        placedJail++;
+    }
+}
+
+    MONOPOLY_CELL_TYPES = types;
+}
+
+function getMonopolyCellType(idx) {
+    if (!MONOPOLY_CELL_TYPES || MONOPOLY_CELL_TYPES.length === 0) {
+        return (idx === 0) ? 0 : 1;
+    }
+    return MONOPOLY_CELL_TYPES[idx] || 1;
+}
+
+// 编号 → 坐标：按玩家移动编号（0-56）查坐标
+// 因为 MONOPOLY_SPIRAL_POS 数组顺序 = 走法顺序（开始、1、2、...、56）
+// 所以直接用编号当数组下标即可
+var MONOPOLY_POS_BY_INDEX = MONOPOLY_SPIRAL_POS;
+
+function getMonopolyCellLabel(idx) {
+    var t = getMonopolyCellType(idx);
+    if (t === 0) return '开始';
+    if (t === 2) return '❓';
+    if (t === 3) return '🔒';
+    return String(idx);
+}
+
+// 颜色加深/变浅工具
+function hexToRgb(hex) {
+    var h = hex.replace('#', '');
+    if (h.length === 3) {
+        h = h.charAt(0) + h.charAt(0) + h.charAt(1) + h.charAt(1) + h.charAt(2) + h.charAt(2);
+    }
+    var n = parseInt(h, 16);
+    return {
+        r: (n >> 16) & 255,
+        g: (n >> 8) & 255,
+        b: n & 255
+    };
+}
+
+function rgbToHex(r, g, b) {
+    return '#' + [r, g, b].map(function(v) {
+        var s = Math.max(0, Math.min(255, Math.round(v))).toString(16);
+        return s.length === 1 ? '0' + s : s;
+    }).join('');
+}
+
+function lightenColor(hex, percent) {
+    var c = hexToRgb(hex);
+    return rgbToHex(
+        c.r + (255 - c.r) * percent / 100,
+        c.g + (255 - c.g) * percent / 100,
+        c.b + (255 - c.b) * percent / 100
+    );
+}
+
+function darkenColor(hex, percent) {
+    var c = hexToRgb(hex);
+    return rgbToHex(
+        c.r * (1 - percent / 100),
+        c.g * (1 - percent / 100),
+        c.b * (1 - percent / 100)
+    );
+}
+
+// 渲染棋盘
+// state: 对局状态对象
+function renderMonopolyBoard(state) {
+    var monopoly = DataHub.get('monopoly', {});
+    var colors = monopoly.colors || { me: '#4a90d9', friend: '#9b6bc4' };
+    var myColor = colors.me || '#4a90d9';
+    var friendColor = colors.friend || '#9b6bc4';
+    var npcColor = '#9e9e9e';
+
+    var myProfile = DataHub.get('myProfile', { nickname: '我', avatar: '' });
+    var friends = DataHub.get('friends', []);
+    var friendObj = friends.find(function(f) { return f.id === state.chatId; });
+
+    // 外层容器：浅灰底（通道色 #f0f0f0），正方形
+    var html = '<div style="position:relative;width:100%;padding-bottom:100%;background:#f0f0f0;overflow:hidden;">';
+    html += '<div style="position:absolute;top:0;left:0;right:0;bottom:0;">';
+
+    // 画所有格子（白色方格）
+for (var i = 0; i < MONOPOLY_SPIRAL_POS.length; i++) {
+    var p = MONOPOLY_SPIRAL_POS[i];
+    var owner = state.cellOwners ? state.cellOwners[i] : null;
+    var level = state.cellLevels ? (state.cellLevels[i] || 0) : 0;
+
+    var bg = '#ffffff';
+    var borderColor = '#cccccc';
+    var borderWidth = '1px';
+
+    if (owner === 'me') {
+        bg = lightenColor(myColor, 65);
+        if (level >= 2) { borderColor = myColor; borderWidth = '2px'; }
+    } else if (owner === 'friend') {
+        bg = lightenColor(friendColor, 65);
+        if (level >= 2) { borderColor = friendColor; borderWidth = '2px'; }
+    } else if (owner === 'npc1' || owner === 'npc2') {
+        bg = lightenColor(npcColor, 65);
+        if (level >= 2) { borderColor = npcColor; borderWidth = '2px'; }
+    }
+
+    var label = getMonopolyCellLabel(i);
+    var fontSize = '10px';
+    if (label.length > 2) fontSize = '9px';
+
+    html += '<div style="position:absolute;left:' + p.x + '%;top:' + p.y + '%;width:' + p.w + '%;height:' + p.h + '%;background:' + bg + ';border:' + borderWidth + ' solid ' + borderColor + ';box-sizing:border-box;display:flex;align-items:center;justify-content:center;font-size:' + fontSize + ';color:#000000;overflow:hidden;line-height:1;">' + label + '</div>';
+}
+
+// 画中心骰子格（E5-F6 合并）
+var dicePos = MONOPOLY_DICE_CELL;
+var diceValue = (state.diceValue !== undefined && state.diceValue !== null) ? state.diceValue : '?';
+var diceText = (diceValue === '?') ? '?' : (diceValue + '点');
+var isRolling = (state.diceRolling === true);
+var diceSpinStyle = isRolling ? 'animation:monopolyDiceSpin 0.3s linear infinite;' : '';
+html += '<div style="position:absolute;left:' + dicePos.x + '%;top:' + dicePos.y + '%;width:' + dicePos.w + '%;height:' + dicePos.h + '%;background:#ffffff;border:2px solid #4a7a4e;box-sizing:border-box;display:flex;align-items:center;justify-content:center;flex-direction:column;font-size:14px;color:#000000;font-weight:600;">' +
+    '<div id="monopolyDiceIcon" style="font-size:18px;line-height:1;' + diceSpinStyle + '">🎲</div>' +
+    '<div id="monopolyDiceValue" style="font-size:12px;margin-top:2px;">' + diceText + '</div>' +
+'</div>';
+
+    // 画棋子（头像）
+    if (state.players) {
+        var posGroups = {};
+        for (var gp = 0; gp < state.players.length; gp++) {
+            var gpPos = state.players[gp].pos || 0;
+            if (!posGroups[gpPos]) posGroups[gpPos] = [];
+            posGroups[gpPos].push(state.players[gp]);
+        }
+
+        for (var pi = 0; pi < state.players.length; pi++) {
+            var player = state.players[pi];
+            var posIdx = player.pos || 0;
+            var cellPos = MONOPOLY_SPIRAL_POS[posIdx];
+            if (!cellPos) continue;
+
+            var group = posGroups[posIdx] || [];
+            var sameCellCount = group.length;
+            var sameCellIndex = group.indexOf(player);
+
+            var baseSize = cellPos.h * 0.55;
+            var dotSize = baseSize;
+            if (sameCellCount === 2) dotSize = baseSize * 0.85;
+            else if (sameCellCount === 3) dotSize = baseSize * 0.75;
+            else if (sameCellCount >= 4) dotSize = baseSize * 0.65;
+
+            var dotLeft = cellPos.x + cellPos.w / 2 - dotSize / 2;
+            var dotTop = cellPos.y + cellPos.h * 0.45 - dotSize / 2;
+
+            if (sameCellCount > 1) {
+                var offsets = [
+                    { dx: -0.25, dy: -0.15 },
+                    { dx:  0.25, dy: -0.15 },
+                    { dx: -0.25, dy:  0.20 },
+                    { dx:  0.25, dy:  0.20 }
+                ];
+                var off = offsets[sameCellIndex % 4];
+                dotLeft = cellPos.x + cellPos.w / 2 - dotSize / 2 + cellPos.w * off.dx;
+                dotTop = cellPos.y + cellPos.h / 2 - dotSize / 2 + cellPos.h * off.dy;
+            }
+
+            var avatarContent = '';
+if (player.id === 'me') {
+    if (myProfile.avatar && myProfile.avatar.startsWith('data:image')) {
+        avatarContent = '<img src="' + myProfile.avatar + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">';
+    } else {
+        avatarContent = '<div style="width:100%;height:100%;border-radius:50%;background:var(--theme-main, #d4e9d6);color:#000000;display:flex;align-items:center;justify-content:center;font-size:' + (dotSize * 0.5) + 'px;font-weight:600;">' + ((myProfile.nickname || '我').charAt(0).toUpperCase()) + '</div>';
+    }
+} else if (player.id === 'friend') {
+    if (friendObj && friendObj.avatar && friendObj.avatar.startsWith('data:image')) {
+        avatarContent = '<img src="' + friendObj.avatar + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">';
+    } else {
+        var fName = friendObj ? (friendObj.name || '好友') : '好友';
+        avatarContent = '<div style="width:100%;height:100%;border-radius:50%;background:var(--theme-main, #d4e9d6);color:#000000;display:flex;align-items:center;justify-content:center;font-size:' + (dotSize * 0.5) + 'px;font-weight:600;">' + (fName.charAt(0).toUpperCase()) + '</div>';
+    }
+} else if (player.id === 'npc1' || player.id === 'npc2') {
+    avatarContent = '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:' + (dotSize * 0.7) + 'px;">🤖</div>';
+}
+
+html += '<div style="position:absolute;left:' + dotLeft + '%;top:' + dotTop + '%;width:' + dotSize + '%;height:' + dotSize + '%;border-radius:50%;overflow:hidden;transition:left 0.3s ease,top 0.3s ease;z-index:10;">' + avatarContent + '</div>';
+        }
+    }
+
+    html += '</div></div>';
+    return html;
+}
+
+// ====== 大富翁：对局 ======
+function generateMonopolyCellTypesIfNeeded() {
+    if (!MONOPOLY_CELL_TYPES || MONOPOLY_CELL_TYPES.length === 0) {
+        generateMonopolyCellTypes();
+    }
+}
+
+// ====== 大富翁：对局 ======
+function openMonopolyGame(mode) {
+    if (!currentChatId) {
+        showToast('请先进入聊天');
+        return;
+    }
+    generateMonopolyCellTypesIfNeeded();
+    var friends = DataHub.get('friends', []);
+    var friend = friends.find(function(f) { return f.id === currentChatId; });
+    if (!friend) return;
+
+    var monopoly = DataHub.get('monopoly', {});
+    var colors = monopoly.colors || { me: '#4a90d9', friend: '#9b6bc4' };
+
+    var state = {
+        mode: mode,
+        chatId: currentChatId,
+        round: 1,
+        maxRound: 30,
+        turn: 'me',
+        turnOrder: [],
+        turnIndex: 0,
+        players: [],
+        cellOwners: {},
+        cellLevels: {},
+        logs: [],
+        chat: [],
+        finished: false,
+        colors: colors,
+        friendName: friend.name || '好友'
+    };
+
+    if (mode === 'single') {
+        state.players = [
+            { id: 'me', name: '我', money: 1500, pos: 0, color: colors.me, jailSkip: 0 },
+            { id: 'friend', name: friend.name || '好友', money: 1500, pos: 0, color: colors.friend, jailSkip: 0 }
+        ];
+        state.turnOrder = ['me', 'friend'];
+    } else {
+        state.players = [
+            { id: 'me', name: '我', money: 1500, pos: 0, color: colors.me, jailSkip: 0 },
+            { id: 'friend', name: friend.name || '好友', money: 1500, pos: 0, color: colors.friend, jailSkip: 0 },
+            { id: 'npc1', name: 'NPC1', money: 1500, pos: 0, color: '#9e9e9e', jailSkip: 0 },
+            { id: 'npc2', name: 'NPC2', money: 1500, pos: 0, color: '#9e9e9e', jailSkip: 0 }
+        ];
+        state.turnOrder = ['me', 'friend', 'npc1', 'npc2'];
+    }
+
+    DataHub.set('monopolyCurrentGame', state);
+
+    renderMonopolyGamePage(state);
+}
+
+function renderMonopolyStatusBar(state) {
+    var myProfileForStatus = DataHub.get('myProfile', { nickname: '我', avatar: '' });
+    var friendsForStatus = DataHub.get('friends', []);
+    var friendObjForStatus = friendsForStatus.find(function(f) { return f.id === state.chatId; });
+
+    function buildStatusItem(pl, isCurrent) {
+        var statusAvatar = '';
+        if (pl.id === 'me') {
+            if (myProfileForStatus.avatar && myProfileForStatus.avatar.startsWith('data:image')) {
+                statusAvatar = '<img src="' + myProfileForStatus.avatar + '" style="width:16px;height:16px;border-radius:50%;object-fit:cover;flex-shrink:0;">';
+            } else {
+                statusAvatar = '<div style="width:16px;height:16px;border-radius:50%;background:var(--theme-main, #d4e9d6);color:#000000;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;flex-shrink:0;">' + ((myProfileForStatus.nickname || '我').charAt(0).toUpperCase()) + '</div>';
+            }
+        } else if (pl.id === 'friend') {
+            if (friendObjForStatus && friendObjForStatus.avatar && friendObjForStatus.avatar.startsWith('data:image')) {
+                statusAvatar = '<img src="' + friendObjForStatus.avatar + '" style="width:16px;height:16px;border-radius:50%;object-fit:cover;flex-shrink:0;">';
+            } else {
+                var fNameStatus = friendObjForStatus ? (friendObjForStatus.name || '好友') : '好友';
+                statusAvatar = '<div style="width:16px;height:16px;border-radius:50%;background:var(--theme-main, #d4e9d6);color:#000000;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;flex-shrink:0;">' + (fNameStatus.charAt(0).toUpperCase()) + '</div>';
+            }
+        } else if (pl.id === 'npc1') {
+            statusAvatar = '<div style="width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;">NPC1</div>';
+        } else if (pl.id === 'npc2') {
+            statusAvatar = '<div style="width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;">NPC2</div>';
+        }
+        return '<div style="display:flex;align-items:center;font-size:12px;color:#000000;white-space:nowrap;' + (isCurrent ? 'font-weight:600;' : '') + '">' +
+            '<div style="width:20px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">' + statusAvatar + '</div>' +
+            '&nbsp;&nbsp;' +
+            '<span>' + pl.name + '</span>' +
+            '&nbsp;&nbsp;' +
+            '<span style="color:#666666;">¥' + (pl.money || 0).toFixed(0) + '</span>' +
+        '</div>';
+    }
+
+    var html = '';
+    if (state.players.length >= 2) {
+        html += '<div style="display:flex;width:100%;padding:3px 0 3px 8px;box-sizing:border-box;">' +
+            '<div style="flex:1;min-width:0;overflow:hidden;">' + buildStatusItem(state.players[0], state.players[0].id === state.turnOrder[state.turnIndex]) + '</div>' +
+            '<div style="flex:1;min-width:0;overflow:hidden;">' + buildStatusItem(state.players[1], state.players[1].id === state.turnOrder[state.turnIndex]) + '</div>' +
+        '</div>';
+    }
+    if (state.players.length >= 4) {
+        html += '<div style="display:flex;width:100%;padding:3px 0 3px 8px;box-sizing:border-box;">' +
+            '<div style="flex:1;min-width:0;overflow:hidden;">' + buildStatusItem(state.players[2], state.players[2].id === state.turnOrder[state.turnIndex]) + '</div>' +
+            '<div style="flex:1;min-width:0;overflow:hidden;">' + buildStatusItem(state.players[3], state.players[3].id === state.turnOrder[state.turnIndex]) + '</div>' +
+        '</div>';
+    }
+    return html;
+}
+
+function renderMonopolyGamePage(state) {
+    var container = document.getElementById('subPageContainer');
+    if (!container) return;
+
+    var logsHtml = '';
+if (state.logs && state.logs.length > 0) {
+    var lastLog = state.logs[state.logs.length - 1];
+    logsHtml = '<div style="padding:0 12px;height:18px;line-height:18px;font-size:10px;color:#666666;background:#fafafa;border-bottom:1px solid #e0e0e0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0;">' + lastLog + '</div>';
+} else {
+    logsHtml = '<div style="padding:0 12px;height:18px;line-height:18px;font-size:10px;color:#999999;background:#fafafa;border-bottom:1px solid #e0e0e0;flex-shrink:0;">游戏开始</div>';
+}
+
+    var chatHtml = '';
+for (var ci = 0; ci < (state.chat || []).length; ci++) {
+    var cm = state.chat[ci];
+    var isMe = (cm.from === 'me');
+    var chatSenderName = isMe ? '我' : state.friendName;
+    var chatTimeStr = '';
+    if (cm.time) {
+        var ct = new Date(cm.time);
+        chatTimeStr = '[' + String(ct.getHours()).padStart(2,'0') + ':' + String(ct.getMinutes()).padStart(2,'0') + ']';
+    } else {
+        chatTimeStr = '';
+    }
+    chatHtml += '<div style="margin-bottom:5px;">' +
+        '<div style="font-size:8px;color:#999999;margin-bottom:1px;text-align:' + (isMe ? 'right' : 'left') + ';">' + chatSenderName + ' ' + chatTimeStr + '</div>' +
+        '<div style="display:flex;justify-content:' + (isMe ? 'flex-end' : 'flex-start') + ';">' +
+            '<div style="max-width:75%;padding:2px 7px;border-radius:9px;font-size:8px;line-height:1.4;word-break:break-word;color:#000000;background:' + (isMe ? 'var(--theme-main, #d4e9d6)' : 'var(--theme-light, #eef5ef)') + ';">' + cm.text + '</div>' +
+        '</div>' +
+    '</div>';
+}
+
+    var canRoll = (state.turn === 'me') && !state.finished;
+
+    var playersStatusHtml = '';
+var myProfileForStatus = DataHub.get('myProfile', { nickname: '我', avatar: '' });
+var friendsForStatus = DataHub.get('friends', []);
+var friendObjForStatus = friendsForStatus.find(function(f) { return f.id === state.chatId; });
+
+function buildStatusItem(pl, isCurrent) {
+    var statusAvatar = '';
+    if (pl.id === 'me') {
+        if (myProfileForStatus.avatar && myProfileForStatus.avatar.startsWith('data:image')) {
+            statusAvatar = '<img src="' + myProfileForStatus.avatar + '" style="width:16px;height:16px;border-radius:50%;object-fit:cover;flex-shrink:0;">';
+        } else {
+            statusAvatar = '<div style="width:16px;height:16px;border-radius:50%;background:var(--theme-main, #d4e9d6);color:#000000;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;flex-shrink:0;">' + ((myProfileForStatus.nickname || '我').charAt(0).toUpperCase()) + '</div>';
+        }
+    } else if (pl.id === 'friend') {
+        if (friendObjForStatus && friendObjForStatus.avatar && friendObjForStatus.avatar.startsWith('data:image')) {
+            statusAvatar = '<img src="' + friendObjForStatus.avatar + '" style="width:16px;height:16px;border-radius:50%;object-fit:cover;flex-shrink:0;">';
+        } else {
+            var fNameStatus = friendObjForStatus ? (friendObjForStatus.name || '好友') : '好友';
+            statusAvatar = '<div style="width:16px;height:16px;border-radius:50%;background:var(--theme-main, #d4e9d6);color:#000000;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;flex-shrink:0;">' + (fNameStatus.charAt(0).toUpperCase()) + '</div>';
+        }
+    } else if (pl.id === 'npc1') {
+        statusAvatar = '<div style="width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;">🤖1</div>';
+    } else if (pl.id === 'npc2') {
+        statusAvatar = '<div style="width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;">🤖2</div>';
+    }
+        return '<div style="display:flex;align-items:center;font-size:12px;color:#000000;white-space:nowrap;' + (isCurrent ? 'font-weight:600;' : '') + '">' +
+        '<div style="width:20px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">' + statusAvatar + '</div>' +
+        '&nbsp;&nbsp;' +
+        '<span>' + pl.name + '</span>' +
+        '&nbsp;&nbsp;' +
+        '<span style="color:#666666;">¥' + (pl.money || 0).toFixed(0) + '</span>' +
+    '</div>';
+}
+
+if (state.players.length >= 2) {
+    playersStatusHtml += '<div style="display:flex;width:100%;padding:3px 0 3px 8px;box-sizing:border-box;">' +
+        '<div style="flex:1;min-width:0;overflow:hidden;">' + buildStatusItem(state.players[0], state.players[0].id === state.turnOrder[state.turnIndex]) + '</div>' +
+        '<div style="flex:1;min-width:0;overflow:hidden;">' + buildStatusItem(state.players[1], state.players[1].id === state.turnOrder[state.turnIndex]) + '</div>' +
+    '</div>';
+}
+if (state.players.length >= 4) {
+    playersStatusHtml += '<div style="display:flex;width:100%;padding:3px 0 3px 8px;box-sizing:border-box;">' +
+        '<div style="flex:1;min-width:0;overflow:hidden;">' + buildStatusItem(state.players[2], state.players[2].id === state.turnOrder[state.turnIndex]) + '</div>' +
+        '<div style="flex:1;min-width:0;overflow:hidden;">' + buildStatusItem(state.players[3], state.players[3].id === state.turnOrder[state.turnIndex]) + '</div>' +
+    '</div>';
+}
+
+        var html = '<div class="sub-page active" id="monopolyGamePage" style="z-index:70;background:#ffffff;pointer-events:auto;display:flex;flex-direction:column;position:absolute;top:0;left:0;right:0;bottom:0;height:100%;">' +
+
+    // 顶部栏（固定高度）
+    '<div class="sub-top" style="flex-shrink:0;">' +
+        '<div class="back-btn" onclick="exitMonopolyGame()">' +
+            '<svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>' +
+        '</div>' +
+        '<span style="flex:1;text-align:center;font-size:12px;">大富翁 · ' + (state.mode === 'single' ? '单人模式' : '双人模式') + ' · ' + state.round + '/' + state.maxRound + '回合</span>' +
+    '</div>' +
+
+    // 游戏区 + 日志/按钮区：合并为一个区域，让日志紧贴棋盘下方
+'<div style="flex:1 1 auto;display:flex;flex-direction:column;min-height:0;overflow:hidden;padding:4px 8px;box-sizing:border-box;">' +
+
+    // 状态条（固定高度，小字）
+    '<div id="monopolyStatusBar" style="flex-shrink:0;display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-bottom:4px;font-size:11px;">' + playersStatusHtml + '</div>' +
+
+    // 棋盘区（按比例分配高度）
+    '<div style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;position:relative;width:100%;">' +
+        '<div id="monopolyBoardInner" style="width:100%;aspect-ratio:1;position:relative;">' +
+    renderMonopolyBoard(state) +
+'</div>' +
+    '</div>' +
+
+    // 日志 + 掷骰子按钮（紧贴棋盘下方）
+'<div id="monopolyLogBar" style="flex-shrink:0;display:flex;align-items:center;gap:8px;padding:2px 10px;background:#fafafa;margin-top:4px;border-radius:8px;">' +
+    '<div style="flex:1;text-align:center;font-size:10px;color:#666666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:16px;">' + (state.logs && state.logs.length > 0 ? state.logs[state.logs.length - 1] : '游戏开始') + '</div>' +
+    '<button onclick="monopolyRollDice()" ' + (canRoll ? '' : 'disabled') + ' style="padding:3px 14px;background:' + (canRoll ? 'var(--theme-main, #d4e9d6)' : '#e0e0e0') + ';color:#000000;border:none;border-radius:14px;font-size:11px;cursor:' + (canRoll ? 'pointer' : 'default') + ';flex-shrink:0;">' + (canRoll ? '投骰子' : (state.finished ? '已结束' : '等待中')) + '</button>' +
+'</div>' +
+
+    // 会话区（撑满剩余）
+    '<div id="monopolyChatArea" style="flex:1;overflow-y:auto;padding:6px 12px;min-height:0;background:#ffffff;margin-top:4px;border-radius:8px;">' + chatHtml + '</div>' +
+
+'</div>' +
+
+// 输入框（固定在底部）
+'<div style="flex-shrink:0;display:flex;gap:6px;padding:6px 10px;border-top:1px solid #e0e0e0;background:#ffffff;">' +
+    '<input type="text" id="monopolyChatInput" placeholder="输入消息..." style="flex:1;padding:6px 10px;border:1px solid #d4e4d6;border-radius:14px;font-size:12px;outline:none;color:#000000;background:#ffffff;">' +
+    '<button onclick="monopolySendChat()" style="padding:6px 14px;background:var(--theme-main, #d4e9d6);color:#000000;border:none;border-radius:14px;font-size:12px;cursor:pointer;flex-shrink:0;">发送</button>' +
+'</div>' +
+
+'</div>';
+
+    container.innerHTML = html;
+    var subPage = container.querySelector('#monopolyGamePage');
+    if (subPage) {
+        subPage.classList.add('active');
+        subPage.style.pointerEvents = 'auto';
+    }
+
+    var input = document.getElementById('monopolyChatInput');
+    if (input) {
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') monopolySendChat();
+        });
+    }
+
+    setTimeout(function() {
+        var area = document.getElementById('monopolyChatArea');
+        if (area) area.scrollTop = area.scrollHeight;
+    }, 50);
+}
+
+// 退出对局
+function exitMonopolyGame() {
+    if (!confirm('确定退出对局吗？当前进度不会保存。')) return;
+    DataHub.delete('monopolyCurrentGame');
+    DataHub.delete('monopolyChat');
+    openMonopolyMain();
+}
+
+// 掷骰子
+function monopolyRollDice() {
+    var state = DataHub.get('monopolyCurrentGame', null);
+    if (!state) return;
+    if (state.finished) return;
+    if (state.turn !== 'me') {
+        showToast('等待其他玩家');
+        return;
+    }
+
+    var dice = Math.floor(Math.random() * 6) + 1;
+    state.diceValue = dice;
+    DataHub.set('monopolyCurrentGame', state);
+
+    // 骰子滚动动画：每 60ms 变一次，共 10 次（600ms），最后定格在 dice
+// 滚动期间：骰子图标持续旋转，点数文字快速跳动
+// 定格后：骰子停止旋转，显示最终点数，200ms 后开始移动
+var tmpStateInit = DataHub.get('monopolyCurrentGame', null);
+if (tmpStateInit) {
+    tmpStateInit.diceRolling = true;
+    DataHub.set('monopolyCurrentGame', tmpStateInit);
+    var diceIconInit = document.getElementById('monopolyDiceIcon');
+    if (diceIconInit) {
+        diceIconInit.style.animation = 'monopolyDiceSpin 0.3s linear infinite';
+    }
+}
+
+var rollCount = 0;
+var rollTimer = setInterval(function() {
+    rollCount++;
+    var tmpState = DataHub.get('monopolyCurrentGame', null);
+    if (!tmpState) {
+        clearInterval(rollTimer);
+        return;
+    }
+    if (rollCount >= 10) {
+        clearInterval(rollTimer);
+        tmpState.diceValue = dice;
+        tmpState.diceRolling = false;
+        DataHub.set('monopolyCurrentGame', tmpState);
+        var diceEl = document.getElementById('monopolyDiceValue');
+        if (diceEl) {
+            diceEl.textContent = dice + '点';
+        }
+        var diceIconStop = document.getElementById('monopolyDiceIcon');
+        if (diceIconStop) {
+            diceIconStop.style.animation = '';
+        }
+        // 动画结束后再移动
+        setTimeout(function() {
+            var latest = DataHub.get('monopolyCurrentGame', null);
+            if (!latest) return;
+            monopolyMovePlayer(latest, 'me', dice);
+        }, 200);
+    } else {
+        var tmpVal = Math.floor(Math.random() * 6) + 1;
+        tmpState.diceValue = tmpVal;
+        DataHub.set('monopolyCurrentGame', tmpState);
+        var diceEl2 = document.getElementById('monopolyDiceValue');
+        if (diceEl2) {
+            diceEl2.textContent = tmpVal + '点';
+        }
+    }
+}, 60);
+}
+
+// 移动玩家
+function monopolyMovePlayer(state, playerId, steps) {
+    var playerIdx = -1;
+    for (var i = 0; i < state.players.length; i++) {
+        if (state.players[i].id === playerId) { playerIdx = i; break; }
+    }
+    if (playerIdx < 0) return;
+
+    var player = state.players[playerIdx];
+
+    if (player.jailSkip && player.jailSkip > 0) {
+        player.jailSkip--;
+        monopolyAddLog(state, player.name + ' 在监狱中，跳过本回合');
+        DataHub.set('monopolyCurrentGame', state);
+        monopolyNextTurn(state);
+        return;
+    }
+
+    var oldPos = player.pos || 0;
+    var totalCells = MONOPOLY_SPIRAL_POS.length;
+    var currentPos = oldPos;
+    var stepCount = 0;
+
+    function moveOneStep() {
+        var cur = DataHub.get('monopolyCurrentGame', null);
+        if (!cur || cur.finished) return;
+
+        if (stepCount >= steps) {
+            monopolyAddLog(state, player.name + ' 掷出 ' + steps + ' 点，前进到第 ' + (player.pos + 1) + ' 格');
+            DataHub.set('monopolyCurrentGame', state);
+            monopolyRefreshBoardOnly(state);
+            setTimeout(function() {
+                monopolyHandleCell(state, playerId);
+            }, 300);
+            return;
+        }
+
+        currentPos = (currentPos + 1) % totalCells;
+        player.pos = currentPos;
+        stepCount++;
+
+        if (currentPos === 0) {
+            player.money += 200;
+            monopolyAddLog(state, player.name + ' 经过起点，获得 ¥200');
+        }
+
+        DataHub.set('monopolyCurrentGame', state);
+        monopolyRefreshBoardOnly(state);
+
+        setTimeout(moveOneStep, 200);
+    }
+
+    moveOneStep();
+}
+
+// 处理落地格子
+function monopolyHandleCell(state, playerId) {
+    var playerIdx = -1;
+    for (var i = 0; i < state.players.length; i++) {
+        if (state.players[i].id === playerId) { playerIdx = i; break; }
+    }
+    if (playerIdx < 0) return;
+    var player = state.players[playerIdx];
+    var pos = player.pos || 0;
+    var type = getMonopolyCellType(pos);
+    var owner = state.cellOwners[pos] || null;
+    var level = state.cellLevels[pos] || 0;
+
+    if (type === 0) {
+        // 起点
+        monopolyAddLog(state, player.name + ' 停在起点');
+        DataHub.set('monopolyCurrentGame', state);
+        monopolyNextTurn(state);
+        return;
+    }
+
+    if (type === 2) {
+        // 机会
+        DataHub.set('monopolyCurrentGame', state);
+        if (playerId === 'me') {
+            monopolyShowQuestion(state, playerId);
+        } else {
+            // 好友/NPC 自动答（50% 对）
+            var autoCorrect = Math.random() < 0.5;
+            if (autoCorrect) {
+                player.money += 200;
+                monopolyAddLog(state, player.name + ' 答对了，获得 ¥200');
+            } else {
+                player.money -= 100;
+                monopolyAddLog(state, player.name + ' 答错了，扣 ¥100');
+            }
+            DataHub.set('monopolyCurrentGame', state);
+            monopolyNextTurn(state);
+        }
+        return;
+    }
+
+    if (type === 3) {
+        // 监狱
+        player.jailSkip = 1;
+        monopolyAddLog(state, player.name + ' 进入监狱，下回合跳过');
+        DataHub.set('monopolyCurrentGame', state);
+        monopolyNextTurn(state);
+        return;
+    }
+
+    // 空地/房产
+    if (!owner) {
+        // 空地，询问购买
+        DataHub.set('monopolyCurrentGame', state);
+        if (playerId === 'me') {
+            monopolyAskBuy(state, playerId, pos);
+        } else {
+            // 好友/NPC 自动决定：钱够 50% 买
+            var price = 200;
+            if (player.money >= price && Math.random() < 0.5) {
+                player.money -= price;
+                state.cellOwners[pos] = playerId;
+                state.cellLevels[pos] = 1;
+                monopolyAddLog(state, player.name + ' 买下第 ' + (pos + 1) + ' 格，花费 ¥' + price);
+            } else {
+                monopolyAddLog(state, player.name + ' 放弃购买第 ' + (pos + 1) + ' 格');
+            }
+            DataHub.set('monopolyCurrentGame', state);
+            monopolyNextTurn(state);
+        }
+        return;
+    }
+
+    // 别人的房产，交过路费
+    if (owner === playerId) {
+        monopolyAddLog(state, player.name + ' 停在自己的房产上');
+        DataHub.set('monopolyCurrentGame', state);
+        monopolyNextTurn(state);
+        return;
+    }
+
+    // 判断是否同一队（双人模式：me+friend 一队，npc1+npc2 一队）
+    var isSameTeam = false;
+    if (state.mode === 'double') {
+        if ((owner === 'me' || owner === 'friend') && (playerId === 'me' || playerId === 'friend')) isSameTeam = true;
+        if ((owner === 'npc1' || owner === 'npc2') && (playerId === 'npc1' || playerId === 'npc2')) isSameTeam = true;
+    } else {
+        isSameTeam = (owner === playerId);
+    }
+
+    if (isSameTeam) {
+        monopolyAddLog(state, player.name + ' 停在队友的房产上');
+        DataHub.set('monopolyCurrentGame', state);
+        monopolyNextTurn(state);
+        return;
+    }
+
+    // 交过路费
+    var toll = 100 * level;
+    player.money -= toll;
+
+    // 找房主
+    var ownerIdx = -1;
+    for (var oi = 0; oi < state.players.length; oi++) {
+        if (state.players[oi].id === owner) { ownerIdx = oi; break; }
+    }
+    if (ownerIdx >= 0) {
+        state.players[ownerIdx].money += toll;
+        monopolyAddLog(state, player.name + ' 向 ' + state.players[ownerIdx].name + ' 支付过路费 ¥' + toll);
+    }
+
+    DataHub.set('monopolyCurrentGame', state);
+    monopolyNextTurn(state);
+}
+
+// 询问购买
+function monopolyAskBuy(state, playerId, pos) {
+    var price = 200;
+    var player = state.players.find(function(p) { return p.id === playerId; });
+    if (!player) return;
+
+    if (player.money < price) {
+        monopolyAddLog(state, player.name + ' 资金不足，无法购买');
+        DataHub.set('monopolyCurrentGame', state);
+        renderMonopolyGamePage(state);
+        setTimeout(function() { monopolyNextTurn(state); }, 500);
+        return;
+    }
+
+    var html = '<div class="modal-title">购买地块</div>' +
+        '<div style="text-align:center;padding:8px 0 16px;font-size:14px;color:#000000;">第 ' + (pos + 1) + ' 格，价格 ¥' + price + '</div>' +
+        '<div style="text-align:center;font-size:12px;color:#999999;margin-bottom:12px;">当前资金 ¥' + player.money.toFixed(0) + '</div>' +
+        '<div class="btn-row">' +
+            '<button class="cancel" onclick="closeModal();monopolyBuyDecision(false)">不买</button>' +
+            '<button class="confirm" onclick="closeModal();monopolyBuyDecision(true)">购买</button>' +
+        '</div>';
+    showModal(html);
+}
+
+function monopolyBuyDecision(buy) {
+    var state = DataHub.get('monopolyCurrentGame', null);
+    if (!state) return;
+    var player = state.players.find(function(p) { return p.id === 'me'; });
+    if (!player) return;
+    var pos = player.pos || 0;
+    var price = 200;
+
+    if (buy && player.money >= price) {
+        player.money -= price;
+        state.cellOwners[pos] = 'me';
+        state.cellLevels[pos] = 1;
+        monopolyAddLog(state, '我 买下第 ' + (pos + 1) + ' 格，花费 ¥' + price);
+    } else {
+        monopolyAddLog(state, '我 放弃购买第 ' + (pos + 1) + ' 格');
+    }
+    DataHub.set('monopolyCurrentGame', state);
+    monopolyNextTurn(state);
+}
+
+// 脑筋急转弯
+function monopolyShowQuestion(state, playerId) {
+    var monopoly = DataHub.get('monopoly', { questions: [] });
+    var questions = monopoly.questions || [];
+    if (questions.length === 0) {
+        // 没题目，直接给奖励
+        var player0 = state.players.find(function(p) { return p.id === playerId; });
+        if (player0) player0.money += 100;
+        monopolyAddLog(state, '机会：题库为空，获得 ¥100');
+        DataHub.set('monopolyCurrentGame', state);
+        monopolyNextTurn(state);
+        return;
+    }
+
+    var q = questions[Math.floor(Math.random() * questions.length)];
+    var opts = q.options || [];
+    var optsHtml = '';
+    for (var i = 0; i < opts.length; i++) {
+        optsHtml += '<div onclick="monopolyAnswerQuestion(' + i + ')" style="padding:10px 12px;border:1px solid #d4e4d6;border-radius:10px;margin-bottom:8px;cursor:pointer;font-size:14px;color:#000000;background:#ffffff;">' + String.fromCharCode(65 + i) + '. ' + opts[i] + '</div>';
+    }
+
+    window._monopolyCurrentQuestion = q;
+
+    var html = '<div class="modal-title">机会 · 脑筋急转弯</div>' +
+        '<div style="font-size:14px;color:#000000;margin-bottom:12px;line-height:1.6;word-break:break-word;">' + q.question + '</div>' +
+        optsHtml +
+        '<div style="font-size:12px;color:#999999;margin-top:8px;">答对 +¥200，答错 -¥100</div>' +
+        '<div class="btn-row" style="margin-top:12px;">' +
+            '<button class="cancel" onclick="closeModal();monopolySkipQuestion()">跳过</button>' +
+        '</div>';
+    showModal(html);
+}
+
+function monopolyAnswerQuestion(idx) {
+    var state = DataHub.get('monopolyCurrentGame', null);
+    if (!state) return;
+    var q = window._monopolyCurrentQuestion;
+    if (!q) return;
+    var player = state.players.find(function(p) { return p.id === 'me'; });
+    if (!player) return;
+
+    var correct = (idx === q.answer);
+    closeModal();
+
+    if (correct) {
+        player.money += 200;
+        monopolyAddLog(state, '我 答对了，获得 ¥200');
+    } else {
+        player.money -= 100;
+        monopolyAddLog(state, '我 答错了，扣 ¥100');
+    }
+    DataHub.set('monopolyCurrentGame', state);
+    window._monopolyCurrentQuestion = null;
+    monopolyNextTurn(state);
+}
+
+function monopolySkipQuestion() {
+    var state = DataHub.get('monopolyCurrentGame', null);
+    if (!state) return;
+    monopolyAddLog(state, '我 跳过了机会题');
+    DataHub.set('monopolyCurrentGame', state);
+    window._monopolyCurrentQuestion = null;
+    monopolyNextTurn(state);
+}
+
+// 下一个回合
+function monopolyNextTurn(state) {
+    if (state.finished) return;
+
+    // 检查资金归零
+    for (var i = 0; i < state.players.length; i++) {
+        if (state.players[i].money <= 0) {
+            monopolyEndGame(state);
+            return;
+        }
+    }
+
+    // 下一位玩家
+    state.turnIndex++;
+    if (state.turnIndex >= state.turnOrder.length) {
+        state.turnIndex = 0;
+        state.round++;
+        if (state.round > state.maxRound) {
+            monopolyEndGame(state);
+            return;
+        }
+    }
+
+    state.turn = state.turnOrder[state.turnIndex];
+DataHub.set('monopolyCurrentGame', state);
+monopolyRefreshBoardOnly(state);
+monopolyRefreshStatusAndButtonOnly(state);
+
+    // 如果是好友/NPC，自动掷骰
+if (state.turn !== 'me') {
+    setTimeout(function() {
+        var latest = DataHub.get('monopolyCurrentGame', null);
+        if (!latest || latest.finished) return;
+        if (latest.turn !== state.turn) return;
+
+        // 好友掷骰前主动说一句（NPC 不说话）
+        if (latest.turn === 'friend' && Math.random() < 0.5) {
+            monopolyFriendSay(latest, getMonopolyFriendReply(latest.chatId));
+        }
+
+        var dice = Math.floor(Math.random() * 6) + 1;
+        monopolyMovePlayer(latest, latest.turn, dice);
+    }, 800 + Math.random() * 800);
+}
+}
+
+// 结算
+function monopolyEndGame(state) {
+    state.finished = true;
+
+    // 单人模式：比资金
+    // 双人模式：我方两人总资金 vs 敌方两人总资金
+    var myMoney = 0;
+    var oppMoney = 0;
+
+    if (state.mode === 'single') {
+        var me = state.players.find(function(p) { return p.id === 'me'; });
+        var fr = state.players.find(function(p) { return p.id === 'friend'; });
+        myMoney = (me ? me.money : 0);
+        oppMoney = (fr ? fr.money : 0);
+    } else {
+        for (var i = 0; i < state.players.length; i++) {
+            var p = state.players[i];
+            if (p.id === 'me' || p.id === 'friend') myMoney += p.money;
+            else oppMoney += p.money;
+        }
+    }
+
+    var result = (myMoney >= oppMoney) ? 'win' : 'lose';
+
+    // 写入战绩
+    var monopoly = DataHub.get('monopoly', { records: { single: [], double: [] } });
+    if (!monopoly.records) monopoly.records = { single: [], double: [] };
+    if (!monopoly.records.single) monopoly.records.single = [];
+    if (!monopoly.records.double) monopoly.records.double = [];
+
+    var now = new Date();
+    var time = now.getFullYear() + '.' + String(now.getMonth()+1).padStart(2,'0') + '.' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
+
+    var record = {
+        id: 'mr' + Date.now() + Math.random().toString(36).substr(2, 4),
+        time: time,
+        result: result,
+        rounds: state.round,
+        myMoney: Math.round(myMoney),
+        oppMoney: Math.round(oppMoney),
+        mode: state.mode,
+        friendName: state.friendName
+    };
+
+    if (state.mode === 'single') {
+        monopoly.records.single.unshift(record);
+    } else {
+        monopoly.records.double.unshift(record);
+    }
+    DataHub.set('monopoly', monopoly);
+
+    // 清对局聊天
+    DataHub.delete('monopolyChat');
+    DataHub.delete('monopolyCurrentGame');
+
+    var resultText = (result === 'win') ? '胜利' : '失败';
+    var html = '<div class="modal-title">对局结束</div>' +
+        '<div style="text-align:center;padding:8px 0;font-size:16px;color:#000000;font-weight:600;">' + resultText + '</div>' +
+        '<div style="text-align:center;padding:4px 0 12px;font-size:13px;color:#666666;">我方 ¥' + Math.round(myMoney) + ' ： 对方 ¥' + Math.round(oppMoney) + '</div>' +
+        '<div class="btn-row">' +
+            '<button class="cancel" onclick="closeModal();openMonopolyMain()">返回</button>' +
+            '<button class="confirm" onclick="closeModal();openMonopolyRecords()">看战绩</button>' +
+        '</div>';
+    showModal(html);
+}
+
+// 日志
+function monopolyAddLog(state, text) {
+    if (!state.logs) state.logs = [];
+    state.logs.push(text);
+    if (state.logs.length > 200) state.logs.shift();
+}
+
+function monopolyRefreshBoardOnly(state) {
+    if (!state) return;
+    var inner = document.getElementById('monopolyBoardInner');
+    if (inner) {
+        inner.innerHTML = renderMonopolyBoard(state);
+    }
+    var logBar = document.getElementById('monopolyLogBar');
+    if (logBar) {
+        var logEl = logBar.querySelector('div');
+        if (logEl) {
+            logEl.textContent = (state.logs && state.logs.length > 0) ? state.logs[state.logs.length - 1] : '游戏开始';
+        }
+        var btn = logBar.querySelector('button');
+        if (btn) {
+            var canRoll = (state.turn === 'me') && !state.finished;
+            btn.disabled = !canRoll;
+            btn.style.background = canRoll ? 'var(--theme-main, #d4e9d6)' : '#e0e0e0';
+            btn.style.cursor = canRoll ? 'pointer' : 'default';
+            btn.textContent = canRoll ? '投骰子' : (state.finished ? '已结束' : '等待中');
+        }
+    }
+}
+
+function monopolyRefreshStatusAndButtonOnly(state) {
+    if (!state) return;
+
+    var statusBar = document.getElementById('monopolyStatusBar');
+    if (statusBar) {
+        statusBar.innerHTML = renderMonopolyStatusBar(state);
+    }
+
+    var logBar = document.getElementById('monopolyLogBar');
+    if (logBar) {
+        var logEl = logBar.querySelector('div');
+        if (logEl) {
+            logEl.textContent = (state.logs && state.logs.length > 0) ? state.logs[state.logs.length - 1] : '游戏开始';
+        }
+        var btn = logBar.querySelector('button');
+        if (btn) {
+            var canRoll = (state.turn === 'me') && !state.finished;
+            btn.disabled = !canRoll;
+            btn.style.background = canRoll ? 'var(--theme-main, #d4e9d6)' : '#e0e0e0';
+            btn.style.cursor = canRoll ? 'pointer' : 'default';
+            btn.textContent = canRoll ? '投骰子' : (state.finished ? '已结束' : '等待中');
+        }
+    }
+}
+
+// 好友主动说话（不依赖我发消息）
+function monopolyFriendSay(state, text) {
+    if (!state) return;
+    if (!text) return;
+    if (!state.chat) state.chat = [];
+    state.chat.push({ from: 'friend', text: text, time: Date.now() });
+    DataHub.set('monopolyCurrentGame', state);
+
+    var area = document.getElementById('monopolyChatArea');
+    if (!area) {
+        renderMonopolyGamePage(state);
+        return;
+    }
+
+    var chatHtml = '';
+    for (var ci = 0; ci < (state.chat || []).length; ci++) {
+        var cm = state.chat[ci];
+        var isMe = (cm.from === 'me');
+        var chatSenderName = isMe ? '我' : state.friendName;
+        var chatTimeStr = '';
+        if (cm.time) {
+            var ct = new Date(cm.time);
+            chatTimeStr = '[' + String(ct.getHours()).padStart(2,'0') + ':' + String(ct.getMinutes()).padStart(2,'0') + ']';
+        }
+        chatHtml += '<div style="margin-bottom:5px;">' +
+            '<div style="font-size:8px;color:#999999;margin-bottom:1px;text-align:' + (isMe ? 'right' : 'left') + ';">' + chatSenderName + ' ' + chatTimeStr + '</div>' +
+            '<div style="display:flex;justify-content:' + (isMe ? 'flex-end' : 'flex-start') + ';">' +
+                '<div style="max-width:75%;padding:2px 7px;border-radius:9px;font-size:8px;line-height:1.4;word-break:break-word;color:#000000;background:' + (isMe ? 'var(--theme-main, #d4e9d6)' : 'var(--theme-light, #eef5ef)') + ';">' + cm.text + '</div>' +
+            '</div>' +
+        '</div>';
+    }
+    area.innerHTML = chatHtml;
+    area.scrollTop = area.scrollHeight;
+}
+
+function renderMonopolyChatAreaOnly(state) {
+    var area = document.getElementById('monopolyChatArea');
+    if (!area) return;
+    var chatHtml = '';
+    for (var ci = 0; ci < (state.chat || []).length; ci++) {
+        var cm = state.chat[ci];
+        var isMe = (cm.from === 'me');
+        var chatSenderName = isMe ? '我' : state.friendName;
+        var chatTimeStr = '';
+        if (cm.time) {
+            var ct = new Date(cm.time);
+            chatTimeStr = '[' + String(ct.getHours()).padStart(2,'0') + ':' + String(ct.getMinutes()).padStart(2,'0') + ']';
+        } else {
+            chatTimeStr = '';
+        }
+        chatHtml += '<div style="margin-bottom:5px;">' +
+            '<div style="font-size:8px;color:#999999;margin-bottom:1px;text-align:' + (isMe ? 'right' : 'left') + ';">' + chatSenderName + ' ' + chatTimeStr + '</div>' +
+            '<div style="display:flex;justify-content:' + (isMe ? 'flex-end' : 'flex-start') + ';">' +
+                '<div style="max-width:75%;padding:2px 7px;border-radius:9px;font-size:8px;line-height:1.4;word-break:break-word;color:#000000;background:' + (isMe ? 'var(--theme-main, #d4e9d6)' : 'var(--theme-light, #eef5ef)') + ';">' + cm.text + '</div>' +
+            '</div>' +
+        '</div>';
+    }
+    area.innerHTML = chatHtml;
+    area.scrollTop = area.scrollHeight;
+}
+
+// 对局会话
+function monopolySendChat() {
+    var input = document.getElementById('monopolyChatInput');
+    if (!input || !input.value.trim()) return;
+    var text = input.value.trim();
+    var state = DataHub.get('monopolyCurrentGame', null);
+    if (!state) return;
+
+    if (!state.chat) state.chat = [];
+    state.chat.push({ from: 'me', text: text, time: Date.now() });
+    input.value = '';
+    DataHub.set('monopolyCurrentGame', state);
+    renderMonopolyChatAreaOnly(state);
+
+    // 好友回复（NPC 不回复）
+    if (state.mode === 'single' || state.mode === 'double') {
+        setTimeout(function() {
+            var latest = DataHub.get('monopolyCurrentGame', null);
+            if (!latest) return;
+            var reply = getMonopolyFriendReply(latest.chatId);
+            if (!latest.chat) latest.chat = [];
+            latest.chat.push({ from: 'friend', text: reply, time: Date.now() });
+            DataHub.set('monopolyCurrentGame', latest);
+            renderMonopolyChatAreaOnly(latest);
+        }, 1000 + Math.random() * 2000);
+    }
+}
+
+// 好友回复（独立小函数，不复用主聊天，避免 bug）
+function getMonopolyFriendReply(chatId) {
+    var friends = DataHub.get('friends', []);
+    var friend = friends.find(function(f) { return f.id === chatId; });
+    if (!friend) return '嗯嗯';
+
+    var allItems = [];
+    var publicData = DataHub.get('lexiconData', null);
+    if (publicData && publicData.items) {
+        publicData.items.forEach(function(item) {
+            if (item.type === 'word' || item.type === 'emoji' || item.type === 'yanwenzi' || item.type === 'status' || item.type === 'weather') {
+                if (item.content) allItems.push(item.content);
+            }
+        });
+    }
+    if (friend.privateLexicon && friend.privateLexicon.items) {
+        friend.privateLexicon.items.forEach(function(item) {
+            if (item.type === 'word' || item.type === 'emoji' || item.type === 'yanwenzi' || item.type === 'status' || item.type === 'weather') {
+                if (item.content) allItems.push(item.content);
+            }
+        });
+    }
+
+    if (allItems.length > 0) {
+        var count = Math.floor(Math.random() * 3) + 1;
+        var selected = [];
+        for (var i = 0; i < count; i++) {
+            selected.push(allItems[Math.floor(Math.random() * allItems.length)]);
+        }
+        return selected.join(' ');
+    }
+
+    var dictData = DataHub.get('dictionary', null);
+    if (dictData && dictData.items && dictData.items.length > 0) {
+        var sentence = generateDictionarySentence();
+        if (sentence) return sentence;
+    }
+
+    return '嗯嗯';
+}
+
+// ====== 大富翁：战绩 ======
+var monopolyRecordsTab = 'single';
+
+function openMonopolyRecords() {
+    monopolyRecordsTab = 'single';
+    renderMonopolyRecordsPage();
+}
+
+function switchMonopolyRecordsTab(tab) {
+    monopolyRecordsTab = tab;
+    renderMonopolyRecordsPage();
+}
+
+function renderMonopolyRecordsPage() {
+    var container = document.getElementById('subPageContainer');
+    if (!container) return;
+
+    var monopoly = DataHub.get('monopoly', { records: { single: [], double: [] } });
+    if (!monopoly.records) monopoly.records = { single: [], double: [] };
+    if (!monopoly.records.single) monopoly.records.single = [];
+    if (!monopoly.records.double) monopoly.records.double = [];
+
+    var list = (monopolyRecordsTab === 'single') ? monopoly.records.single : monopoly.records.double;
+
+    var totalCount = list.length;
+    var winCount = 0;
+    var loseCount = 0;
+    for (var i = 0; i < list.length; i++) {
+        if (list[i].result === 'win') winCount++;
+        else loseCount++;
+    }
+    var rate = totalCount > 0 ? (winCount / totalCount * 100).toFixed(1) : '0.0';
+
+    var singleActive = (monopolyRecordsTab === 'single');
+    var doubleActive = (monopolyRecordsTab === 'double');
+
+    var listHtml = '';
+    if (list.length === 0) {
+        listHtml = '<div style="text-align:center;color:#999999;padding:30px 0;font-size:13px;">暂无战绩</div>';
+    } else {
+        for (var j = 0; j < list.length; j++) {
+            var r = list[j];
+            var resultText = (r.result === 'win') ? '胜' : '负';
+            var resultColor = (r.result === 'win') ? '#4caf50' : '#e05a5a';
+            var modeText = (r.mode === 'single') ? '单人' : '双人';
+            var oppText = (r.mode === 'single') ? ('我 VS ' + (r.friendName || '好友')) : ('我和' + (r.friendName || '好友') + ' VS NPC1和NPC2');
+            listHtml += '<div style="background:#ffffff;border:1px solid #e0e0e0;border-radius:10px;padding:12px;margin-bottom:8px;">' +
+                '<div style="font-size:12px;color:#999999;margin-bottom:6px;">' + (r.time || '') + '</div>' +
+                '<div style="font-size:13px;color:#000000;margin-bottom:4px;">' + modeText + ' · ' + oppText + '</div>' +
+                '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+                    '<div style="font-size:14px;color:#000000;">' +
+                        '<span style="color:' + resultColor + ';font-weight:600;">' + resultText + '</span>' +
+                        '  ¥' + (r.myMoney || 0) + ' : ¥' + (r.oppMoney || 0) +
+                    '</div>' +
+                    '<button class="btn-icon" onclick="deleteMonopolyRecord(\'' + r.id + '\')" style="padding:4px 12px;font-size:12px;">删除</button>' +
+                '</div>' +
+                '<div style="font-size:11px;color:#999999;margin-top:4px;">共 ' + (r.rounds || 0) + ' 回合</div>' +
+            '</div>';
+        }
+    }
+
+    var html = '<div class="sub-page active" id="monopolyRecordsPage" style="z-index:60;background:#ffffff;pointer-events:auto;display:flex;flex-direction:column;">' +
+        '<div class="sub-top">' +
+            '<div class="back-btn" onclick="openMonopolyMain()">' +
+                '<svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>' +
+            '</div>' +
+            '<span>过往战绩</span>' +
+        '</div>' +
+        '<div class="sub-content" style="padding:16px;overflow-y:auto;pointer-events:auto;flex:1;">' +
+
+            '<div style="display:flex;gap:8px;margin-bottom:12px;">' +
+                '<button class="btn-icon" onclick="switchMonopolyRecordsTab(\'single\')" style="flex:1;padding:8px 0;font-size:13px;border:none;cursor:pointer;border-radius:20px;background:' + (singleActive ? 'var(--theme-main, #d4e9d6)' : 'var(--theme-lighter, #eef5ef)') + ';color:' + (singleActive ? '#000000' : '#888888') + ';">单人模式</button>' +
+                '<button class="btn-icon" onclick="switchMonopolyRecordsTab(\'double\')" style="flex:1;padding:8px 0;font-size:13px;border:none;cursor:pointer;border-radius:20px;background:' + (doubleActive ? 'var(--theme-main, #d4e9d6)' : 'var(--theme-lighter, #eef5ef)') + ';color:' + (doubleActive ? '#000000' : '#888888') + ';">双人模式</button>' +
+            '</div>' +
+
+            '<div class="setting-block no-click" style="margin:0 0 12px 0;display:flex;justify-content:space-around;padding:14px 8px;">' +
+                '<div style="text-align:center;">' +
+                    '<div style="font-size:12px;color:#999999;">总场次</div>' +
+                    '<div style="font-size:18px;font-weight:600;color:#000000;">' + totalCount + '</div>' +
+                '</div>' +
+                '<div style="text-align:center;">' +
+                    '<div style="font-size:12px;color:#999999;">胜</div>' +
+                    '<div style="font-size:18px;font-weight:600;color:#4caf50;">' + winCount + '</div>' +
+                '</div>' +
+                '<div style="text-align:center;">' +
+                    '<div style="font-size:12px;color:#999999;">负</div>' +
+                    '<div style="font-size:18px;font-weight:600;color:#e05a5a;">' + loseCount + '</div>' +
+                '</div>' +
+                '<div style="text-align:center;">' +
+                    '<div style="font-size:12px;color:#999999;">胜率</div>' +
+                    '<div style="font-size:18px;font-weight:600;color:#000000;">' + rate + '%</div>' +
+                '</div>' +
+            '</div>' +
+
+            '<div>' + listHtml + '</div>' +
+
+        '</div>' +
+    '</div>';
+    container.innerHTML = html;
+    var subPage = container.querySelector('#monopolyRecordsPage');
+    if (subPage) {
+        subPage.classList.add('active');
+        subPage.style.pointerEvents = 'auto';
+    }
+}
+
+function deleteMonopolyRecord(recordId) {
+    if (!recordId) return;
+    if (!confirm('确定删除这条战绩吗？')) return;
+    var monopoly = DataHub.get('monopoly', { records: { single: [], double: [] } });
+    if (!monopoly.records) monopoly.records = { single: [], double: [] };
+    if (monopolyRecordsTab === 'single') {
+        monopoly.records.single = (monopoly.records.single || []).filter(function(r) { return r.id !== recordId; });
+    } else {
+        monopoly.records.double = (monopoly.records.double || []).filter(function(r) { return r.id !== recordId; });
+    }
+    DataHub.set('monopoly', monopoly);
+    showToast('已删除');
+    renderMonopolyRecordsPage();
+}
+
 // ====== 商场页面（浏览购买 + 管理） ======
 function renderMallManagePage() {
     var friendName = '';
@@ -23250,6 +25043,67 @@ if (!mall) {
     if (!payRequests) {
         DataHub.set('payRequests', []);
     }
+    
+    // 大富翁数据初始化
+var monopoly = DataHub.get('monopoly', null);
+if (!monopoly) {
+    monopoly = {
+        colors: {
+            me: '#4a90d9',
+            friend: '#9b6bc4'
+        },
+        questions: [
+            {
+                id: 'mq1',
+                question: '什么东西越洗越脏？',
+                options: ['衣服', '水', '手', '碗'],
+                answer: 1
+            },
+            {
+                id: 'mq2',
+                question: '什么东西天气越热，它爬得越高？',
+                options: ['温度计', '树', '猫', '人'],
+                answer: 0
+            },
+            {
+                id: 'mq3',
+                question: '什么东西有头无脚？',
+                options: ['桌子', '硬币', '鞋', '袜子'],
+                answer: 1
+            },
+            {
+                id: 'mq4',
+                question: '什么东西别人请你吃，但你自己还是要付钱？',
+                options: ['饭', '官司', '水果', '茶'],
+                answer: 1
+            },
+            {
+                id: 'mq5',
+                question: '什么东西明明是你的，别人却用得比你还多？',
+                options: ['名字', '书', '笔', '伞'],
+                answer: 0
+            }
+        ],
+        records: {
+            single: [],
+            double: []
+        }
+    };
+    DataHub.set('monopoly', monopoly);
+} else {
+    if (!monopoly.colors) {
+        monopoly.colors = { me: '#4a90d9', friend: '#9b6bc4' };
+    }
+    if (!monopoly.questions) {
+        monopoly.questions = [];
+    }
+    if (!monopoly.records) {
+        monopoly.records = { single: [], double: [] };
+    }
+    if (!monopoly.records.single) monopoly.records.single = [];
+    if (!monopoly.records.double) monopoly.records.double = [];
+    DataHub.set('monopoly', monopoly);
+}
 
     // 月度统计标记
     var lastMonthlyStatsMonth = DataHub.get('lastMonthlyStatsMonth', null);
@@ -23287,6 +25141,18 @@ function handleVisualViewport() {
             if (chatPage) {
                 chatPage.style.height = '';
                 chatPage.style.bottom = '';
+                chatPage.style.top = '';
+                chatPage.style.position = '';
+            }
+            var chatInput = document.getElementById('chatInput');
+            if (chatInput && document.activeElement !== chatInput) {
+                chatInput.blur();
+            }
+            var chatMessages = document.getElementById('chatMessages');
+            if (chatMessages) {
+                setTimeout(function() {
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                }, 100);
             }
         }
     }
@@ -23805,6 +25671,29 @@ window.calcNormalAmount = calcNormalAmount;
 window.renderGroupHongbaoCard = renderGroupHongbaoCard;
 window.acceptHongbao = acceptHongbao;
 window.rejectHongbao = rejectHongbao;
+// ====== 大富翁 window 挂载 ======
+window.openMonopolyHome = openMonopolyHome;
+window.openMonopolyMain = openMonopolyMain;
+window.invitePlayMonopoly = invitePlayMonopoly;
+window.confirmInviteMonopoly = confirmInviteMonopoly;
+window.openMonopolyCustom = openMonopolyCustom;
+window.setMonopolyColor = setMonopolyColor;
+window.showAddMonopolyQuestion = showAddMonopolyQuestion;
+window.saveMonopolyQuestion = saveMonopolyQuestion;
+window.editMonopolyQuestion = editMonopolyQuestion;
+window.updateMonopolyQuestion = updateMonopolyQuestion;
+window.deleteMonopolyQuestion = deleteMonopolyQuestion;
+window.openMonopolyGame = openMonopolyGame;
+window.renderMonopolyGamePage = renderMonopolyGamePage;
+window.exitMonopolyGame = exitMonopolyGame;
+window.monopolyRollDice = monopolyRollDice;
+window.monopolyBuyDecision = monopolyBuyDecision;
+window.monopolyAnswerQuestion = monopolyAnswerQuestion;
+window.monopolySkipQuestion = monopolySkipQuestion;
+window.monopolySendChat = monopolySendChat;
+window.openMonopolyRecords = openMonopolyRecords;
+window.switchMonopolyRecordsTab = switchMonopolyRecordsTab;
+window.deleteMonopolyRecord = deleteMonopolyRecord;
 
 init().catch(console.warn);
 })();
