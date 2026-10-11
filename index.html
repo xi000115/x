@@ -3868,29 +3868,34 @@ function createVoteCard(type, source, title, options, creator, answerer) {
     var now = new Date();
     var time = now.getFullYear() + '.' + String(now.getMonth()+1).padStart(2,'0') + '.' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
     var msgs = DataHub.get('messages', []);
-    var msgId = 'm' + genId();
-    msgs.push({
-        id: msgId,
+var msgId = 'm' + genId();
+var chatrooms = DataHub.get('chatrooms', []);
+var isGroup = chatrooms.some(function(c) { return c.id === currentChatId; });
+msgs.push({
+    id: msgId,
+    chatId: currentChatId,
+    from: creator,
+    text: '',
+    time: time,
+    timestamp: Date.now(),
+    unread: (creator === 'me') ? 0 : 1,
+    isVoteCard: true,
+    voteCard: {
+        id: 'vc' + genId(),
+        type: type,
+        source: source,
+        title: title,
+        options: options,
+        creator: creator,
+        answerer: answerer,
+        answer: null,
+        locked: false,
+        answeredAt: null,
+        isGroup: isGroup,
         chatId: currentChatId,
-        from: creator,
-        text: '',
-        time: time,
-        timestamp: Date.now(),
-        unread: (creator === 'me') ? 0 : 1,
-        isVoteCard: true,
-        voteCard: {
-            id: 'vc' + genId(),
-            type: type,
-            source: source,
-            title: title,
-            options: options,
-            creator: creator,
-            answerer: answerer,
-            answer: null,
-            locked: false,
-            answeredAt: null
-        }
-    });
+        groupAnswers: {}
+    }
+});
     DataHub.set('messages', msgs);
     renderChatMessages();
     renderMessages();
@@ -3909,8 +3914,14 @@ function friendAnswerVoteCard(msgId) {
     var msg = msgs.find(function(m) { return m.id === msgId; });
     if (!msg || !msg.voteCard) return;
     var vc = msg.voteCard;
-    if (vc.locked) return;
     if (vc.creator !== 'me') return;
+
+    if (vc.isGroup) {
+        answerGroupVoteMember(msgId, arguments[1]);
+        return;
+    }
+
+    if (vc.locked) return;
 
     var count = vc.options.length;
     var answer = [];
@@ -3937,7 +3948,83 @@ function friendAnswerVoteCard(msgId) {
     renderMessages();
 }
 
+// 群聊：某个成员答题
+function answerGroupVoteMember(msgId, memberId) {
+    if (!memberId) return;
+    var msgs = DataHub.get('messages', []);
+    var msg = msgs.find(function(m) { return m.id === msgId; });
+    if (!msg || !msg.voteCard) return;
+    var vc = msg.voteCard;
+    if (!vc.isGroup) return;
+    if (vc.creator !== 'me') return;
+    if (!vc.groupAnswers) vc.groupAnswers = {};
+    if (vc.groupAnswers[memberId]) return;
+
+    var count = vc.options.length;
+    var answer = [];
+    if (vc.type === 'single') {
+        answer = [Math.floor(Math.random() * count)];
+    } else {
+        var pickCount = Math.floor(Math.random() * count) + 1;
+        var idxs = [];
+        for (var i = 0; i < count; i++) idxs.push(i);
+        for (var j = idxs.length - 1; j > 0; j--) {
+            var r = Math.floor(Math.random() * (j + 1));
+            var t = idxs[j]; idxs[j] = idxs[r]; idxs[r] = t;
+        }
+        answer = idxs.slice(0, pickCount).sort(function(a, b) { return a - b; });
+    }
+
+    vc.groupAnswers[memberId] = {
+        answer: answer,
+        answeredAt: Date.now()
+    };
+
+    var members = getVoteGroupMembers(vc.chatId);
+    var answeredCount = 0;
+    for (var k = 0; k < members.length; k++) {
+        if (vc.groupAnswers[members[k]]) answeredCount++;
+    }
+    if (answeredCount >= members.length) {
+        vc.locked = true;
+        vc.answeredAt = Date.now();
+    }
+
+    DataHub.set('messages', msgs);
+    if (currentChatId === msg.chatId) {
+        renderChatMessages();
+    }
+    renderMessages();
+}
+
+// 获取群投票的成员列表
+function getVoteGroupMembers(chatId) {
+    var chatrooms = DataHub.get('chatrooms', []);
+    var room = chatrooms.find(function(c) { return c.id === chatId; });
+    if (!room) return [];
+    return room.members || [];
+}
+
 function scheduleFriendAnswerVote(msgId) {
+    var msgs = DataHub.get('messages', []);
+    var msg = msgs.find(function(m) { return m.id === msgId; });
+    if (!msg || !msg.voteCard) return;
+    var vc = msg.voteCard;
+
+    if (vc.isGroup) {
+        var members = getVoteGroupMembers(vc.chatId);
+        if (members.length === 0) return;
+        for (var i = 0; i < members.length; i++) {
+            (function(memberId) {
+                var delay = (5 + Math.random() * 25) * 1000;
+                setTimeout(function() {
+                    friendAnswerVoteCard(msgId, memberId);
+                }, delay);
+            })(members[i]);
+        }
+        return;
+    }
+
     var delay = (5 + Math.random() * 25) * 1000;
     setTimeout(function() {
         friendAnswerVoteCard(msgId);
@@ -3950,10 +4037,11 @@ function handleVoteOptionClick(msgId, optionIndex) {
     var msg = msgs.find(function(m) { return m.id === msgId; });
     if (!msg || !msg.voteCard) return;
     var vc = msg.voteCard;
-    if (vc.locked) return;
-    if (vc.creator === 'me') return;
+if (vc.locked) return;
+if (vc.creator === 'me') return;
+if (vc.isGroup) return;
 
-    var cur = vc._tempAnswer || [];
+var cur = vc._tempAnswer || [];
     if (vc.type === 'single') {
         cur = [optionIndex];
     } else {
@@ -3972,9 +4060,10 @@ function submitVoteAnswer(msgId) {
     var msg = msgs.find(function(m) { return m.id === msgId; });
     if (!msg || !msg.voteCard) return;
     var vc = msg.voteCard;
-    if (vc.locked) return;
-    if (vc.creator === 'me') return;
-    var cur = vc._tempAnswer || [];
+if (vc.locked) return;
+if (vc.creator === 'me') return;
+if (vc.isGroup) return;
+var cur = vc._tempAnswer || [];
     if (cur.length === 0) {
         showToast('请先选择选项');
         return;
@@ -3991,6 +4080,10 @@ function submitVoteAnswer(msgId) {
 // 投票卡片渲染
 function renderVoteCard(msg) {
     var vc = msg.voteCard;
+    if (vc.isGroup) {
+        return renderGroupVoteCard(msg);
+    }
+
     var isMine = (vc.creator === 'me');
     var locked = vc.locked;
     var answer = vc.answer;
@@ -3999,8 +4092,8 @@ function renderVoteCard(msg) {
     var html = '<div style="background:#ffffff;border:1px solid var(--theme-main, #d4e9d6);border-radius:12px;padding:14px;width:220px;box-sizing:border-box;">';
 
     var typeTag = (vc.type === 'single') ? '单选' : '多选';
-html += '<div style="font-size:11px;color:#999999;margin-bottom:4px;">' + typeTag + '</div>';
-html += '<div style="font-size:14px;font-weight:600;color:#000000;margin-bottom:10px;word-break:break-word;">' + vc.title + '</div>';
+    html += '<div style="font-size:11px;color:#999999;margin-bottom:4px;">' + typeTag + '</div>';
+    html += '<div style="font-size:14px;font-weight:600;color:#000000;margin-bottom:10px;word-break:break-word;">' + vc.title + '</div>';
 
     for (var i = 0; i < vc.options.length; i++) {
         var selected = false;
@@ -4028,14 +4121,82 @@ html += '<div style="font-size:14px;font-weight:600;color:#000000;margin-bottom:
     }
 
     if (isMine) {
-    var answererName = getFriendSpecialName(vc.answerer);
-    html += '<div style="font-size:12px;color:#999999;margin-top:8px;">' + (locked ? answererName + '已答' : '等待' + answererName + '回答') + '</div>';
-} else {
+        var answererName = getFriendSpecialName(vc.answerer);
+        html += '<div style="font-size:12px;color:#999999;margin-top:8px;">' + (locked ? answererName + '已答' : '等待' + answererName + '回答') + '</div>';
+    } else {
         if (locked) {
             html += '<div style="font-size:12px;color:#999999;margin-top:8px;">已答</div>';
         } else {
             html += '<div style="margin-top:10px;"><button onclick="submitVoteAnswer(\'' + msg.id + '\')" style="width:100%;padding:8px 0;background:var(--theme-main, #d4e9d6);color:#000000;border:none;border-radius:20px;font-size:13px;cursor:pointer;">提交</button></div>';
         }
+    }
+
+    html += '</div>';
+    return html;
+}
+
+// 群聊投票卡片渲染
+function renderGroupVoteCard(msg) {
+    var vc = msg.voteCard;
+    var members = getVoteGroupMembers(vc.chatId);
+    var totalMembers = members.length;
+    var groupAnswers = vc.groupAnswers || {};
+
+    var html = '<div style="background:#ffffff;border:1px solid var(--theme-main, #d4e9d6);border-radius:12px;padding:14px;width:240px;box-sizing:border-box;">';
+
+    var typeTag = (vc.type === 'single') ? '单选' : '多选';
+    html += '<div style="font-size:11px;color:#999999;margin-bottom:4px;">' + typeTag + '</div>';
+    html += '<div style="font-size:14px;font-weight:600;color:#000000;margin-bottom:10px;word-break:break-word;">' + vc.title + '</div>';
+
+    var counts = [];
+    var pickers = [];
+    for (var i = 0; i < vc.options.length; i++) {
+        counts.push(0);
+        pickers.push([]);
+    }
+
+    var answeredCount = 0;
+    for (var m = 0; m < members.length; m++) {
+        var mid = members[m];
+        var ans = groupAnswers[mid];
+        if (!ans) continue;
+        answeredCount++;
+        var a = ans.answer || [];
+        for (var k = 0; k < a.length; k++) {
+            var idx = a[k];
+            if (idx >= 0 && idx < counts.length) {
+                counts[idx]++;
+                pickers[idx].push(getFriendSpecialName(mid));
+            }
+        }
+    }
+
+    for (var j = 0; j < vc.options.length; j++) {
+        html += '<div style="padding:6px 0;">';
+        html += '<div style="display:flex;align-items:center;">' +
+            '<span style="display:inline-block;width:14px;height:14px;border-radius:50%;border:2px solid var(--theme-dark, #4a7a4e);box-sizing:border-box;flex-shrink:0;margin-right:8px;"></span>' +
+            '<span style="font-size:13px;color:#000000;word-break:break-word;">' + vc.options[j] + '（' + counts[j] + '票）</span>' +
+        '</div>';
+        if (pickers[j].length > 0) {
+            html += '<div style="font-size:12px;color:#666666;margin-left:22px;margin-top:2px;word-break:break-word;">' + pickers[j].join('、') + '</div>';
+        }
+        html += '</div>';
+    }
+
+    if (answeredCount >= totalMembers && totalMembers > 0) {
+        var maxCount = -1, minCount = 999999;
+        for (var x = 0; x < counts.length; x++) {
+            if (counts[x] > maxCount) maxCount = counts[x];
+            if (counts[x] < minCount) minCount = counts[x];
+        }
+        var maxNames = [], minNames = [];
+        for (var y = 0; y < counts.length; y++) {
+            if (counts[y] === maxCount) maxNames.push(vc.options[y]);
+            if (counts[y] === minCount) minNames.push(vc.options[y]);
+        }
+        html += '<div style="font-size:12px;color:#999999;margin-top:8px;word-break:break-word;">已答完，票数最高：' + maxNames.join('、') + '，票数最低：' + minNames.join('、') + '</div>';
+    } else {
+        html += '<div style="font-size:12px;color:#999999;margin-top:8px;">' + answeredCount + '/' + totalMembers + '人已答</div>';
     }
 
     html += '</div>';
@@ -4672,6 +4833,9 @@ window.scheduleFriendAnswerVote = scheduleFriendAnswerVote;
 window.handleVoteOptionClick = handleVoteOptionClick;
 window.submitVoteAnswer = submitVoteAnswer;
 window.renderVoteCard = renderVoteCard;
+window.renderGroupVoteCard = renderGroupVoteCard;
+window.answerGroupVoteMember = answerGroupVoteMember;
+window.getVoteGroupMembers = getVoteGroupMembers;
 window.openSpecialVotePicker = openSpecialVotePicker;
 window.pickSpecialVoteQuestion = pickSpecialVoteQuestion;
 window.sendSpecialVote = sendSpecialVote;
