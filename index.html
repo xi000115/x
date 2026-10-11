@@ -1323,7 +1323,7 @@ color: #000000;
 <div onclick="openMonopolyHome()" style="display:flex;align-items:center;justify-content:center;padding:14px 4px;background:var(--theme-lighter, #eef5ef);border-radius:12px;cursor:pointer;font-size:14px;color:#000000;">游戏</div>
 <div onclick="showToast('问卷功能开发中')" style="display:flex;align-items:center;justify-content:center;padding:14px 4px;background:var(--theme-lighter, #eef5ef);border-radius:12px;cursor:pointer;font-size:14px;color:#000000;">问卷</div>
 <div onclick="openMallFromChat()" style="display:flex;align-items:center;justify-content:center;padding:14px 4px;background:var(--theme-lighter, #eef5ef);border-radius:12px;cursor:pointer;font-size:14px;color:#000000;">商场</div>
-<div onclick="showCreateVoteModal()" style="display:flex;align-items:center;justify-content:center;padding:14px 4px;background:var(--theme-lighter, #eef5ef);border-radius:12px;cursor:pointer;font-size:14px;color:#000000;">投票</div>
+<div onclick="openVoteMenu()" style="display:flex;align-items:center;justify-content:center;padding:14px 4px;background:var(--theme-lighter, #eef5ef);border-radius:12px;cursor:pointer;font-size:14px;color:#000000;">投票</div>
     </div>
 </div>
         <div id="emojiPanel">
@@ -2126,7 +2126,8 @@ try {
     updateChatTopStatus(chatId);
     startChatTopStatusTimer(chatId);
     startAutoStartTimer();
-    startChatSessionTimer(chatId);
+startChatSessionTimer(chatId);
+startFriendSpecialVoteTimer(chatId);
     if (window.visualViewport) {
         handleVisualViewport();
     }
@@ -3262,7 +3263,8 @@ hideChatUnreadText();
     chatPage.style.pointerEvents = '';
     currentChatId = null;
     stopAutoStartTimer();
-    stopChatSessionTimer();
+stopChatSessionTimer();
+stopFriendSpecialVoteTimer();
     stopChatTopStatusTimer();
     var _chatTopStatusEl = document.getElementById('chatTopStatus');
     if (_chatTopStatusEl) {
@@ -3637,27 +3639,9 @@ if (m.isPat) {
     continue;
 }
 
-if (m.isVote && m.voteId) {
-            var lines = msgContent.split('\n');
-            var titleLine = lines[0] || '';
-            var optionsHtml = '';
-            var optionLines = [];
-            for (var j = 1; j < lines.length; j++) {
-                var line = lines[j];
-                if (line.indexOf('点击') !== -1) break;
-                if (line.trim()) optionLines.push(line);
-            }
-            for (var k = 0; k < optionLines.length; k++) {
-                var optText = optionLines[k];
-                var match = optText.match(/^\d+\.\s*(.+?)\s*\((\d+)票\)/);
-                if (match) {
-                    var optName = match[1];
-                    var optCount = parseInt(match[2]) || 0;
-                    optionsHtml += '<div onclick="handleVoteClick(\'' + m.voteId + '\',' + k + ')" style="padding:4px 8px;margin:2px 0;background:#eef5ef;border-radius:6px;cursor:pointer;font-size:13px;color:#000000;">' + (k+1) + '. ' + optName + ' (' + optCount + '票)</div>';
-                }
-            }
-            msgContent = '<div style="font-weight:600;margin-bottom:4px;">' + titleLine + '</div>' + optionsHtml;
-        }
+if (m.isVoteCard && m.voteCard) {
+    msgContent = renderVoteCard(m);
+}
         
 if (m.isPayRequest && m.payRequestId) {
     var reqStatus = m.payRequestStatus || 'pending';
@@ -3701,7 +3685,7 @@ if (m.isPayRequest && m.payRequestId) {
         var longPressAttr = ' oncontextmenu="return false;"';
 
         if (isMe) {
-            var isBubbleCard = (m.isHongbaoCard || m.isHongbaoResult || m.isHelpRequest || m.isCollectionCard);
+            var isBubbleCard = (m.isHongbaoCard || m.isHongbaoResult || m.isHelpRequest || m.isCollectionCard || m.isVoteCard);
             if (isBubbleCard) {
                 html += '<div' + msgIdAttr + longPressAttr + ' class="chat-msg-row" data-from="me" style="display:flex;justify-content:flex-end;margin-bottom:14px;">' +
                     '<div style="display:flex;flex-direction:column;align-items:flex-end;max-width:100%;min-width:0;">' +
@@ -3734,7 +3718,7 @@ if (m.isPayRequest && m.payRequestId) {
             '</div>';
             }
         } else {
-            var isBubbleCardOther = (m.isHongbaoCard || m.isHongbaoResult || m.isHelpRequest || m.isCollectionCard);
+            var isBubbleCardOther = (m.isHongbaoCard || m.isHongbaoResult || m.isHelpRequest || m.isCollectionCard || m.isVoteCard);
             if (isBubbleCardOther) {
                 html += '<div' + msgIdAttr + longPressAttr + ' class="chat-msg-row" data-from="other" style="display:flex;justify-content:flex-start;margin-bottom:14px;">' +
                     '<div style="display:flex;flex-direction:column;align-items:flex-start;max-width:100%;min-width:0;">' +
@@ -3806,44 +3790,64 @@ function bindQuoteBubbleClick() {
         jumpToQuoteMessage(jumpId);
     });
 }
-// ====== 投票功能（所有会话通用） ======
-function showCreateVoteModal() {
+
+// ====== 投票模块（单人/多人/特殊/题库） ======
+
+// 投票菜单
+function openVoteMenu() {
     if (!currentChatId) {
         showToast('请先进入聊天');
         return;
     }
-    var html = '<div class="modal-title">发起投票</div>' +
-        '<input type="text" id="voteTitleInput" placeholder="投票标题" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;margin-bottom:12px;font-size:14px;color:#000000;background:#ffffff;">' +
-        '<div id="voteOptionsContainer">' +
-            '<input type="text" class="vote-option-input" placeholder="选项1" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;margin-bottom:8px;font-size:14px;color:#000000;background:#ffffff;">' +
-            '<input type="text" class="vote-option-input" placeholder="选项2" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;margin-bottom:8px;font-size:14px;color:#000000;background:#ffffff;">' +
+    closeChatBottomPanel();
+    var html = '<div class="modal-title">投票</div>' +
+        '<button class="btn-primary" style="width:100%;margin-bottom:8px;" onclick="closeModal();openVoteCompose(\'single\')">单选</button>' +
+'<button class="btn-primary" style="width:100%;margin-bottom:8px;" onclick="closeModal();openVoteCompose(\'multi\')">多选</button>' +
+        '<button class="btn-primary" style="width:100%;margin-bottom:8px;" onclick="closeModal();openSpecialVotePicker()">特殊投票</button>' +
+        '<button class="btn-primary" style="width:100%;margin-bottom:8px;" onclick="closeModal();openVoteBankManage()">题库</button>' +
+        '<div class="btn-row" style="margin-top:8px;"><button class="cancel" onclick="closeModal()">取消</button></div>';
+    showModal(html);
+}
+
+// 现编投票（单人/多人）
+function openVoteCompose(type) {
+    if (!currentChatId) {
+        showToast('请先进入聊天');
+        return;
+    }
+    var typeName = (type === 'single') ? '好友单选' : '好友多选';
+    var html = '<div class="modal-title">' + typeName + '</div>' +
+        '<input type="text" id="voteComposeTitle" placeholder="题目" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
+        '<div id="voteComposeOptions">' +
+            '<input type="text" class="vote-compose-option" placeholder="选项1" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
+            '<input type="text" class="vote-compose-option" placeholder="选项2" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
         '</div>' +
-        '<button class="btn-icon" onclick="addVoteOption()" style="margin-bottom:12px;">+ 添加选项</button>' +
+        '<button class="btn-icon" onclick="addVoteComposeOption()" style="margin-bottom:12px;">+ 添加选项</button>' +
         '<div class="btn-row">' +
             '<button class="cancel" onclick="closeModal()">取消</button>' +
-            '<button class="confirm" onclick="sendVote()">发布投票</button>' +
+            '<button class="confirm" onclick="sendVoteCompose(\'' + type + '\')">发出</button>' +
         '</div>';
     showModal(html);
 }
 
-function addVoteOption() {
-    var container = document.getElementById('voteOptionsContainer');
+function addVoteComposeOption() {
+    var container = document.getElementById('voteComposeOptions');
     if (!container) return;
-    var count = container.querySelectorAll('.vote-option-input').length;
+    var count = container.querySelectorAll('.vote-compose-option').length;
     var newInput = document.createElement('input');
     newInput.type = 'text';
-    newInput.className = 'vote-option-input';
+    newInput.className = 'vote-compose-option';
     newInput.placeholder = '选项' + (count + 1);
-    newInput.style.cssText = 'width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;margin-bottom:8px;font-size:14px;color:#000000;background:#ffffff;';
+    newInput.style.cssText = 'width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;';
     container.appendChild(newInput);
 }
 
-function sendVote() {
-    var titleInput = document.getElementById('voteTitleInput');
-    var optionInputs = document.querySelectorAll('.vote-option-input');
+function sendVoteCompose(type) {
+    var titleInput = document.getElementById('voteComposeTitle');
+    var optionInputs = document.querySelectorAll('.vote-compose-option');
     var title = titleInput ? titleInput.value.trim() : '';
     if (!title) {
-        showToast('请输入投票标题');
+        showToast('请输入题目');
         return;
     }
     var options = [];
@@ -3855,94 +3859,850 @@ function sendVote() {
         showToast('至少需要2个选项');
         return;
     }
+    closeModal();
+    createVoteCard(type, 'custom', title, options, 'me', currentChatId);
+}
 
+// 生成投票卡片消息
+function createVoteCard(type, source, title, options, creator, answerer) {
     var now = new Date();
     var time = now.getFullYear() + '.' + String(now.getMonth()+1).padStart(2,'0') + '.' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
-
-    var votes = {};
-    for (var j = 0; j < options.length; j++) {
-        votes[options[j]] = 0;
-    }
-
-    var voteData = {
-        id: 'v' + genId(),
-        title: title,
-        options: options,
-        votes: votes,
-        voters: [],
-        creator: 'me',
-        time: time
-    };
-
-    var allVotes = DataHub.get('votes', []);
-    allVotes.push(voteData);
-    DataHub.set('votes', allVotes);
-
-    var msgText = '投票：' + title + '\n';
-    for (var k = 0; k < options.length; k++) {
-        msgText += (k + 1) + '. ' + options[k] + ' (0票)\n';
-    }
-    msgText += '\n点击选项投票';
-
     var msgs = DataHub.get('messages', []);
+    var msgId = 'm' + genId();
     msgs.push({
-        id: 'm' + genId(),
+        id: msgId,
         chatId: currentChatId,
-        from: 'me',
-        text: msgText,
+        from: creator,
+        text: '',
         time: time,
-        unread: 0,
-        isVote: true,
-        voteId: voteData.id
+        timestamp: Date.now(),
+        unread: (creator === 'me') ? 0 : 1,
+        isVoteCard: true,
+        voteCard: {
+            id: 'vc' + genId(),
+            type: type,
+            source: source,
+            title: title,
+            options: options,
+            creator: creator,
+            answerer: answerer,
+            answer: null,
+            locked: false,
+            answeredAt: null
+        }
     });
     DataHub.set('messages', msgs);
-
-    closeModal();
     renderChatMessages();
     renderMessages();
-    showToast('投票已发布');
+    jumpChatToBottom();
+    if (creator === 'me') {
+        showToast('投票已发出');
+        scheduleFriendAnswerVote(msgId);
+    } else {
+        showToast(getFriendSpecialName(creator) + ' 发来一个投票');
+    }
 }
 
-function handleVoteClick(voteId, optionIndex) {
-    var allVotes = DataHub.get('votes', []);
-    var vote = allVotes.find(function(v) { return v.id === voteId; });
-    if (!vote) {
-        showToast('投票已失效');
-        return;
-    }
-
-    var myId = 'me';
-    if (vote.voters && vote.voters.indexOf(myId) !== -1) {
-        showToast('你已经投过票了');
-        return;
-    }
-
-    var optionKeys = Object.keys(vote.votes);
-    if (optionIndex < 0 || optionIndex >= optionKeys.length) return;
-    var selectedOption = optionKeys[optionIndex];
-    vote.votes[selectedOption] = (vote.votes[selectedOption] || 0) + 1;
-    if (!vote.voters) vote.voters = [];
-    vote.voters.push(myId);
-    DataHub.set('votes', allVotes);
-
+// 好友系统自动答
+function friendAnswerVoteCard(msgId) {
     var msgs = DataHub.get('messages', []);
-    var targetMsg = msgs.find(function(m) { return m.voteId === voteId; });
-    if (targetMsg) {
-        var newText = '投票：' + vote.title + '\n';
-        for (var i = 0; i < vote.options.length; i++) {
-            var opt = vote.options[i];
-            var count = vote.votes[opt] || 0;
-            newText += (i + 1) + '. ' + opt + ' (' + count + '票)\n';
+    var msg = msgs.find(function(m) { return m.id === msgId; });
+    if (!msg || !msg.voteCard) return;
+    var vc = msg.voteCard;
+    if (vc.locked) return;
+    if (vc.creator !== 'me') return;
+
+    var count = vc.options.length;
+    var answer = [];
+    if (vc.type === 'single') {
+        answer = [Math.floor(Math.random() * count)];
+    } else {
+        var pickCount = Math.floor(Math.random() * count) + 1;
+        var idxs = [];
+        for (var i = 0; i < count; i++) idxs.push(i);
+        for (var j = idxs.length - 1; j > 0; j--) {
+            var r = Math.floor(Math.random() * (j + 1));
+            var t = idxs[j]; idxs[j] = idxs[r]; idxs[r] = t;
         }
-        newText += '\n点击选项投票';
-        targetMsg.text = newText;
-        DataHub.set('messages', msgs);
+        answer = idxs.slice(0, pickCount).sort(function(a, b) { return a - b; });
     }
 
-    renderChatMessages();
+    vc.answer = answer;
+    vc.locked = true;
+    vc.answeredAt = Date.now();
+    DataHub.set('messages', msgs);
+    if (currentChatId === msg.chatId) {
+        renderChatMessages();
+    }
     renderMessages();
-    showToast('投票成功');
 }
+
+function scheduleFriendAnswerVote(msgId) {
+    var delay = (5 + Math.random() * 25) * 1000;
+    setTimeout(function() {
+        friendAnswerVoteCard(msgId);
+    }, delay);
+}
+
+// 我答题（好友发起的）
+function handleVoteOptionClick(msgId, optionIndex) {
+    var msgs = DataHub.get('messages', []);
+    var msg = msgs.find(function(m) { return m.id === msgId; });
+    if (!msg || !msg.voteCard) return;
+    var vc = msg.voteCard;
+    if (vc.locked) return;
+    if (vc.creator === 'me') return;
+
+    var cur = vc._tempAnswer || [];
+    if (vc.type === 'single') {
+        cur = [optionIndex];
+    } else {
+        var pos = cur.indexOf(optionIndex);
+        if (pos === -1) cur.push(optionIndex);
+        else cur.splice(pos, 1);
+        cur.sort(function(a, b) { return a - b; });
+    }
+    vc._tempAnswer = cur;
+    DataHub.set('messages', msgs);
+    renderChatMessages();
+}
+
+function submitVoteAnswer(msgId) {
+    var msgs = DataHub.get('messages', []);
+    var msg = msgs.find(function(m) { return m.id === msgId; });
+    if (!msg || !msg.voteCard) return;
+    var vc = msg.voteCard;
+    if (vc.locked) return;
+    if (vc.creator === 'me') return;
+    var cur = vc._tempAnswer || [];
+    if (cur.length === 0) {
+        showToast('请先选择选项');
+        return;
+    }
+    vc.answer = cur;
+    vc.locked = true;
+    vc.answeredAt = Date.now();
+    vc._tempAnswer = null;
+    DataHub.set('messages', msgs);
+    renderChatMessages();
+    showToast('已提交');
+}
+
+// 投票卡片渲染
+function renderVoteCard(msg) {
+    var vc = msg.voteCard;
+    var isMine = (vc.creator === 'me');
+    var locked = vc.locked;
+    var answer = vc.answer;
+    var tempAnswer = vc._tempAnswer || [];
+
+    var html = '<div style="background:#ffffff;border:1px solid var(--theme-main, #d4e9d6);border-radius:12px;padding:14px;width:220px;box-sizing:border-box;">';
+
+    var typeTag = (vc.type === 'single') ? '单选' : '多选';
+html += '<div style="font-size:11px;color:#999999;margin-bottom:4px;">' + typeTag + '</div>';
+html += '<div style="font-size:14px;font-weight:600;color:#000000;margin-bottom:10px;word-break:break-word;">' + vc.title + '</div>';
+
+    for (var i = 0; i < vc.options.length; i++) {
+        var selected = false;
+        if (locked && answer) {
+            selected = answer.indexOf(i) !== -1;
+        } else if (!isMine && !locked && tempAnswer) {
+            selected = tempAnswer.indexOf(i) !== -1;
+        }
+
+        var dotHtml;
+        if (selected) {
+            dotHtml = '<span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:var(--theme-dark, #4a7a4e);flex-shrink:0;margin-right:8px;"></span>';
+        } else {
+            dotHtml = '<span style="display:inline-block;width:14px;height:14px;border-radius:50%;border:2px solid var(--theme-dark, #4a7a4e);box-sizing:border-box;flex-shrink:0;margin-right:8px;"></span>';
+        }
+
+        var clickAttr = '';
+        if (!isMine && !locked) {
+            clickAttr = ' onclick="handleVoteOptionClick(\'' + msg.id + '\',' + i + ')" style="display:flex;align-items:center;padding:6px 0;cursor:pointer;"';
+        } else {
+            clickAttr = ' style="display:flex;align-items:center;padding:6px 0;"';
+        }
+
+        html += '<div' + clickAttr + '>' + dotHtml + '<span style="font-size:13px;color:#000000;word-break:break-word;">' + vc.options[i] + '</span></div>';
+    }
+
+    if (isMine) {
+    var answererName = getFriendSpecialName(vc.answerer);
+    html += '<div style="font-size:12px;color:#999999;margin-top:8px;">' + (locked ? answererName + '已答' : '等待' + answererName + '回答') + '</div>';
+} else {
+        if (locked) {
+            html += '<div style="font-size:12px;color:#999999;margin-top:8px;">已答</div>';
+        } else {
+            html += '<div style="margin-top:10px;"><button onclick="submitVoteAnswer(\'' + msg.id + '\')" style="width:100%;padding:8px 0;background:var(--theme-main, #d4e9d6);color:#000000;border:none;border-radius:20px;font-size:13px;cursor:pointer;">提交</button></div>';
+        }
+    }
+
+    html += '</div>';
+    return html;
+}
+
+// 特殊投票：挑题
+function openSpecialVotePicker() {
+    if (!currentChatId) {
+        showToast('请先进入聊天');
+        return;
+    }
+    var bank = getVoteBank();
+    var visible = getVisibleVoteQuestions(currentChatId);
+    if (visible.length === 0) {
+        showToast('题库里没有可用的题目');
+        return;
+    }
+    var listHtml = '';
+    for (var i = 0; i < visible.length; i++) {
+        var q = visible[i];
+        listHtml += '<div onclick="pickSpecialVoteQuestion(\'' + q.id + '\')" style="padding:10px 12px;border:1px solid #d4e4d6;border-radius:10px;margin-bottom:8px;cursor:pointer;font-size:13px;color:#000000;background:#ffffff;word-break:break-word;">' + q.title + '</div>';
+    }
+    var html = '<div class="modal-title">选择题目</div>' +
+        '<div style="max-height:300px;overflow-y:auto;margin-bottom:12px;">' + listHtml + '</div>' +
+        '<div class="btn-row"><button class="cancel" onclick="closeModal()">取消</button></div>';
+    showModal(html);
+}
+
+function pickSpecialVoteQuestion(questionId) {
+    closeModal();
+    var bank = getVoteBank();
+    var q = bank.questions.find(function(x) { return x.id === questionId; });
+    if (!q) return;
+    var html = '<div class="modal-title">' + q.title + '</div>' +
+        '<div style="font-size:13px;color:#999999;margin-bottom:12px;">选择答题方式</div>' +
+        '<button class="btn-primary" style="width:100%;margin-bottom:8px;" onclick="closeModal();sendSpecialVote(\'' + questionId + '\',\'single\')">单选</button>' +
+        '<button class="btn-primary" style="width:100%;margin-bottom:8px;" onclick="closeModal();sendSpecialVote(\'' + questionId + '\',\'multi\')">多选</button>' +
+        '<div class="btn-row" style="margin-top:8px;"><button class="cancel" onclick="closeModal()">取消</button></div>';
+    showModal(html);
+}
+
+function sendSpecialVote(questionId, type) {
+    var bank = getVoteBank();
+    var q = bank.questions.find(function(x) { return x.id === questionId; });
+    if (!q) return;
+    createVoteCard(type, 'bank', q.title, q.options.slice(), 'me', currentChatId);
+}
+
+// ====== 投票题库 ======
+function getVoteBank() {
+    var bank = DataHub.get('voteBank', null);
+    if (!bank) {
+        bank = { categories: [{ name: '默认', exclusiveFriendId: '' }], questions: [] };
+        DataHub.set('voteBank', bank);
+    }
+    if (!bank.categories) bank.categories = [{ name: '默认', exclusiveFriendId: '' }];
+    if (!bank.questions) bank.questions = [];
+    return bank;
+}
+
+function saveVoteBank(bank) {
+    DataHub.set('voteBank', bank);
+}
+
+function getVisibleVoteQuestions(friendId) {
+    var bank = getVoteBank();
+    return bank.questions.filter(function(q) {
+        var cat = bank.categories.find(function(c) { return c.name === q.category; });
+        if (!cat) return true;
+        if (!cat.exclusiveFriendId) return true;
+        return cat.exclusiveFriendId === friendId;
+    });
+}
+
+// 题库管理页
+function openVoteBankManage() {
+    var html = '<div class="sub-page active" id="voteBankPage" style="z-index:60;background:#ffffff;pointer-events:auto;display:flex;flex-direction:column;">' +
+        '<div class="sub-top">' +
+            '<div class="back-btn" onclick="closeSubPage()">' +
+                '<svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>' +
+            '</div>' +
+            '<span>投票题库</span>' +
+            '<span onclick="showVoteBankAddMenu()" style="margin-left:auto;cursor:pointer;font-size:13px;color:#000000;padding:4px 8px;">添加</span>' +
+        '</div>' +
+        '<div class="sub-content" id="voteBankContent" style="padding:16px;overflow-y:auto;pointer-events:auto;flex:1;">' +
+            renderVoteBankContent() +
+        '</div>' +
+    '</div>';
+    var container = document.getElementById('subPageContainer');
+    container.innerHTML = html;
+    var subPage = container.querySelector('#voteBankPage');
+    if (subPage) {
+        subPage.classList.add('active');
+        subPage.style.pointerEvents = 'auto';
+    }
+}
+
+function renderVoteBankContent() {
+    var bank = getVoteBank();
+    var currentCat = window._voteBankCat || '全部';
+    var html = '';
+
+    html += '<div style="display:flex;gap:6px;overflow-x:auto;padding:0 0 10px 0;scrollbar-width:none;">';
+    var allActive = (currentCat === '全部');
+    html += '<button class="btn-icon" onclick="switchVoteBankCat(\'全部\')" style="flex-shrink:0;padding:6px 16px;border-radius:30px;border:none;font-size:13px;cursor:pointer;background:' + (allActive ? 'var(--theme-main, #d4e9d6)' : 'var(--theme-lighter, #eef5ef)') + ';color:' + (allActive ? '#000000' : '#888888') + ';">全部</button>';
+    for (var i = 0; i < bank.categories.length; i++) {
+        var c = bank.categories[i];
+        var active = (currentCat === c.name);
+        var label = c.name;
+        if (c.exclusiveFriendId) {
+            var f = DataHub.get('friends', []).find(function(x) { return x.id === c.exclusiveFriendId; });
+            if (f) label += '（' + f.name + '专属）';
+        }
+        html += '<button class="btn-icon vote-bank-cat-btn" data-cat="' + c.name + '" onclick="switchVoteBankCat(\'' + c.name + '\')" style="flex-shrink:0;padding:6px 16px;border-radius:30px;border:none;font-size:13px;cursor:pointer;background:' + (active ? 'var(--theme-main, #d4e9d6)' : 'var(--theme-lighter, #eef5ef)') + ';color:' + (active ? '#000000' : '#888888') + ';">' + label + '</button>';
+    }
+    html += '<button class="btn-icon" onclick="showAddVoteBankCategory()" style="flex-shrink:0;padding:6px 16px;border-radius:30px;border:1px dashed var(--theme-main, #b8d9ba);font-size:13px;cursor:pointer;background:transparent;color:#000000;">+ 新建分类</button>';
+    html += '</div>';
+
+    var questions = bank.questions;
+    if (currentCat !== '全部') {
+        questions = questions.filter(function(q) { return q.category === currentCat; });
+    }
+
+    if (questions.length === 0) {
+        html += '<div style="text-align:center;color:#999999;padding:30px 0;font-size:13px;">暂无题目</div>';
+    } else {
+        for (var j = 0; j < questions.length; j++) {
+            var q = questions[j];
+            html += '<div style="background:#ffffff;border:1px solid #eef5ef;border-radius:10px;padding:12px;margin-bottom:8px;">' +
+                '<div style="font-size:14px;color:#000000;font-weight:500;margin-bottom:6px;word-break:break-word;">' + q.title + '</div>' +
+                '<div style="font-size:12px;color:#666666;line-height:1.8;margin-bottom:8px;">';
+            for (var k = 0; k < q.options.length; k++) {
+                html += '<div>' + (k + 1) + '. ' + q.options[k] + '</div>';
+            }
+            html += '</div>' +
+                '<div style="display:flex;gap:8px;">' +
+    '<button class="btn-icon" onclick="showEditVoteBankQuestion(\'' + q.id + '\')" style="padding:4px 12px;font-size:12px;">编辑</button>' +
+    '<button class="btn-icon" onclick="deleteVoteBankQuestion(\'' + q.id + '\')" style="padding:4px 12px;font-size:12px;">删除</button>' +
+'</div>' +
+            '</div>';
+        }
+    }
+    setTimeout(function() { bindVoteBankCatLongPress(); }, 0);
+    return html;
+}
+
+function switchVoteBankCat(cat) {
+    window._voteBankCat = cat;
+    var content = document.getElementById('voteBankContent');
+    if (content) content.innerHTML = renderVoteBankContent();
+}
+
+function bindVoteBankCatLongPress() {
+    var container = document.getElementById('voteBankContent');
+    if (!container) return;
+    var btns = container.querySelectorAll('.vote-bank-cat-btn');
+    for (var i = 0; i < btns.length; i++) {
+        (function(btn) {
+            var catName = btn.getAttribute('data-cat');
+            var timer = null;
+            var moved = false;
+            var startX = 0, startY = 0;
+            function onStart(e) {
+                var p = e.touches ? e.touches[0] : e;
+                startX = p.clientX;
+                startY = p.clientY;
+                moved = false;
+                clearTimeout(timer);
+                timer = setTimeout(function() {
+                    if (moved) return;
+                    showVoteBankCatMenu(catName);
+                }, 600);
+            }
+            function onMove(e) {
+                var p = e.touches ? e.touches[0] : e;
+                if (Math.abs(p.clientX - startX) > 8 || Math.abs(p.clientY - startY) > 8) {
+                    moved = true;
+                    clearTimeout(timer);
+                }
+            }
+            function onEnd() { clearTimeout(timer); }
+            btn.addEventListener('touchstart', onStart, { passive: true });
+            btn.addEventListener('touchmove', onMove, { passive: true });
+            btn.addEventListener('touchend', onEnd);
+            btn.addEventListener('mousedown', onStart);
+            btn.addEventListener('mousemove', onMove);
+            btn.addEventListener('mouseup', onEnd);
+            btn.addEventListener('mouseleave', onEnd);
+        })(btns[i]);
+    }
+}
+
+function showVoteBankCatMenu(catName) {
+    var html = '<div class="modal-title">' + catName + '</div>' +
+        '<button class="btn-primary" style="width:100%;margin-bottom:8px;" onclick="closeModal();showEditVoteBankCategory(\'' + catName + '\')">编辑</button>' +
+        '<button class="btn-primary" style="width:100%;margin-bottom:8px;background:#e8a0a0;color:#ffffff;" onclick="closeModal();deleteVoteBankCategory(\'' + catName + '\')">删除</button>' +
+        '<div class="btn-row" style="margin-top:8px;"><button class="cancel" onclick="closeModal()">取消</button></div>';
+    showModal(html);
+}
+
+function showAddVoteBankCategory() {
+    var friends = DataHub.get('friends', []);
+    var friendOpts = '<option value="">公开（所有人可见）</option>';
+    for (var i = 0; i < friends.length; i++) {
+        friendOpts += '<option value="' + friends[i].id + '">' + friends[i].name + ' 专属</option>';
+    }
+    var html = '<div class="modal-title">新建分类</div>' +
+        '<input type="text" id="voteBankCatName" placeholder="分类名称" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
+        '<div style="font-size:12px;color:#999999;margin-bottom:4px;">可见范围</div>' +
+        '<select id="voteBankCatExclusive" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;">' + friendOpts + '</select>' +
+        '<div class="btn-row">' +
+            '<button class="cancel" onclick="closeModal()">取消</button>' +
+            '<button class="confirm" onclick="saveVoteBankCategory()">创建</button>' +
+        '</div>';
+    showModal(html);
+}
+
+function saveVoteBankCategory() {
+    var nameInput = document.getElementById('voteBankCatName');
+    var exclusiveInput = document.getElementById('voteBankCatExclusive');
+    if (!nameInput || !nameInput.value.trim()) {
+        showToast('请输入分类名');
+        return;
+    }
+    var bank = getVoteBank();
+    var name = nameInput.value.trim();
+    var exists = bank.categories.some(function(c) { return c.name === name; });
+    if (exists) {
+        showToast('分类已存在');
+        return;
+    }
+    bank.categories.push({
+        name: name,
+        exclusiveFriendId: exclusiveInput ? exclusiveInput.value : ''
+    });
+    saveVoteBank(bank);
+    closeModal();
+    var content = document.getElementById('voteBankContent');
+    if (content) content.innerHTML = renderVoteBankContent();
+    showToast('已创建分类');
+}
+
+function showEditVoteBankCategory(catName) {
+    var bank = getVoteBank();
+    var c = bank.categories.find(function(x) { return x.name === catName; });
+    if (!c) return;
+    var friends = DataHub.get('friends', []);
+    var friendOpts = '<option value="">公开（所有人可见）</option>';
+    for (var i = 0; i < friends.length; i++) {
+        friendOpts += '<option value="' + friends[i].id + '"' + (c.exclusiveFriendId === friends[i].id ? ' selected' : '') + '>' + friends[i].name + ' 专属</option>';
+    }
+    var html = '<div class="modal-title">编辑分类</div>' +
+        '<input type="text" id="voteBankCatEditName" value="' + c.name.replace(/"/g, '&quot;') + '" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
+        '<div style="font-size:12px;color:#999999;margin-bottom:4px;">可见范围</div>' +
+        '<select id="voteBankCatEditExclusive" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;">' + friendOpts + '</select>' +
+        '<div class="btn-row">' +
+            '<button class="cancel" onclick="closeModal()">取消</button>' +
+            '<button class="confirm" onclick="saveVoteBankCategoryEdit(\'' + catName + '\')">保存</button>' +
+        '</div>';
+    showModal(html);
+}
+
+function saveVoteBankCategoryEdit(oldName) {
+    var nameInput = document.getElementById('voteBankCatEditName');
+    var exclusiveInput = document.getElementById('voteBankCatEditExclusive');
+    if (!nameInput || !nameInput.value.trim()) {
+        showToast('请输入分类名');
+        return;
+    }
+    var bank = getVoteBank();
+    var newName = nameInput.value.trim();
+    var c = bank.categories.find(function(x) { return x.name === oldName; });
+    if (!c) return;
+    if (newName !== oldName) {
+        var exists = bank.categories.some(function(x) { return x.name === newName; });
+        if (exists) {
+            showToast('分类名已存在');
+            return;
+        }
+    }
+    c.name = newName;
+    c.exclusiveFriendId = exclusiveInput ? exclusiveInput.value : '';
+    for (var i = 0; i < bank.questions.length; i++) {
+        if (bank.questions[i].category === oldName) {
+            bank.questions[i].category = newName;
+        }
+    }
+    saveVoteBank(bank);
+    closeModal();
+    if (window._voteBankCat === oldName) {
+        window._voteBankCat = newName;
+    }
+    var content = document.getElementById('voteBankContent');
+    if (content) content.innerHTML = renderVoteBankContent();
+    showToast('已保存');
+}
+
+function deleteVoteBankCategory(catName) {
+    if (!catName) return;
+    var bank = getVoteBank();
+    if (bank.categories.length <= 1) {
+        showToast('至少保留一个分类');
+        return;
+    }
+    if (!confirm('确定删除分类「' + catName + '」吗？该分类下的题目会归入默认分类。')) return;
+    var defaultCat = bank.categories.find(function(x) { return x.name === '默认'; });
+    var fallback = defaultCat ? '默认' : bank.categories[0].name;
+    bank.categories = bank.categories.filter(function(x) { return x.name !== catName; });
+    for (var i = 0; i < bank.questions.length; i++) {
+        if (bank.questions[i].category === catName) {
+            bank.questions[i].category = fallback;
+        }
+    }
+    saveVoteBank(bank);
+    if (window._voteBankCat === catName) {
+        window._voteBankCat = '全部';
+    }
+    var content = document.getElementById('voteBankContent');
+    if (content) content.innerHTML = renderVoteBankContent();
+    showToast('已删除分类');
+}
+
+function showVoteBankAddMenu() {
+    var html = '<div class="modal-title">添加题目</div>' +
+        '<button class="btn-primary" style="width:100%;margin-bottom:8px;" onclick="closeModal();showAddVoteQuestionSingle()">手动单条</button>' +
+        '<button class="btn-primary" style="width:100%;margin-bottom:8px;" onclick="closeModal();showAddVoteQuestionBatch()">批量添加</button>' +
+        '<button class="btn-primary" style="width:100%;margin-bottom:8px;" onclick="closeModal();showAddVoteQuestionFile()">文件导入</button>' +
+        '<div class="btn-row" style="margin-top:8px;"><button class="cancel" onclick="closeModal()">取消</button></div>';
+    showModal(html);
+}
+
+function getVoteBankCategoryOptions() {
+    var bank = getVoteBank();
+    var opts = '';
+    for (var i = 0; i < bank.categories.length; i++) {
+        opts += '<option value="' + bank.categories[i].name + '">' + bank.categories[i].name + '</option>';
+    }
+    return opts;
+}
+
+function showAddVoteQuestionSingle() {
+    var html = '<div class="modal-title">添加题目</div>' +
+        '<input type="text" id="voteQTitle" placeholder="题目" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
+        '<div id="voteQOptions">' +
+            '<input type="text" class="vote-q-option" placeholder="选项1" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
+            '<input type="text" class="vote-q-option" placeholder="选项2" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
+        '</div>' +
+        '<button class="btn-icon" onclick="addVoteQOption()" style="margin-bottom:8px;">+ 添加选项</button>' +
+        '<div style="font-size:12px;color:#999999;margin-bottom:4px;">分类</div>' +
+        '<select id="voteQCategory" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' + getVoteBankCategoryOptions() + '</select>' +
+        '<div class="btn-row">' +
+            '<button class="cancel" onclick="closeModal()">取消</button>' +
+            '<button class="confirm" onclick="saveVoteQuestionSingle()">保存</button>' +
+        '</div>';
+    showModal(html);
+}
+
+function addVoteQOption() {
+    var container = document.getElementById('voteQOptions');
+    if (!container) return;
+    var count = container.querySelectorAll('.vote-q-option').length;
+    var newInput = document.createElement('input');
+    newInput.type = 'text';
+    newInput.className = 'vote-q-option';
+    newInput.placeholder = '选项' + (count + 1);
+    newInput.style.cssText = 'width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;';
+    container.appendChild(newInput);
+}
+
+function saveVoteQuestionSingle() {
+    var titleInput = document.getElementById('voteQTitle');
+    var optionInputs = document.querySelectorAll('.vote-q-option');
+    var catInput = document.getElementById('voteQCategory');
+    if (!titleInput || !titleInput.value.trim()) {
+        showToast('请输入题目');
+        return;
+    }
+    var options = [];
+    for (var i = 0; i < optionInputs.length; i++) {
+        var v = optionInputs[i].value.trim();
+        if (v) options.push(v);
+    }
+    if (options.length < 2) {
+        showToast('至少需要2个选项');
+        return;
+    }
+    var bank = getVoteBank();
+    bank.questions.push({
+        id: 'vq' + Date.now() + Math.random().toString(36).substr(2, 4),
+        title: titleInput.value.trim(),
+        options: options,
+        category: catInput ? catInput.value : '默认',
+        createdAt: Date.now()
+    });
+    saveVoteBank(bank);
+    closeModal();
+    var content = document.getElementById('voteBankContent');
+    if (content) content.innerHTML = renderVoteBankContent();
+    showToast('已添加');
+}
+
+function showAddVoteQuestionBatch() {
+    var html = '<div class="modal-title">批量添加</div>' +
+        '<div style="font-size:12px;color:#999999;margin-bottom:6px;">一行一题，用 | 分隔：题目|选项1|选项2|选项3</div>' +
+        '<textarea id="voteQBatchInput" placeholder="今天吃什么|米饭|面条|火锅" style="width:100%;height:140px;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;resize:vertical;"></textarea>' +
+        '<div style="font-size:12px;color:#999999;margin-bottom:4px;">分类</div>' +
+        '<select id="voteQBatchCategory" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' + getVoteBankCategoryOptions() + '</select>' +
+        '<div class="btn-row">' +
+            '<button class="cancel" onclick="closeModal()">取消</button>' +
+            '<button class="confirm" onclick="saveVoteQuestionBatch()">导入</button>' +
+        '</div>';
+    showModal(html);
+}
+
+function parseVoteBatchLines(text) {
+    var lines = text.split('\n');
+    var result = [];
+    for (var i = 0; i < lines.length; i++) {
+        var line = lines[i].trim();
+        if (!line) continue;
+        var parts = line.split('|');
+        if (parts.length < 3) {
+            return { error: '第 ' + (i + 1) + ' 行格式不对，至少需要题目和2个选项' };
+        }
+        var title = parts[0].trim();
+        var options = [];
+        for (var j = 1; j < parts.length; j++) {
+            var o = parts[j].trim();
+            if (o) options.push(o);
+        }
+        if (!title) {
+            return { error: '第 ' + (i + 1) + ' 行题目为空' };
+        }
+        if (options.length < 2) {
+            return { error: '第 ' + (i + 1) + ' 行选项不足2个' };
+        }
+        result.push({ title: title, options: options });
+    }
+    if (result.length === 0) {
+        return { error: '没有有效内容' };
+    }
+    return { list: result };
+}
+
+function saveVoteQuestionBatch() {
+    var input = document.getElementById('voteQBatchInput');
+    var catInput = document.getElementById('voteQBatchCategory');
+    if (!input || !input.value.trim()) {
+        showToast('请输入内容');
+        return;
+    }
+    var parsed = parseVoteBatchLines(input.value);
+    if (parsed.error) {
+        showToast(parsed.error);
+        return;
+    }
+    var bank = getVoteBank();
+    var cat = catInput ? catInput.value : '默认';
+    for (var i = 0; i < parsed.list.length; i++) {
+        bank.questions.push({
+            id: 'vq' + Date.now() + Math.random().toString(36).substr(2, 6),
+            title: parsed.list[i].title,
+            options: parsed.list[i].options,
+            category: cat,
+            createdAt: Date.now()
+        });
+    }
+    saveVoteBank(bank);
+    closeModal();
+    var content = document.getElementById('voteBankContent');
+    if (content) content.innerHTML = renderVoteBankContent();
+    showToast('已导入 ' + parsed.list.length + ' 题');
+}
+
+function showAddVoteQuestionFile() {
+    var html = '<div class="modal-title">文件导入</div>' +
+        '<div style="font-size:12px;color:#999999;margin-bottom:6px;">支持 .txt 和 .json，内容格式：一行一题，用 | 分隔</div>' +
+        '<div style="font-size:12px;color:#999999;margin-bottom:6px;">题目|选项1|选项2|选项3</div>' +
+        '<input type="file" id="voteQFileInput" accept=".txt,.json" style="margin-bottom:12px;padding:8px;border:1px solid #d4e4d6;border-radius:12px;width:100%;box-sizing:border-box;">' +
+        '<div style="font-size:12px;color:#999999;margin-bottom:4px;">分类</div>' +
+        '<select id="voteQFileCategory" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' + getVoteBankCategoryOptions() + '</select>' +
+        '<div class="btn-row">' +
+            '<button class="cancel" onclick="closeModal()">取消</button>' +
+            '<button class="confirm" onclick="importVoteQuestionFile()">导入</button>' +
+        '</div>';
+    showModal(html);
+}
+
+function importVoteQuestionFile() {
+    var fileInput = document.getElementById('voteQFileInput');
+    var catInput = document.getElementById('voteQFileCategory');
+    if (!fileInput || !fileInput.files || !fileInput.files[0]) {
+        showToast('请选择文件');
+        return;
+    }
+    var reader = new FileReader();
+    reader.onload = function(e) {
+        var parsed = parseVoteBatchLines(e.target.result);
+        if (parsed.error) {
+            showToast(parsed.error);
+            return;
+        }
+        var bank = getVoteBank();
+        var cat = catInput ? catInput.value : '默认';
+        for (var i = 0; i < parsed.list.length; i++) {
+            bank.questions.push({
+                id: 'vq' + Date.now() + Math.random().toString(36).substr(2, 6),
+                title: parsed.list[i].title,
+                options: parsed.list[i].options,
+                category: cat,
+                createdAt: Date.now()
+            });
+        }
+        saveVoteBank(bank);
+        closeModal();
+        var content = document.getElementById('voteBankContent');
+        if (content) content.innerHTML = renderVoteBankContent();
+        showToast('已导入 ' + parsed.list.length + ' 题');
+    };
+    reader.readAsText(fileInput.files[0]);
+}
+
+function showEditVoteBankQuestion(qid) {
+    var bank = getVoteBank();
+    var q = bank.questions.find(function(x) { return x.id === qid; });
+    if (!q) return;
+    var optionsHtml = '';
+    for (var i = 0; i < q.options.length; i++) {
+        optionsHtml += '<input type="text" class="vote-q-edit-option" value="' + q.options[i].replace(/"/g, '&quot;') + '" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">';
+    }
+    var catOpts = '';
+    for (var j = 0; j < bank.categories.length; j++) {
+        var c = bank.categories[j];
+        catOpts += '<option value="' + c.name + '"' + (q.category === c.name ? ' selected' : '') + '>' + c.name + '</option>';
+    }
+    var html = '<div class="modal-title">编辑题目</div>' +
+        '<input type="text" id="voteQEditTitle" value="' + q.title.replace(/"/g, '&quot;') + '" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
+        '<div id="voteQEditOptions">' + optionsHtml + '</div>' +
+        '<button class="btn-icon" onclick="addVoteQEditOption()" style="margin-bottom:8px;">+ 添加选项</button>' +
+        '<div style="font-size:12px;color:#999999;margin-bottom:4px;">分类</div>' +
+        '<select id="voteQEditCategory" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' + catOpts + '</select>' +
+        '<div class="btn-row">' +
+            '<button class="cancel" onclick="closeModal()">取消</button>' +
+            '<button class="confirm" onclick="saveVoteBankQuestionEdit(\'' + qid + '\')">保存</button>' +
+        '</div>';
+    showModal(html);
+}
+
+function addVoteQEditOption() {
+    var container = document.getElementById('voteQEditOptions');
+    if (!container) return;
+    var newInput = document.createElement('input');
+    newInput.type = 'text';
+    newInput.className = 'vote-q-edit-option';
+    newInput.placeholder = '选项';
+    newInput.style.cssText = 'width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;';
+    container.appendChild(newInput);
+}
+
+function saveVoteBankQuestionEdit(qid) {
+    var titleInput = document.getElementById('voteQEditTitle');
+    var optionInputs = document.querySelectorAll('.vote-q-edit-option');
+    var catInput = document.getElementById('voteQEditCategory');
+    if (!titleInput || !titleInput.value.trim()) {
+        showToast('请输入题目');
+        return;
+    }
+    var options = [];
+    for (var i = 0; i < optionInputs.length; i++) {
+        var v = optionInputs[i].value.trim();
+        if (v) options.push(v);
+    }
+    if (options.length < 2) {
+        showToast('至少需要2个选项');
+        return;
+    }
+    var bank = getVoteBank();
+    var q = bank.questions.find(function(x) { return x.id === qid; });
+    if (!q) return;
+    q.title = titleInput.value.trim();
+    q.options = options;
+    q.category = catInput ? catInput.value : '默认';
+    saveVoteBank(bank);
+    closeModal();
+    var content = document.getElementById('voteBankContent');
+    if (content) content.innerHTML = renderVoteBankContent();
+    showToast('已保存');
+}
+
+function deleteVoteBankQuestion(qid) {
+    if (!confirm('确定删除这道题吗？')) return;
+    var bank = getVoteBank();
+    bank.questions = bank.questions.filter(function(q) { return q.id !== qid; });
+    saveVoteBank(bank);
+    var content = document.getElementById('voteBankContent');
+    if (content) content.innerHTML = renderVoteBankContent();
+    showToast('已删除');
+}
+
+// ====== 好友主动发起特殊投票（每小时 1%） ======
+var friendSpecialVoteTimer = null;
+
+function startFriendSpecialVoteTimer(chatId) {
+    stopFriendSpecialVoteTimer();
+    friendSpecialVoteTimer = setInterval(function() {
+        var chatPage = document.getElementById('chatPage');
+        if (!chatPage || !chatPage.classList.contains('active')) return;
+        if (currentChatId !== chatId) return;
+        if (Math.random() * 100 >= 1) return;
+        var visible = getVisibleVoteQuestions(chatId);
+        if (visible.length === 0) return;
+        var q = visible[Math.floor(Math.random() * visible.length)];
+        var type = Math.random() < 0.5 ? 'single' : 'multi';
+        createVoteCard(type, 'bank', q.title, q.options.slice(), chatId, 'me');
+    }, 60 * 60 * 1000);
+}
+
+function stopFriendSpecialVoteTimer() {
+    if (friendSpecialVoteTimer) {
+        clearInterval(friendSpecialVoteTimer);
+        friendSpecialVoteTimer = null;
+    }
+}
+
+// 挂 window
+window.openVoteMenu = openVoteMenu;
+window.openVoteCompose = openVoteCompose;
+window.addVoteComposeOption = addVoteComposeOption;
+window.sendVoteCompose = sendVoteCompose;
+window.createVoteCard = createVoteCard;
+window.friendAnswerVoteCard = friendAnswerVoteCard;
+window.scheduleFriendAnswerVote = scheduleFriendAnswerVote;
+window.handleVoteOptionClick = handleVoteOptionClick;
+window.submitVoteAnswer = submitVoteAnswer;
+window.renderVoteCard = renderVoteCard;
+window.openSpecialVotePicker = openSpecialVotePicker;
+window.pickSpecialVoteQuestion = pickSpecialVoteQuestion;
+window.sendSpecialVote = sendSpecialVote;
+window.getVoteBank = getVoteBank;
+window.saveVoteBank = saveVoteBank;
+window.getVisibleVoteQuestions = getVisibleVoteQuestions;
+window.openVoteBankManage = openVoteBankManage;
+window.renderVoteBankContent = renderVoteBankContent;
+window.switchVoteBankCat = switchVoteBankCat;
+window.showAddVoteBankCategory = showAddVoteBankCategory;
+window.saveVoteBankCategory = saveVoteBankCategory;
+window.showVoteBankAddMenu = showVoteBankAddMenu;
+window.showAddVoteQuestionSingle = showAddVoteQuestionSingle;
+window.addVoteQOption = addVoteQOption;
+window.saveVoteQuestionSingle = saveVoteQuestionSingle;
+window.showAddVoteQuestionBatch = showAddVoteQuestionBatch;
+window.saveVoteQuestionBatch = saveVoteQuestionBatch;
+window.showAddVoteQuestionFile = showAddVoteQuestionFile;
+window.importVoteQuestionFile = importVoteQuestionFile;
+window.deleteVoteBankQuestion = deleteVoteBankQuestion;
+window.showEditVoteBankQuestion = showEditVoteBankQuestion;
+window.addVoteQEditOption = addVoteQEditOption;
+window.saveVoteBankQuestionEdit = saveVoteBankQuestionEdit;
+window.showEditVoteBankCategory = showEditVoteBankCategory;
+window.saveVoteBankCategoryEdit = saveVoteBankCategoryEdit;
+window.deleteVoteBankCategory = deleteVoteBankCategory;
+window.showVoteBankCatMenu = showVoteBankCatMenu;
+window.bindVoteBankCatLongPress = bindVoteBankCatLongPress;
+window.startFriendSpecialVoteTimer = startFriendSpecialVoteTimer;
+window.stopFriendSpecialVoteTimer = stopFriendSpecialVoteTimer;
+
 // ====== 输入框自动增高 ======
 function autoResizeInput(el) {
     el.style.height = 'auto';
@@ -11990,6 +12750,94 @@ function togglePrivateLexiconPatLock(itemId) {
     showToast(item.locked ? '已上锁，仅我可用' : '已解锁');
 }
 
+function showPrivateLexiconItemMenu(itemId) {
+    var data = getPrivateLexiconData();
+    var item = data.items.find(function(it) { return it.id === itemId; });
+    if (!item) return;
+    var isImageType = (item.type === 'emoji_pack');
+    var isPat = (item.type === 'pat');
+    var html = '<div class="modal-title">' + (item.content || '表情包') + '</div>';
+    if (!isImageType) {
+        html += '<button class="btn-primary" style="width:100%;margin-bottom:8px;" onclick="closeModal();showEditPrivateLexiconItem(\'' + itemId + '\')">编辑</button>';
+    }
+    if (isPat) {
+        var lockLabel = (item.locked === true) ? '解锁' : '上锁';
+        html += '<button class="btn-primary" style="width:100%;margin-bottom:8px;" onclick="closeModal();togglePrivateLexiconPatLock(\'' + itemId + '\')">' + lockLabel + '</button>';
+    }
+    html += '<button class="btn-primary" style="width:100%;margin-bottom:8px;" onclick="closeModal();enterPrivateLexiconSelectMode()">多选</button>' +
+        '<button class="btn-primary" style="width:100%;margin-bottom:8px;background:#e8a0a0;color:#ffffff;" onclick="closeModal();deletePrivateLexiconItemSingle(\'' + itemId + '\')">删除</button>' +
+        '<div class="btn-row" style="margin-top:8px;"><button class="cancel" onclick="closeModal()">取消</button></div>';
+    showModal(html);
+}
+
+function deletePrivateLexiconItemSingle(itemId) {
+    var data = getPrivateLexiconData();
+    var item = data.items.find(function(it) { return it.id === itemId; });
+    if (!item) return;
+    if (!confirm('确定删除这个词条吗？')) return;
+    data.items = data.items.filter(function(it) { return it.id !== itemId; });
+    savePrivateLexiconData(data);
+    renderPrivateLexiconList();
+    renderPrivateLexiconGroups();
+    updatePrivateTypeCounts();
+    showToast('已删除');
+}
+
+function showEditPrivateLexiconItem(itemId) {
+    var data = getPrivateLexiconData();
+    var item = data.items.find(function(it) { return it.id === itemId; });
+    if (!item) return;
+    var type = item.type;
+    var groups = data.groups[type] || ['默认'];
+    var groupOpts = '';
+    for (var i = 0; i < groups.length; i++) {
+        groupOpts += '<option value="' + groups[i] + '"' + (item.group === groups[i] ? ' selected' : '') + '>' + groups[i] + '</option>';
+    }
+    var typeNames = {
+        word: '字卡', emoji: 'emoji', yanwenzi: '颜文字',
+        emoji_pack: '表情包', pat: '拍一拍', status: '状态', weather: '天气'
+    };
+    var html = '<div class="modal-title">编辑' + (typeNames[type] || '词条') + '</div>' +
+        '<input type="text" id="privateLexiconEditContent" value="' + (item.content || '').replace(/"/g, '&quot;') + '" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
+        '<div style="font-size:12px;color:#999999;margin-bottom:4px;">分组</div>' +
+        '<select id="privateLexiconEditGroup" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' + groupOpts + '</select>' +
+        '<div class="btn-row">' +
+            '<button class="cancel" onclick="closeModal()">取消</button>' +
+            '<button class="confirm" onclick="saveEditPrivateLexiconItem(\'' + itemId + '\')">保存</button>' +
+        '</div>';
+    showModal(html);
+}
+
+function saveEditPrivateLexiconItem(itemId) {
+    var contentInput = document.getElementById('privateLexiconEditContent');
+    var groupInput = document.getElementById('privateLexiconEditGroup');
+    if (!contentInput || !contentInput.value.trim()) {
+        showToast('请输入内容');
+        return;
+    }
+    var data = getPrivateLexiconData();
+    var item = data.items.find(function(it) { return it.id === itemId; });
+    if (!item) return;
+    var newContent = contentInput.value.trim();
+    var newGroup = groupInput ? groupInput.value : item.group;
+    var type = item.type;
+    var exists = data.items.some(function(it) {
+        return it.id !== itemId && it.type === type && it.group === newGroup && it.content === newContent;
+    });
+    if (exists) {
+        showToast('该分组下已存在相同词条');
+        return;
+    }
+    item.content = newContent;
+    item.group = newGroup;
+    savePrivateLexiconData(data);
+    closeModal();
+    renderPrivateLexiconList();
+    renderPrivateLexiconGroups();
+    updatePrivateTypeCounts();
+    showToast('已保存');
+}
+
 // ====== 渲染私人词条列表 ======
 function renderPrivateLexiconList() {
     const container = document.getElementById('privateLexiconItemList');
@@ -12136,30 +12984,38 @@ container.querySelectorAll('.private-lexicon-item').forEach(function(el) {
                 }
             });
         } else {
-            let pressTimer = null;
-            el.addEventListener('touchstart', function(e) {
-                pressTimer = setTimeout(function() {
-                    enterPrivateLexiconSelectMode();
-                }, 600);
-            });
-            el.addEventListener('touchend', function() {
-                clearTimeout(pressTimer);
-            });
-            el.addEventListener('touchmove', function() {
-                clearTimeout(pressTimer);
-            });
-            el.addEventListener('mousedown', function(e) {
-                pressTimer = setTimeout(function() {
-                    enterPrivateLexiconSelectMode();
-                }, 600);
-            });
-            el.addEventListener('mouseup', function() {
-                clearTimeout(pressTimer);
-            });
-            el.addEventListener('mouseleave', function() {
-                clearTimeout(pressTimer);
-            });
+    let pressTimer = null;
+    let moved = false;
+    let startX = 0, startY = 0;
+    function startPress(e) {
+        var p = e.touches ? e.touches[0] : e;
+        startX = p.clientX;
+        startY = p.clientY;
+        moved = false;
+        clearTimeout(pressTimer);
+        pressTimer = setTimeout(function() {
+            if (moved) return;
+            showPrivateLexiconItemMenu(id);
+        }, 600);
+    }
+    function movePress(e) {
+        var p = e.touches ? e.touches[0] : e;
+        if (Math.abs(p.clientX - startX) > 8 || Math.abs(p.clientY - startY) > 8) {
+            moved = true;
+            clearTimeout(pressTimer);
         }
+    }
+    function endPress() {
+        clearTimeout(pressTimer);
+    }
+    el.addEventListener('touchstart', startPress, { passive: true });
+    el.addEventListener('touchmove', movePress, { passive: true });
+    el.addEventListener('touchend', endPress);
+    el.addEventListener('mousedown', startPress);
+    el.addEventListener('mousemove', movePress);
+    el.addEventListener('mouseup', endPress);
+    el.addEventListener('mouseleave', endPress);
+}
     });
     updatePrivateLexiconSelectAllState();
     updatePrivateLexiconSelectCount();
@@ -15277,7 +16133,7 @@ window.editRoomName = function(id) {
     if (!room) return;
     const html = `
         <div class="modal-title">修改群名称</div>
-        <input type="text" id="roomNameInput" value="${room.name}" placeholder="输入新名称">
+        <input type="text" id="roomNameInput" value="${stripGroupCountSuffix(room.name)}" placeholder="输入新名称">
         <div class="btn-row">
             <button class="cancel" onclick="closeModal()">取消</button>
             <button class="confirm" onclick="saveRoomName('${id}')">保存</button>
@@ -15292,7 +16148,9 @@ window.saveRoomName = function(id) {
         var chatrooms = DataHub.get('chatrooms', []);
         const room = chatrooms.find(c => c.id === id);
         if (room) {
-            room.name = input.value.trim();
+            var baseName = stripGroupCountSuffix(input.value.trim());
+            var totalCount = (room.members ? room.members.length : 0) + 1;
+            room.name = baseName + '（' + totalCount + '人）';
             DataHub.set('chatrooms', chatrooms);
             closeModal();
             renderAll();
@@ -18616,6 +19474,89 @@ function renderLexiconGroups() {
     });
 }
 
+function showLexiconItemMenu(itemId) {
+    var data = getLexiconData();
+    var item = data.items.find(function(it) { return it.id === itemId; });
+    if (!item) return;
+    var isImageType = (item.type === 'emoji_pack');
+    var html = '<div class="modal-title">' + (item.content || '表情包') + '</div>';
+    if (!isImageType) {
+        html += '<button class="btn-primary" style="width:100%;margin-bottom:8px;" onclick="closeModal();showEditLexiconItem(\'' + itemId + '\')">编辑</button>';
+    }
+    html += '<button class="btn-primary" style="width:100%;margin-bottom:8px;" onclick="closeModal();enterLexiconSelectMode()">多选</button>' +
+        '<button class="btn-primary" style="width:100%;margin-bottom:8px;background:#e8a0a0;color:#ffffff;" onclick="closeModal();deleteLexiconItemSingle(\'' + itemId + '\')">删除</button>' +
+        '<div class="btn-row" style="margin-top:8px;"><button class="cancel" onclick="closeModal()">取消</button></div>';
+    showModal(html);
+}
+
+function deleteLexiconItemSingle(itemId) {
+    var data = getLexiconData();
+    var item = data.items.find(function(it) { return it.id === itemId; });
+    if (!item) return;
+    if (!confirm('确定删除这个词条吗？')) return;
+    data.items = data.items.filter(function(it) { return it.id !== itemId; });
+    saveLexiconData(data);
+    renderLexiconList();
+    renderLexiconGroups();
+    updateTypeCounts();
+    showToast('已删除');
+}
+
+function showEditLexiconItem(itemId) {
+    var data = getLexiconData();
+    var item = data.items.find(function(it) { return it.id === itemId; });
+    if (!item) return;
+    var type = item.type;
+    var groups = data.groups[type] || ['默认'];
+    var groupOpts = '';
+    for (var i = 0; i < groups.length; i++) {
+        groupOpts += '<option value="' + groups[i] + '"' + (item.group === groups[i] ? ' selected' : '') + '>' + groups[i] + '</option>';
+    }
+    var typeNames = {
+        word: '字卡', emoji: 'emoji', yanwenzi: '颜文字',
+        emoji_pack: '表情包', pat: '拍一拍', status: '状态', weather: '天气'
+    };
+    var html = '<div class="modal-title">编辑' + (typeNames[type] || '词条') + '</div>' +
+        '<input type="text" id="lexiconEditContent" value="' + (item.content || '').replace(/"/g, '&quot;') + '" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
+        '<div style="font-size:12px;color:#999999;margin-bottom:4px;">分组</div>' +
+        '<select id="lexiconEditGroup" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' + groupOpts + '</select>' +
+        '<div class="btn-row">' +
+            '<button class="cancel" onclick="closeModal()">取消</button>' +
+            '<button class="confirm" onclick="saveEditLexiconItem(\'' + itemId + '\')">保存</button>' +
+        '</div>';
+    showModal(html);
+}
+
+function saveEditLexiconItem(itemId) {
+    var contentInput = document.getElementById('lexiconEditContent');
+    var groupInput = document.getElementById('lexiconEditGroup');
+    if (!contentInput || !contentInput.value.trim()) {
+        showToast('请输入内容');
+        return;
+    }
+    var data = getLexiconData();
+    var item = data.items.find(function(it) { return it.id === itemId; });
+    if (!item) return;
+    var newContent = contentInput.value.trim();
+    var newGroup = groupInput ? groupInput.value : item.group;
+    var type = item.type;
+    var exists = data.items.some(function(it) {
+        return it.id !== itemId && it.type === type && it.group === newGroup && it.content === newContent;
+    });
+    if (exists) {
+        showToast('该分组下已存在相同词条');
+        return;
+    }
+    item.content = newContent;
+    item.group = newGroup;
+    saveLexiconData(data);
+    closeModal();
+    renderLexiconList();
+    renderLexiconGroups();
+    updateTypeCounts();
+    showToast('已保存');
+}
+
 function renderLexiconList() {
     const container = document.getElementById('lexiconItemList');
     if (!container) return;
@@ -18729,30 +19670,38 @@ const totalCount = items.length;
                 }
             });
         } else {
-            let pressTimer = null;
-            el.addEventListener('touchstart', function(e) {
-                pressTimer = setTimeout(() => {
-                    enterLexiconSelectMode();
-                }, 600);
-            });
-            el.addEventListener('touchend', function() {
-                clearTimeout(pressTimer);
-            });
-            el.addEventListener('touchmove', function() {
-                clearTimeout(pressTimer);
-            });
-            el.addEventListener('mousedown', function(e) {
-                pressTimer = setTimeout(() => {
-                    enterLexiconSelectMode();
-                }, 600);
-            });
-            el.addEventListener('mouseup', function() {
-                clearTimeout(pressTimer);
-            });
-            el.addEventListener('mouseleave', function() {
-                clearTimeout(pressTimer);
-            });
+    let pressTimer = null;
+    let moved = false;
+    let startX = 0, startY = 0;
+    function startPress(e) {
+        var p = e.touches ? e.touches[0] : e;
+        startX = p.clientX;
+        startY = p.clientY;
+        moved = false;
+        clearTimeout(pressTimer);
+        pressTimer = setTimeout(function() {
+            if (moved) return;
+            showLexiconItemMenu(id);
+        }, 600);
+    }
+    function movePress(e) {
+        var p = e.touches ? e.touches[0] : e;
+        if (Math.abs(p.clientX - startX) > 8 || Math.abs(p.clientY - startY) > 8) {
+            moved = true;
+            clearTimeout(pressTimer);
         }
+    }
+    function endPress() {
+        clearTimeout(pressTimer);
+    }
+    el.addEventListener('touchstart', startPress, { passive: true });
+    el.addEventListener('touchmove', movePress, { passive: true });
+    el.addEventListener('touchend', endPress);
+    el.addEventListener('mousedown', startPress);
+    el.addEventListener('mousemove', movePress);
+    el.addEventListener('mouseup', endPress);
+    el.addEventListener('mouseleave', endPress);
+}
     });
     updateLexiconSelectAllState();
     updateLexiconSelectCount();
@@ -19718,11 +20667,12 @@ window.importData = function() {
     reader.onload = function(e) {
         try {
             const data = JSON.parse(e.target.result);
-            DataHub.setAll(data);
-            renderAll();
-            updateTopBar();
-            closeSubPage();
-            showToast('导入成功！');
+DataHub.setAll(data);
+DataHub.delete('votes');
+renderAll();
+updateTopBar();
+closeSubPage();
+showToast('导入成功！');
         } catch(err) {
             alert('导入失败，请检查文件格式');
         }
@@ -21293,13 +22243,47 @@ function showAddChatroom() {
     showModal(html);
 }
 
+// ====== 群聊昵称人数同步 ======
+// 去掉群名末尾已有的（N人），避免重复叠加
+function stripGroupCountSuffix(name) {
+    if (!name) return '';
+    return name.replace(/（\d+人）\s*$/, '').trim();
+}
+
+// 同步所有群聊的名称人数：群成员数 + 1（自己）
+function syncAllChatroomNameCounts() {
+    var chatrooms = DataHub.get('chatrooms', []);
+    var changed = false;
+    for (var i = 0; i < chatrooms.length; i++) {
+        var room = chatrooms[i];
+        var baseName = stripGroupCountSuffix(room.name);
+        var totalCount = (room.members ? room.members.length : 0) + 1;
+        var newName = baseName + '（' + totalCount + '人）';
+        if (room.name !== newName) {
+            room.name = newName;
+            changed = true;
+        }
+    }
+    if (changed) DataHub.set('chatrooms', chatrooms);
+}
+
+window.stripGroupCountSuffix = stripGroupCountSuffix;
+window.syncAllChatroomNameCounts = syncAllChatroomNameCounts;
+
 window.saveChatroom = function() {
     const name = document.getElementById('newRoomName');
     const checks = document.querySelectorAll('#modalBox input[type="checkbox"]:checked');
     if (name && name.value.trim() && checks.length >= 2) {
         const members = Array.from(checks).map(c => c.value);
         var chatrooms = DataHub.get('chatrooms', []);
-        chatrooms.push({ id: 'c' + genId(), name: name.value.trim(), avatar: '', members: members });
+        var totalCount = members.length + 1;
+        var baseName = stripGroupCountSuffix(name.value.trim());
+        chatrooms.push({
+            id: 'c' + genId(),
+            name: baseName + '（' + totalCount + '人）',
+            avatar: '',
+            members: members
+        });
         DataHub.set('chatrooms', chatrooms);
         closeModal();
         renderAll();
@@ -25235,14 +26219,16 @@ DataHub.set('friends', friends);
     }
     DataHub.set('chatrooms', chatrooms);
 
-    if (!DataHub.get('votes', null)) {
-    DataHub.set('votes', []);
+if (!DataHub.get('voteBank', null)) {
+    DataHub.set('voteBank', { categories: [{ name: '默认', exclusiveFriendId: '' }], questions: [] });
 }
 
 if (!DataHub.get('myCollections', null)) {
     DataHub.set('myCollections', []);
 }
 
+// 初始化时同步群聊名称人数
+syncAllChatroomNameCounts();
 initAccountSystem();
 DataHub.set('pendingTransfers', []);
 var _walletClean = DataHub.get('wallet', { balance: 0, flows: [] });
@@ -25425,6 +26411,10 @@ window.enterLexiconSelectMode = enterLexiconSelectMode;
 window.exitLexiconSelectMode = exitLexiconSelectMode;
 window.toggleLexiconSelectAll = toggleLexiconSelectAll;
 window.deleteLexiconSelected = deleteLexiconSelected;
+window.showLexiconItemMenu = showLexiconItemMenu;
+window.deleteLexiconItemSingle = deleteLexiconItemSingle;
+window.showEditLexiconItem = showEditLexiconItem;
+window.saveEditLexiconItem = saveEditLexiconItem;
 window.searchLexicon = searchLexicon;
 window.showLexiconAddMenu = showLexiconAddMenu;
 window.showAddLexiconSingle = showAddLexiconSingle;
@@ -25470,6 +26460,10 @@ window.enterPrivateLexiconSelectMode = enterPrivateLexiconSelectMode;
 window.exitPrivateLexiconSelectMode = exitPrivateLexiconSelectMode;
 window.togglePrivateLexiconSelectAll = togglePrivateLexiconSelectAll;
 window.deletePrivateLexiconSelected = deletePrivateLexiconSelected;
+window.showPrivateLexiconItemMenu = showPrivateLexiconItemMenu;
+window.deletePrivateLexiconItemSingle = deletePrivateLexiconItemSingle;
+window.showEditPrivateLexiconItem = showEditPrivateLexiconItem;
+window.saveEditPrivateLexiconItem = saveEditPrivateLexiconItem;
 window.searchPrivateLexicon = searchPrivateLexicon;
 window.showPrivateLexiconAddMenu = showPrivateLexiconAddMenu;
 window.showAddPrivateLexiconSingle = showAddPrivateLexiconSingle;
