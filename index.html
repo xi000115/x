@@ -1248,7 +1248,32 @@ color: #000000;
     75% { transform: rotate(270deg) scale(1.15); }
     100% { transform: rotate(360deg) scale(1); }
 }
-    </style>
+
+@keyframes voicePulse {
+    0%, 100% { opacity: 0.3; transform: scale(0.8); }
+    50% { opacity: 1; transform: scale(1.2); }
+}
+
+.voice-wave .voice-bar {
+    display: inline-block;
+    width: 3px;
+    border-radius: 2px;
+    background: currentColor;
+    opacity: 0.55;
+    transition: opacity 0.15s;
+}
+.voice-bubble.playing .voice-wave .voice-bar {
+    animation: voiceBarJump 0.6s ease-in-out infinite;
+}
+.voice-bubble.playing .voice-wave .voice-bar:nth-child(2n) { animation-delay: 0.1s; }
+.voice-bubble.playing .voice-wave .voice-bar:nth-child(3n) { animation-delay: 0.2s; }
+.voice-bubble.playing .voice-wave .voice-bar:nth-child(4n) { animation-delay: 0.05s; }
+.voice-bubble.playing .voice-wave .voice-bar:nth-child(5n) { animation-delay: 0.25s; }
+@keyframes voiceBarJump {
+    0%, 100% { transform: scaleY(1); opacity: 0.55; }
+    50% { transform: scaleY(0.4); opacity: 1; }
+}
+</style>
     </head>
 <body>
 <div id="app">
@@ -1293,11 +1318,25 @@ color: #000000;
         <div id="typingBar" style="display:none;align-items:center;gap:6px;padding:4px 16px;color:#999999;font-size:13px;background:var(--theme-lighter, #fafcfa);border-top:1px solid var(--theme-border, #d4e9d6);"></div>
         <div class="chat-input-area" style="flex-direction:column;padding:6px 12px 4px 12px;gap:4px;">
             <div style="display:flex;gap:8px;width:100%;align-items:center;">
-                <input type="text" id="chatInput" placeholder="输入消息..." style="flex:1;padding:8px 14px;border:1px solid var(--theme-main, #d4e4d6);border-radius:20px;font-size:14px;outline:none;color:#000000;background:#ffffff;min-height:36px;max-height:80px;resize:none;" oninput="autoResizeInput(this)">
-                <button id="sendBtn" onclick="sendChatMessage()" style="padding:8px 14px;background:var(--theme-main, #d4e9d6);color:#000000;border:none;border-radius:50%;cursor:pointer;flex-shrink:0;width:40px;height:40px;display:flex;align-items:center;justify-content:center;">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
-                </button>
-            </div>
+    <button id="voiceToggleBtn" onclick="toggleVoiceInputMode()" style="padding:0;background:transparent;border:none;outline:none;box-shadow:none;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;width:36px;height:36px;-webkit-tap-highlight-color:transparent;">
+    <svg id="voiceIcon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="var(--theme-dark, #5a7a5e)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <path d="M8 12v.01"></path>
+        <path d="M12 9a4 4 0 0 1 0 6"></path>
+        <path d="M15 7a7 7 0 0 1 0 10"></path>
+    </svg>
+</button>
+
+<div id="voiceHoldBtn" onmousedown="startHoldRecord(event)" onmouseup="stopHoldRecord(event)" onmouseleave="stopHoldRecord(event)" ontouchstart="startHoldRecord(event)" ontouchend="stopHoldRecord(event)" style="display:none;flex:1;height:36px;line-height:34px;text-align:center;background:#ffffff;border:1px solid var(--theme-main, #d4e4d6);border-radius:20px;color:#000000;font-size:14px;user-select:none;cursor:pointer;box-sizing:border-box;flex-shrink:1;justify-content:center;align-items:center;">
+    按住 说话
+</div>
+
+    <input type="text" id="chatInput" placeholder="输入消息..." style="flex:1;padding:8px 14px;border:1px solid var(--theme-main, #d4e4d6);border-radius:20px;font-size:14px;outline:none;color:#000000;background:#ffffff;min-height:36px;max-height:80px;resize:none;box-sizing:border-box;" oninput="autoResizeInput(this)">
+    
+    <button id="sendBtn" onclick="sendChatMessage()" style="padding:0;background:var(--theme-main, #d4e9d6);color:#000000;border:none;border-radius:50%;cursor:pointer;flex-shrink:0;width:36px;height:36px;display:flex;align-items:center;justify-content:center;">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+    </button>
+</div>
             <div style="display:flex;justify-content:space-around;padding:2px 4px;align-items:center;width:100%;">
 <div onclick="openImagePicker()" style="background:none;border:none;cursor:pointer;padding:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
     <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="var(--theme-dark, #5a7a5e)" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
@@ -1325,6 +1364,11 @@ color: #000000;
 <div onclick="openMallFromChat()" style="display:flex;align-items:center;justify-content:center;padding:14px 4px;background:var(--theme-lighter, #eef5ef);border-radius:12px;cursor:pointer;font-size:14px;color:#000000;">商场</div>
 <div onclick="openVoteMenu()" style="display:flex;align-items:center;justify-content:center;padding:14px 4px;background:var(--theme-lighter, #eef5ef);border-radius:12px;cursor:pointer;font-size:14px;color:#000000;">投票</div>
     </div>
+</div>
+<div id="voiceRecordBar" style="display:none;align-items:center;justify-content:center;gap:10px;padding:10px 16px;background:var(--theme-lighter, #f0f5f0);border-top:1px solid var(--theme-border, #d4e9d6);flex-shrink:0;">
+    <span style="width:10px;height:10px;border-radius:50%;background:#e05a5a;animation:voicePulse 1s infinite;"></span>
+    <span id="voiceRecordTime" style="font-size:14px;color:#000000;font-weight:500;">0″</span>
+    <span id="voiceRecordHint" style="font-size:12px;color:#666666;">正在录音，再点一次图标结束</span>
 </div>
         <div id="emojiPanel">
     <div class="emoji-type-tabs" id="emojiTypeTabs">
@@ -1750,11 +1794,14 @@ let appData = JSON.parse(JSON.stringify(defaultData));
 function getDB() {
     if (dbOpenPromise) return dbOpenPromise;
     dbOpenPromise = new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, 1);
+        const request = indexedDB.open(DB_NAME, 2);
         request.onupgradeneeded = (e) => {
             const db = e.target.result;
             if (!db.objectStoreNames.contains(STORE_NAME)) {
                 db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+            }
+            if (!db.objectStoreNames.contains('audioStore')) {
+                db.createObjectStore('audioStore', { keyPath: 'id' });
             }
         };
         request.onsuccess = (e) => {
@@ -1799,6 +1846,100 @@ async function loadData() {
         console.error('loadData 错误:', e);
         return null;
     }
+}
+
+// ====== 语音存储专用函数（不进主系统） ======
+function saveAudioBlob(id, blob, meta) {
+    return getDB().then(function(database) {
+        return new Promise(function(resolve, reject) {
+            var tx = database.transaction('audioStore', 'readwrite');
+            var store = tx.objectStore('audioStore');
+            store.put({
+                id: id,
+                blob: blob,
+                text: meta.text || '',
+                duration: meta.duration || 0,
+                wave: meta.wave || [],
+                friendId: meta.friendId || '',
+                createdAt: Date.now()
+            });
+            tx.oncomplete = function() { resolve(); };
+            tx.onerror = function(e) { reject(e.target.error); };
+        });
+    });
+}
+
+function loadAudioBlob(id) {
+    return getDB().then(function(database) {
+        return new Promise(function(resolve) {
+            var tx = database.transaction('audioStore', 'readonly');
+            var store = tx.objectStore('audioStore');
+            var req = store.get(id);
+            req.onsuccess = function() {
+                resolve(req.result || null);
+            };
+            req.onerror = function() { resolve(null); };
+        });
+    });
+}
+
+function deleteAudioBlob(id) {
+    return getDB().then(function(database) {
+        return new Promise(function(resolve) {
+            var tx = database.transaction('audioStore', 'readwrite');
+            var store = tx.objectStore('audioStore');
+            store.delete(id);
+            tx.oncomplete = function() { resolve(); };
+            tx.onerror = function() { resolve(); };
+        });
+    });
+}
+
+function analyzeAudioWave(blob, callback) {
+    var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    var reader = new FileReader();
+    reader.onload = function(e) {
+        audioCtx.decodeAudioData(e.target.result, function(audioBuffer) {
+            var raw = audioBuffer.getChannelData(0);
+            var barCount = Math.min(40, Math.max(8, Math.floor(audioBuffer.duration * 3)));
+            var step = Math.floor(raw.length / barCount);
+            var waves = [];
+            for (var i = 0; i < barCount; i++) {
+                var sum = 0;
+                for (var j = 0; j < step; j++) {
+                    var v = raw[i * step + j] || 0;
+                    sum += v * v;
+                }
+                var rms = Math.sqrt(sum / step);
+                waves.push(Math.round(20 + Math.min(1, rms * 4) * 80));
+            }
+            audioCtx.close();
+            callback(waves);
+        }, function() {
+            audioCtx.close();
+            callback(generateFakeWave(barCount));
+        });
+    };
+    reader.readAsArrayBuffer(blob);
+}
+
+function generateFakeWave(count) {
+    var arr = [];
+    for (var i = 0; i < count; i++) {
+        arr.push(Math.round(20 + Math.random() * 80));
+    }
+    return arr;
+}
+
+function generateWaveBySeed(seed, duration) {
+    var count = Math.min(40, Math.max(8, Math.floor(duration * 3)));
+    var arr = [];
+    for (var i = 0; i < count; i++) {
+        var x = Math.sin(seed + i * 999) * 10000;
+        var r = x - Math.floor(x);
+        arr.push(Math.round(20 + r * 80));
+    }
+    return arr;
 }
 
 async function saveData(data) {
@@ -3609,6 +3750,57 @@ function renderChatMessages() {
             continue;
         }
 
+        if (m.isVoice) {
+    var d = m.duration || 3;
+    var waveArr = m.wave;
+    if (!waveArr || waveArr.length === 0) {
+        waveArr = m.waveSeed ? generateWaveBySeed(m.waveSeed, d) : generateFakeWave(Math.floor(d * 3));
+    }
+    var barsHtml = '';
+    for (var wi = 0; wi < waveArr.length; wi++) {
+        barsHtml += '<span class="voice-bar" data-i="' + wi + '" style="height:' + waveArr[wi] + '%;"></span>';
+    }
+    var bubbleWidth = Math.min(280, Math.max(80, d * 14 + 50));
+    var durationText = d + '″';
+    var voiceBody = '<div class="voice-bubble" data-audioid="' + (m.audioId || '') + '" data-seed="' + (m.waveSeed || '') + '" data-duration="' + d + '" onclick="playVoiceMessage(this)" style="display:flex;align-items:center;gap:8px;width:' + bubbleWidth + 'px;max-width:100%;cursor:pointer;">' +
+        '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg>' +
+        '<div class="voice-wave" style="display:flex;align-items:center;gap:2px;flex:1;height:20px;">' + barsHtml + '</div>' +
+        '<span style="font-size:12px;flex-shrink:0;opacity:0.8;">' + durationText + '</span>' +
+    '</div>' +
+    '<div class="voice-text-line" style="display:none;font-size:12px;color:#666666;margin-top:4px;word-break:break-word;">' + (m.voiceText || '……') + '</div>';
+
+            var timeV = '<div style="font-size:10px;color:#999999;margin-top:4px;">' + (m.time || '') + '</div>';
+
+            if (isMe) {
+                html += '<div data-msgid="' + (m.id || '') + '" class="chat-msg-row" data-from="me" style="display:flex;justify-content:flex-end;margin-bottom:14px;">' +
+                    '<div style="display:flex;flex-direction:column;align-items:flex-end;max-width:100%;min-width:0;">' +
+                        '<div style="font-size:12px;color:#999999;margin-bottom:3px;padding-right:38px;">' + senderName + '</div>' +
+                        '<div style="display:flex;align-items:flex-start;">' +
+                            '<div style="display:flex;flex-direction:column;align-items:flex-end;min-width:0;">' +
+                                '<div class="chat-msg me" style="padding:8px 14px;border-radius:16px;border-bottom-right-radius:4px;color:#000000;background:var(--theme-main, #d4e9d6);">' + voiceBody + '</div>' +
+                                timeV +
+                            '</div>' +
+                            '<div class="msg-avatar-small" style="width:28px;height:28px;border-radius:50%;background:var(--theme-main, #d4e9d6);color:#000000;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0;overflow:hidden;margin-left:8px;">' + avatarContent + '</div>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>';
+            } else {
+                html += '<div data-msgid="' + (m.id || '') + '" class="chat-msg-row" data-from="other" style="display:flex;justify-content:flex-start;margin-bottom:14px;">' +
+                    '<div style="display:flex;flex-direction:column;align-items:flex-start;max-width:100%;min-width:0;">' +
+                        '<div style="font-size:12px;color:#999999;margin-bottom:3px;padding-left:38px;">' + senderName + '</div>' +
+                        '<div style="display:flex;align-items:flex-start;">' +
+                            '<div class="msg-avatar-small" style="width:28px;height:28px;border-radius:50%;background:var(--theme-main, #d4e9d6);color:#000000;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0;overflow:hidden;margin-right:8px;">' + avatarContent + '</div>' +
+                            '<div style="display:flex;flex-direction:column;align-items:flex-start;min-width:0;">' +
+                                '<div class="chat-msg other" style="padding:8px 14px;border-radius:16px;border-bottom-left-radius:4px;color:#000000;background:var(--theme-light, #eef5ef);">' + voiceBody + '</div>' +
+                                timeV +
+                            '</div>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>';
+            }
+            continue;
+        }
+
         var quoteHtml = '';
 if (m.quote) {
     var q = m.quote;
@@ -5416,6 +5608,25 @@ function pickAlbumImageToSend(chatId) {
 }
 
 function generateReplyContent(chatId) {
+    var allFriendsVoice = DataHub.get('friends', []);
+    var friendVoice = allFriendsVoice.find(function(f) { return f.id === chatId; });
+    var globalSettingsForVoice = DataHub.get('settings', {});
+    var voiceProb = (globalSettingsForVoice.friendVoiceProbability !== undefined) ? globalSettingsForVoice.friendVoiceProbability : 10;
+    
+    if (friendVoice && friendVoice.voiceLibrary && friendVoice.voiceLibrary.length > 0) {
+        if (Math.random() * 100 < voiceProb) {
+            var pickedVoice = friendVoice.voiceLibrary[Math.floor(Math.random() * friendVoice.voiceLibrary.length)];
+            return [{
+                isVoice: true,
+                audioId: pickedVoice.audioId,
+                voiceText: pickedVoice.text || '……',
+                duration: pickedVoice.duration || 3,
+                text: '',
+                isPat: false
+            }];
+        }
+    }
+
     var lexiconEmpty = isLexiconEmpty(chatId);
     var dictEmpty = isDictionaryEmpty();
 
@@ -5667,13 +5878,20 @@ if (_amount >= _minTotal) {
                             id: newMsgId,
                             chatId: chatId,
                             from: member.id,
-                            text: result.text,
+                            text: result.text || '',
                             time: time,
                             timestamp: Date.now(),
                             unread: (currentChatId === chatId) ? 0 : 1,
                             isPat: result.isPat,
                             quote: result.quote || null
                         };
+                        if (result.isVoice) {
+                            newMsg.isVoice = true;
+                            newMsg.audioId = result.audioId || '';
+                            newMsg.voiceText = result.voiceText || '';
+                            newMsg.duration = result.duration || 3;
+                            newMsg.wave = result.wave || [];
+                        }
                         if (result.isImage && result.imageData) {
                             newMsg.isImage = true;
                             newMsg.imageData = result.imageData;
@@ -5733,13 +5951,20 @@ function sendGroupChainAgain(memberId, chatId) {
             id: newMsgId,
             chatId: chatId,
             from: member.id,
-            text: result.text,
+            text: result.text || '',
             time: time,
             timestamp: Date.now(),
             unread: (currentChatId === chatId) ? 0 : 1,
             isPat: result.isPat,
             quote: result.quote || null
         };
+        if (result.isVoice) {
+            newMsg.isVoice = true;
+            newMsg.audioId = result.audioId || '';
+            newMsg.voiceText = result.voiceText || '';
+            newMsg.duration = result.duration || 3;
+            newMsg.wave = result.wave || [];
+        }
         if (result.isImage && result.imageData) {
             newMsg.isImage = true;
             newMsg.imageData = result.imageData;
@@ -5853,13 +6078,20 @@ function sendNextResult() {
         id: newMsgId,
         chatId: chatId,
         from: friend.id,
-        text: result.text,
+        text: result.text || '',
         time: time,
         timestamp: Date.now(),
         unread: (currentChatId === chatId) ? 0 : 1,
         isPat: result.isPat,
         quote: result.quote || null
     };
+    if (result.isVoice) {
+        newMsg.isVoice = true;
+        newMsg.audioId = result.audioId || '';
+        newMsg.voiceText = result.voiceText || '';
+        newMsg.duration = result.duration || 3;
+        newMsg.wave = result.wave || [];
+    }
     if (result.isImage && result.imageData) {
         newMsg.isImage = true;
         newMsg.imageData = result.imageData;
@@ -5949,6 +6181,358 @@ renderMessages();
 if (lastNewMsgId) maybeFriendRecall(chatId, lastNewMsgId);
     }, delay);
 }
+
+// ====== 语音录音与识别（按住说话模式） ======
+var voiceRecordState = {
+    recording: false,
+    isHoldMode: false,
+    mediaRecorder: null,
+    chunks: [],
+    recognition: null,
+    finalText: '',
+    interimText: '',
+    startAt: 0,
+    timer: null,
+    stream: null,
+    startY: 0
+};
+
+function toggleVoiceInputMode() {
+    if (!currentChatId) {
+        showToast('请先进入聊天');
+        return;
+    }
+    voiceRecordState.isHoldMode = !voiceRecordState.isHoldMode;
+    var input = document.getElementById('chatInput');
+    var holdBtn = document.getElementById('voiceHoldBtn');
+    var toggleBtn = document.getElementById('voiceIcon');
+    
+    if (voiceRecordState.isHoldMode) {
+        input.style.display = 'none';
+        holdBtn.style.display = 'flex';
+        if(toggleBtn) toggleBtn.setAttribute('stroke', '#e05a5a');
+    } else {
+        input.style.display = 'block';
+        holdBtn.style.display = 'none';
+        if(toggleBtn) toggleBtn.setAttribute('stroke', 'var(--theme-dark, #5a7a5e)');
+    }
+}
+
+function startHoldRecord(e) {
+    if (!voiceRecordState.isHoldMode || voiceRecordState.recording) return;
+    if (e.cancelable) e.preventDefault();
+    
+    var p = e.touches ? e.touches[0] : e;
+    voiceRecordState.startY = p.clientY;
+    
+    var holdBtn = document.getElementById('voiceHoldBtn');
+    if(holdBtn) {
+        holdBtn.textContent = '松开 发送';
+        holdBtn.style.background = 'var(--theme-lighter, #f0f5f0)';
+    }
+    
+    startVoiceRecord();
+}
+
+function stopHoldRecord(e) {
+    if (!voiceRecordState.isHoldMode || !voiceRecordState.recording) return;
+    
+    var holdBtn = document.getElementById('voiceHoldBtn');
+    if(holdBtn) {
+        holdBtn.textContent = '按住 说话';
+        holdBtn.style.background = '#ffffff';
+    }
+    
+    var p = e.changedTouches ? e.changedTouches[0] : e;
+    var endY = p ? p.clientY : voiceRecordState.startY;
+    
+    if (voiceRecordState.startY - endY > 50) {
+        cancelVoiceRecord();
+    } else {
+        stopVoiceRecord();
+    }
+}
+
+function startVoiceRecord() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        showToast('浏览器不支持录音，请使用Edge或Chrome');
+        return;
+    }
+    // 兼容大部分手机浏览器的音频参数
+    var constraints = { 
+        audio: { 
+            echoCancellation: true, 
+            noiseSuppression: true 
+        } 
+    };
+    
+    navigator.mediaDevices.getUserMedia(constraints).then(function(stream) {
+        voiceRecordState.stream = stream;
+        voiceRecordState.chunks = [];
+        voiceRecordState.finalText = '';
+        voiceRecordState.interimText = '';
+        voiceRecordState.startAt = Date.now();
+
+        var recorder = new MediaRecorder(stream);
+        voiceRecordState.mediaRecorder = recorder;
+        recorder.ondataavailable = function(e) {
+            if (e.data && e.data.size > 0) voiceRecordState.chunks.push(e.data);
+        };
+        recorder.start();
+
+        var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (SR) {
+            var rec = new SR();
+            rec.lang = 'zh-CN';
+            rec.interimResults = true;
+            rec.continuous = true;
+            rec.onresult = function(event) {
+                var interim = '';
+                for (var i = event.resultIndex; i < event.results.length; i++) {
+                    var tr = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) {
+                        voiceRecordState.finalText += tr;
+                    } else {
+                        interim += tr;
+                    }
+                }
+                voiceRecordState.interimText = interim;
+            };
+            rec.onerror = function() {};
+            try { rec.start(); } catch (e) {}
+            voiceRecordState.recognition = rec;
+        }
+
+        voiceRecordState.recording = true;
+        
+        var bar = document.getElementById('voiceRecordBar');
+        if (bar) {
+            bar.style.display = 'flex';
+            bar.style.position = 'fixed';
+            bar.style.bottom = '80px';
+            bar.style.left = '50%';
+            bar.style.transform = 'translateX(-50%)';
+            bar.style.borderRadius = '20px';
+            bar.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
+            bar.style.zIndex = '999';
+        }
+        
+        voiceRecordState.timer = setInterval(function() {
+            var sec = Math.floor((Date.now() - voiceRecordState.startAt) / 1000);
+            var el = document.getElementById('voiceRecordTime');
+            if (el) el.textContent = sec + '″';
+            if (sec >= 60) {
+                stopHoldRecord({cancelable:false});
+            }
+        }, 200);
+    }).catch(function(err) {
+        console.error('录音失败:', err);
+        var errMsg = '无法访问麦克风';
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+            errMsg = '权限被拒绝，请在系统设置里允许该浏览器使用麦克风';
+        } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+            errMsg = '没有找到麦克风设备';
+        } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+            errMsg = '麦克风被其他应用占用';
+        }
+        showToast(errMsg + '(' + err.name + ')');
+    });
+}
+
+function stopVoiceRecord() {
+    if (!voiceRecordState.recording) return;
+    voiceRecordState.recording = false;
+
+    if (voiceRecordState.timer) {
+        clearInterval(voiceRecordState.timer);
+        voiceRecordState.timer = null;
+    }
+    
+    var bar = document.getElementById('voiceRecordBar');
+    if (bar) bar.style.display = 'none';
+
+    var duration = Math.max(1, Math.round((Date.now() - voiceRecordState.startAt) / 1000));
+
+    if (voiceRecordState.recognition) {
+        try { voiceRecordState.recognition.stop(); } catch (e) {}
+        voiceRecordState.recognition = null;
+    }
+
+    var recorder = voiceRecordState.mediaRecorder;
+    if (!recorder) {
+        cleanupVoiceStream();
+        return;
+    }
+
+    recorder.onstop = function() {
+        var blob = new Blob(voiceRecordState.chunks, { type: recorder.mimeType || 'audio/webm' });
+        var finalText = (voiceRecordState.finalText + voiceRecordState.interimText).trim();
+
+        analyzeAudioWave(blob, function(wave) {
+            sendVoiceMessage(blob, finalText, duration, wave);
+            cleanupVoiceStream();
+        });
+    };
+    try { recorder.stop(); } catch (e) { cleanupVoiceStream(); }
+}
+
+function cancelVoiceRecord() {
+    if (!voiceRecordState.recording) return;
+    voiceRecordState.recording = false;
+    
+    if (voiceRecordState.timer) {
+        clearInterval(voiceRecordState.timer);
+        voiceRecordState.timer = null;
+    }
+    
+    var bar = document.getElementById('voiceRecordBar');
+    if (bar) bar.style.display = 'none';
+
+    if (voiceRecordState.recognition) {
+        try { voiceRecordState.recognition.stop(); } catch (e) {}
+        voiceRecordState.recognition = null;
+    }
+
+    var recorder = voiceRecordState.mediaRecorder;
+    if (recorder) {
+        try { recorder.stop(); } catch (e) {}
+    }
+    showToast('已取消发送');
+    cleanupVoiceStream();
+}
+
+function cleanupVoiceStream() {
+    if (voiceRecordState.stream) {
+        voiceRecordState.stream.getTracks().forEach(function(t) { t.stop(); });
+        voiceRecordState.stream = null;
+    }
+    voiceRecordState.mediaRecorder = null;
+    voiceRecordState.chunks = [];
+}
+
+function sendVoiceMessage(blob, text, duration, wave) {
+    if (!currentChatId) return;
+    var audioId = 'audio_me_' + Date.now() + Math.random().toString(36).substr(2, 4);
+    
+    // 如果识别出空字符串，给个兜底
+    var finalText = text ? text.trim() : '……';
+
+    saveAudioBlob(audioId, blob, {
+        text: finalText,
+        duration: duration,
+        wave: wave,
+        friendId: ''
+    }).then(function() {
+        var now = new Date();
+        var time = now.getFullYear() + '.' + String(now.getMonth()+1).padStart(2,'0') + '.' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
+        var msgs = DataHub.get('messages', []);
+        msgs.push({
+            id: 'm' + genId(),
+            chatId: currentChatId,
+            from: 'me',
+            text: '',
+            time: time,
+            timestamp: Date.now(),
+            unread: 0,
+            isVoice: true,
+            audioId: audioId,
+            voiceText: finalText,
+            duration: duration,
+            wave: wave
+        });
+        DataHub.set('messages', msgs);
+        chatViewState.isNearBottom = true;
+        clearChatUnreadBubble();
+        renderChatMessages();
+        renderMessages();
+        showToast('语音已发送');
+
+        resetReplyProbability(currentChatId);
+        var allFriends = DataHub.get('friends', []);
+        var friend = allFriends.find(function(f) { return f.id === currentChatId; });
+        if (friend) {
+            if (!friend.replyState) friend.replyState = {};
+            friend.replyState.chainProbability = 100;
+            DataHub.set('friends', allFriends);
+            handleFriendReply(currentChatId, msgs[msgs.length - 1]);
+        } else {
+            var allRooms = DataHub.get('chatrooms', []);
+            var room = allRooms.find(function(r) { return r.id === currentChatId; });
+            if (room) handleChatroomReply(currentChatId, msgs[msgs.length - 1]);
+        }
+    }).catch(function(err) {
+        console.error('语音保存失败:', err);
+        showToast('语音保存失败');
+    });
+}
+
+window.toggleVoiceInputMode = toggleVoiceInputMode;
+window.startHoldRecord = startHoldRecord;
+window.stopHoldRecord = stopHoldRecord;
+
+// ====== 语音播放 ======
+var currentVoiceAudio = null;
+var currentVoiceBubble = null;
+
+function playVoiceMessage(el) {
+    var audioId = el.getAttribute('data-audioid');
+    var seed = el.getAttribute('data-seed');
+    var duration = parseFloat(el.getAttribute('data-duration')) || 3;
+
+    if (currentVoiceAudio) {
+        try { currentVoiceAudio.pause(); } catch (e) {}
+        currentVoiceAudio = null;
+    }
+    if (currentVoiceBubble) {
+        currentVoiceBubble.classList.remove('playing');
+        currentVoiceBubble = null;
+    }
+
+    if (!audioId) {
+        simulateVoicePlay(el, duration);
+        return;
+    }
+
+    loadAudioBlob(audioId).then(function(record) {
+        if (!record || !record.blob) {
+            simulateVoicePlay(el, duration);
+            return;
+        }
+        var url = URL.createObjectURL(record.blob);
+        var audio = new Audio(url);
+        currentVoiceAudio = audio;
+        currentVoiceBubble = el;
+        el.classList.add('playing');
+        audio.onended = function() {
+            el.classList.remove('playing');
+            URL.revokeObjectURL(url);
+            currentVoiceAudio = null;
+            currentVoiceBubble = null;
+        };
+        audio.onerror = function() {
+            el.classList.remove('playing');
+            URL.revokeObjectURL(url);
+            simulateVoicePlay(el, duration);
+        };
+        audio.play().catch(function() {
+            el.classList.remove('playing');
+            URL.revokeObjectURL(url);
+            simulateVoicePlay(el, duration);
+        });
+    });
+}
+
+function simulateVoicePlay(el, duration) {
+    el.classList.add('playing');
+    currentVoiceBubble = el;
+    setTimeout(function() {
+        el.classList.remove('playing');
+        if (currentVoiceBubble === el) currentVoiceBubble = null;
+    }, duration * 1000);
+}
+
+window.playVoiceMessage = playVoiceMessage;
+
 // ====== 图片发送功能 ======
 function openImagePicker() {
     if (!currentChatId) {
@@ -7484,15 +8068,20 @@ function showMessageBubbleMenu(row, msgId, fromMe, x, y) {
     if (msg.isRecall) return;
 
     var items = [];
-    var isSpecial = !fromMe && isSpecialQuoteMessage(msg);
-    items.push({ label: '引用', action: 'quote' });
-    if (isSpecial) {
-        items.push({ label: '添加', action: 'add' });
-    }
-    var withinTime = fromMe && msg.timestamp && (Date.now() - msg.timestamp <= 120000);
-    if (withinTime) {
-        items.push({ label: '撤回', action: 'recall' });
-    }
+var isSpecial = !fromMe && isSpecialQuoteMessage(msg);
+
+if (msg.isVoice) {
+    items.push({ label: '转文字', action: 'toText' });
+}
+
+items.push({ label: '引用', action: 'quote' });
+if (isSpecial) {
+    items.push({ label: '添加', action: 'add' });
+}
+var withinTime = fromMe && msg.timestamp && (Date.now() - msg.timestamp <= 120000);
+if (withinTime) {
+    items.push({ label: '撤回', action: 'recall' });
+}
 
     var menu = document.createElement('div');
     menu.id = 'msgBubbleMenu';
@@ -7509,12 +8098,14 @@ function showMessageBubbleMenu(row, msgId, fromMe, x, y) {
                 e.stopPropagation();
                 hideMessageBubbleMenu();
                 if (it.action === 'quote') {
-                    startQuoteMessage(msgId);
-                } else if (it.action === 'recall') {
-                    recallMyMessage(msgId);
-                } else if (it.action === 'add') {
-                    showSpecialQuoteAddMenu(msg);
-                }
+    startQuoteMessage(msgId);
+} else if (it.action === 'recall') {
+    recallMyMessage(msgId);
+} else if (it.action === 'add') {
+    showSpecialQuoteAddMenu(msg);
+} else if (it.action === 'toText') {
+    toggleVoiceText(row);
+}
             });
             menu.appendChild(btn);
         })(items[i]);
@@ -7698,6 +8289,19 @@ function saveSpecialQuoteCard(target, encodedContent) {
         showToast('已添加到公共词条库');
     }
 }
+
+function toggleVoiceText(row) {
+    if (!row) return;
+    var textLine = row.querySelector('.voice-text-line');
+    if (!textLine) return;
+    if (textLine.style.display === 'none') {
+        textLine.style.display = 'block';
+    } else {
+        textLine.style.display = 'none';
+    }
+}
+
+window.toggleVoiceText = toggleVoiceText;
 
 function hideMessageBubbleMenu() {
     if (chatLongPressState.menuEl) {
@@ -8192,6 +8796,10 @@ const coupleColor = isCouple ? 'var(--theme-dark, #4a7a4e)' : '#999999';
 </div>
                     <div class="action-item" onclick="openFriendPrivateLexicon('${p.id}')" style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--theme-lighter, #eef5ef);cursor:pointer;color:#000000;">
     <span class="action-label" style="font-size:14px;color:#000000;padding-left:12px;">私人词条库</span>
+    <span class="action-arrow" style="color:#999999;">→</span>
+</div>
+<div class="action-item" onclick="openFriendVoiceLibrary('${p.id}')" style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--theme-lighter, #eef5ef);cursor:pointer;color:#000000;">
+    <span class="action-label" style="font-size:14px;color:#000000;padding-left:12px;">语音素材库</span>
     <span class="action-arrow" style="color:#999999;">→</span>
 </div>
 <div class="action-item" onclick="openFriendChatSettings('${p.id}')" style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--theme-lighter, #eef5ef);cursor:pointer;color:#000000;">
@@ -12331,6 +12939,214 @@ ensureFriendDailyRandomFlow(chatId);
         subPage.style.pointerEvents = 'auto';
     }
 }
+
+// ====== 好友语音素材库 ======
+var voiceLibraryState = {
+    chatId: null
+};
+
+function openFriendVoiceLibrary(chatId) {
+    var allFriends = DataHub.get('friends', []);
+    var friend = allFriends.find(function(f) { return f.id === chatId; });
+    if (!friend) return;
+
+    var friendProfile = document.getElementById('friendProfilePage');
+    if (friendProfile) {
+        friendProfile.classList.remove('active');
+        friendProfile.style.pointerEvents = 'none';
+    }
+
+    voiceLibraryState.chatId = chatId;
+
+    var html = '<div class="sub-page active friend-inner-sub" id="voiceLibrarySubPage" style="z-index:50;background:#ffffff;pointer-events:auto;display:flex;flex-direction:column;">' +
+        '<div class="sub-top">' +
+            '<div class="back-btn" onclick="closeInnerSubPage()">' +
+                '<svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>' +
+            '</div>' +
+            '<span>' + friend.name + '的语音素材库</span>' +
+            '<span onclick="importFriendVoiceFiles()" style="margin-left:auto;cursor:pointer;font-size:13px;color:#000000;padding:4px 8px;">导入语音</span>' +
+        '</div>' +
+        '<div class="sub-content" id="voiceLibraryList" style="padding:16px;overflow-y:auto;pointer-events:auto;flex:1;">' +
+            renderVoiceLibraryList(chatId) +
+        '</div>' +
+    '</div>';
+
+    var container = document.getElementById('subPageContainer');
+    var oldSubPages = container.querySelectorAll('.sub-page:not(#friendProfilePage)');
+    oldSubPages.forEach(function(page) { page.remove(); });
+    container.insertAdjacentHTML('beforeend', html);
+    var subPage = container.querySelector('#voiceLibrarySubPage');
+    if (subPage) {
+        subPage.classList.add('active');
+        subPage.style.pointerEvents = 'auto';
+    }
+}
+
+function renderVoiceLibraryList(chatId) {
+    var allFriends = DataHub.get('friends', []);
+    var friend = allFriends.find(function(f) { return f.id === chatId; });
+    if (!friend) return '';
+    var lib = friend.voiceLibrary || [];
+    
+    var html = '<div style="font-size:13px;color:#999999;margin-bottom:12px;">共 ' + lib.length + ' 条语音素材</div>';
+    
+    if (lib.length === 0) {
+        html += '<div style="text-align:center;color:#999999;padding:30px 0;">暂无语音，点击右上角导入</div>';
+        return html;
+    }
+
+    for (var i = 0; i < lib.length; i++) {
+        var item = lib[i];
+        var textDisplay = item.text ? item.text : '……';
+        var textColor = item.text ? '#000000' : '#999999';
+        
+        html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #eef5ef;">' +
+            '<div onclick="playLibraryVoice(\'' + item.audioId + '\', this)" style="width:32px;height:32px;border-radius:50%;background:var(--theme-lighter, #f0f5f0);display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;">' +
+                '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="var(--theme-dark, #5a7a5e)" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>' +
+            '</div>' +
+            '<div style="font-size:13px;color:#666666;width:30px;flex-shrink:0;">' + (item.duration || 0) + '″</div>' +
+            '<div style="flex:1;min-width:0;">' +
+                '<input type="text" value="' + (item.text || '').replace(/"/g, '&quot;') + '" placeholder="……" onchange="updateVoiceLibraryText(\'' + item.audioId + '\', this.value)" style="width:100%;padding:6px 10px;border:1px solid transparent;border-radius:6px;font-size:14px;color:' + textColor + ';background:transparent;outline:none;box-sizing:border-box;" onfocus="this.style.borderColor=\'#d4e4d6\';this.style.background=\'#ffffff\';" onblur="this.style.borderColor=\'transparent\';this.style.background=\'transparent\';">' +
+            '</div>' +
+            '<div onclick="deleteVoiceLibraryItem(\'' + item.audioId + '\')" style="cursor:pointer;color:#d4b0b0;font-size:16px;padding:0 4px;flex-shrink:0;">×</div>' +
+        '</div>';
+    }
+    return html;
+}
+
+function importFriendVoiceFiles() {
+    var chatId = voiceLibraryState.chatId;
+    if (!chatId) return;
+
+    var input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'audio/*';
+    input.multiple = true;
+    input.onchange = function(e) {
+        var files = e.target.files;
+        if (!files || files.length === 0) return;
+        
+        showToast('正在处理音频...');
+        var remaining = files.length;
+        var addedCount = 0;
+
+        for (var i = 0; i < files.length; i++) {
+            (function(file) {
+                var duration = 0;
+                var url = URL.createObjectURL(file);
+                var audio = new Audio(url);
+                
+                audio.onloadedmetadata = function() {
+                    duration = Math.round(audio.duration) || 1;
+                    var audioId = 'audio_lib_' + Date.now() + Math.random().toString(36).substr(2, 4);
+                    
+                    analyzeAudioWave(file, function(wave) {
+                        saveAudioBlob(audioId, file, {
+                            text: '',
+                            duration: duration,
+                            wave: wave,
+                            friendId: chatId
+                        }).then(function() {
+                            var allFriends = DataHub.get('friends', []);
+                            var friend = allFriends.find(function(f) { return f.id === chatId; });
+                            if (friend) {
+                                if (!friend.voiceLibrary) friend.voiceLibrary = [];
+                                friend.voiceLibrary.push({
+                                    audioId: audioId,
+                                    text: '',
+                                    duration: duration
+                                });
+                                DataHub.set('friends', allFriends);
+                            }
+                            URL.revokeObjectURL(url);
+                            remaining--;
+                            addedCount++;
+                            
+                            if (remaining === 0) {
+                                var listContainer = document.getElementById('voiceLibraryList');
+                                if (listContainer) listContainer.innerHTML = renderVoiceLibraryList(chatId);
+                                showToast('成功导入 ' + addedCount + ' 条语音');
+                            }
+                        });
+                    });
+                };
+                audio.onerror = function() {
+                    URL.revokeObjectURL(url);
+                    remaining--;
+                    if (remaining === 0) {
+                        var listContainer = document.getElementById('voiceLibraryList');
+                        if (listContainer) listContainer.innerHTML = renderVoiceLibraryList(chatId);
+                        showToast('导入完成，但部分文件解析失败');
+                    }
+                };
+            })(files[i]);
+        }
+    };
+    input.click();
+}
+
+function updateVoiceLibraryText(audioId, newText) {
+    var chatId = voiceLibraryState.chatId;
+    if (!chatId) return;
+    
+    var allFriends = DataHub.get('friends', []);
+    var friend = allFriends.find(function(f) { return f.id === chatId; });
+    if (!friend || !friend.voiceLibrary) return;
+    
+    var item = friend.voiceLibrary.find(function(v) { return v.audioId === audioId; });
+    if (item) {
+        item.text = newText.trim();
+        DataHub.set('friends', allFriends);
+        showToast('文字已保存');
+        
+        var listContainer = document.getElementById('voiceLibraryList');
+        if (listContainer) listContainer.innerHTML = renderVoiceLibraryList(chatId);
+    }
+}
+
+function deleteVoiceLibraryItem(audioId) {
+    if (!confirm('确定删除这条语音素材吗？')) return;
+    
+    var chatId = voiceLibraryState.chatId;
+    if (!chatId) return;
+    
+    var allFriends = DataHub.get('friends', []);
+    var friend = allFriends.find(function(f) { return f.id === chatId; });
+    if (!friend || !friend.voiceLibrary) return;
+    
+    friend.voiceLibrary = friend.voiceLibrary.filter(function(v) { return v.audioId !== audioId; });
+    DataHub.set('friends', allFriends);
+    
+    deleteAudioBlob(audioId);
+    
+    var listContainer = document.getElementById('voiceLibraryList');
+    if (listContainer) listContainer.innerHTML = renderVoiceLibraryList(chatId);
+    showToast('已删除');
+}
+
+function playLibraryVoice(audioId, el) {
+    if (!audioId) return;
+    loadAudioBlob(audioId).then(function(record) {
+        if (!record || !record.blob) {
+            showToast('音频文件丢失');
+            return;
+        }
+        var url = URL.createObjectURL(record.blob);
+        var audio = new Audio(url);
+        audio.play().catch(function() {});
+        audio.onended = function() {
+            URL.revokeObjectURL(url);
+        };
+    });
+}
+
+window.openFriendVoiceLibrary = openFriendVoiceLibrary;
+window.renderVoiceLibraryList = renderVoiceLibraryList;
+window.importFriendVoiceFiles = importFriendVoiceFiles;
+window.updateVoiceLibraryText = updateVoiceLibraryText;
+window.deleteVoiceLibraryItem = deleteVoiceLibraryItem;
+window.playLibraryVoice = playLibraryVoice;
+
 // ====== 私人词条库状态管理 ======
 let privateLexiconState = {
     currentType: 'word',
@@ -20465,8 +21281,10 @@ function renderSettingsDetailPage() {
                     <input type="range" class="range-slider" min="0" max="100" value="${s.dictionaryProbability !== undefined ? s.dictionaryProbability : 50}" oninput="document.getElementById('dictProbLabel').textContent=this.value;updateSetting('dictionaryProbability',parseInt(this.value))">
                     <div style="font-size:12px;color:#999999;margin-bottom:8px;">关闭后好友不使用词典拼字，只用词条库</div>
                 </div>
-                <div class="section-title">私人相册</div>
+                <div class="section-title">语音与相册</div>
 <div class="setting-block no-click">
+    <div style="margin-bottom:8px;">好友主动发语音概率: <span id="friendVoiceProbLabel">${s.friendVoiceProbability !== undefined ? s.friendVoiceProbability : 10}</span>%</div>
+    <input type="range" class="range-slider" min="0" max="100" value="${s.friendVoiceProbability !== undefined ? s.friendVoiceProbability : 10}" oninput="document.getElementById('friendVoiceProbLabel').textContent=this.value;updateSetting('friendVoiceProbability',parseInt(this.value))">
     <div style="margin-bottom:8px;">好友收藏图片概率: <span id="albumCollectProbLabel">${s.albumCollectProbability !== undefined ? s.albumCollectProbability : 1}</span>%</div>
     <input type="range" class="range-slider" min="0" max="100" value="${s.albumCollectProbability !== undefined ? s.albumCollectProbability : 1}" oninput="document.getElementById('albumCollectProbLabel').textContent=this.value;updateSetting('albumCollectProbability',parseInt(this.value))">
     <div style="margin-bottom:8px;">好友主动发相册图片概率: <span id="albumSendProbLabel">${s.albumSendProbability !== undefined ? s.albumSendProbability : 1}</span>%</div>
@@ -20954,28 +21772,67 @@ function renderExportImportPage() {
     `;
 }
 
+function blobToBase64(blob) {
+    return new Promise(function(resolve, reject) {
+        var reader = new FileReader();
+        reader.onloadend = function() { resolve(reader.result); };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+}
+
+function base64ToBlob(dataUrl) {
+    var parts = dataUrl.split(',');
+    var mime = parts[0].match(/:(.*?);/)[1];
+    var binary = atob(parts[1]);
+    var arr = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i++) arr[i] = binary.charCodeAt(i);
+    return new Blob([arr], { type: mime });
+}
+
 window.exportData = function() {
-    const json = JSON.stringify(DataHub.getAll(), null, 2);
-    const blob = new Blob([json], {type: 'application/json'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = '时间数据_备份.json';
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast('导出成功');
+    getDB().then(function(database) {
+        var tx = database.transaction('audioStore', 'readonly');
+        var store = tx.objectStore('audioStore');
+        var req = store.getAll();
+        req.onsuccess = function() {
+            var blobsArray = req.result || [];
+            var promises = blobsArray.map(function(item) {
+                return blobToBase64(item.blob).then(function(base64) {
+                    return {
+                        id: item.id,
+                        base64: base64,
+                        text: item.text,
+                        duration: item.duration,
+                        wave: item.wave,
+                        friendId: item.friendId,
+                        createdAt: item.createdAt
+                    };
+                });
+            });
+            
+            Promise.all(promises).then(function(processedBlobs) {
+                var exportObj = {
+                    version: 3,
+                    appData: DataHub.getAll(),
+                    blobs: processedBlobs
+                };
+                const json = JSON.stringify(exportObj, null, 2);
+                const blob = new Blob([json], {type: 'application/json'});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = '时间数据_备份.json';
+                a.click();
+                URL.revokeObjectURL(url);
+                showToast('导出成功');
+            });
+        };
+    });
 };
 
 window.exportReadable = function() {
-    const text = '=== 时间数据导出 ===\n' + JSON.stringify(DataHub.getAll(), null, 2);
-    const blob = new Blob([text], {type: 'text/plain'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = '时间数据_可读.txt';
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast('导出成功');
+    exportData();
 };
 
 window.importData = function() {
@@ -20988,12 +21845,35 @@ window.importData = function() {
     reader.onload = function(e) {
         try {
             const data = JSON.parse(e.target.result);
-DataHub.setAll(data);
-DataHub.delete('votes');
-renderAll();
-updateTopBar();
-closeSubPage();
-showToast('导入成功！');
+            if (data && data.version === 3 && data.appData) {
+                DataHub.setAll(data.appData);
+                DataHub.delete('votes');
+                
+                var blobs = data.blobs || [];
+                var promises = blobs.map(function(item) {
+                    var blob = base64ToBlob(item.base64);
+                    return saveAudioBlob(item.id, blob, {
+                        text: item.text,
+                        duration: item.duration,
+                        wave: item.wave,
+                        friendId: item.friendId
+                    });
+                });
+                
+                Promise.all(promises).then(function() {
+                    renderAll();
+                    updateTopBar();
+                    closeSubPage();
+                    showToast('导入成功，已包含语音数据');
+                });
+            } else {
+                DataHub.setAll(data);
+                DataHub.delete('votes');
+                renderAll();
+                updateTopBar();
+                closeSubPage();
+                showToast('导入成功，但该备份不包含语音数据');
+            }
         } catch(err) {
             alert('导入失败，请检查文件格式');
         }
