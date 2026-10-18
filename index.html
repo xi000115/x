@@ -8292,14 +8292,65 @@ function saveSpecialQuoteCard(target, encodedContent) {
 
 function toggleVoiceText(row) {
     if (!row) return;
-    var textLine = row.querySelector('.voice-text-line');
-    if (!textLine) return;
-    if (textLine.style.display === 'none') {
-        textLine.style.display = 'block';
+    var msgId = row.getAttribute('data-msgid');
+    if (!msgId) return;
+
+    var msgs = DataHub.get('messages', []);
+    var msg = msgs.find(function(m) { return m.id === msgId; });
+    if (!msg) return;
+
+    var fromMe = row.getAttribute('data-from') === 'me';
+
+    if (fromMe) {
+        var currentText = (msg.voiceText === '……' || !msg.voiceText) ? '' : msg.voiceText;
+        var html = '<div class="modal-title">输入文字</div>' +
+            '<div style="font-size:12px;color:#999999;margin-bottom:8px;text-align:center;">浏览器无法识别语音，请手动输入</div>' +
+            '<input type="text" id="editVoiceTextInput" value="' + currentText + '" placeholder="输入您刚说的话..." style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:12px;">' +
+            '<div class="btn-row">' +
+                '<button class="cancel" onclick="closeModal()">取消</button>' +
+                '<button class="confirm" onclick="saveVoiceText(\'' + msgId + '\')">保存</button>' +
+            '</div>';
+        showModal(html);
     } else {
-        textLine.style.display = 'none';
+        var textLine = row.querySelector('.voice-text-line');
+        if (!textLine) return;
+        if (textLine.style.display === 'none' || !textLine.style.display) {
+            textLine.style.display = 'block';
+        } else {
+            textLine.style.display = 'none';
+        }
     }
 }
+
+window.saveVoiceText = function(msgId) {
+    var input = document.getElementById('editVoiceTextInput');
+    if (!input) return;
+    
+    var newText = input.value.trim();
+    if (!newText) newText = '……';
+
+    var msgs = DataHub.get('messages', []);
+    var msg = msgs.find(function(m) { return m.id === msgId; });
+    if (msg) {
+        msg.voiceText = newText;
+        DataHub.set('messages', msgs);
+        
+        closeModal();
+        renderChatMessages();
+        renderMessages();
+        
+        // 核心修复：保存后，自动帮您把那行字展开，不用再长按了！
+        var newRow = document.querySelector('[data-msgid="' + msgId + '"]');
+        if (newRow) {
+            var textLine = newRow.querySelector('.voice-text-line');
+            if (textLine) {
+                textLine.style.display = 'block';
+            }
+        }
+        
+        showToast('文字已保存');
+    }
+};
 
 window.toggleVoiceText = toggleVoiceText;
 
