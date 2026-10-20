@@ -19968,7 +19968,7 @@ function autoFriendSendQuestionnaire() {
     console.log('[问卷自动发送] 题库题数=', questions.length);
 
     var available = questions.filter(function(q) { return q.locked !== true; });
-    console.log('[问卷自动发送] 未锁题数=', available.length);
+if (available.length === 0) return;
 
             var changed = false;
             var pendingList = [];
@@ -23449,12 +23449,28 @@ function updateBgOpacity(val) {
 
 function clearAllData() {
     if (!confirm('清除所有数据？包括好友、群聊、设置、聊天记录，全部回到初始状态。')) return;
-    var fresh = JSON.parse(JSON.stringify(defaultData));
-    if (!fresh.groups.includes('未分组')) {
-        fresh.groups.push('未分组');
-    }
-    DataHub.setAll(fresh);
-    location.reload();
+    getDB().then(function(database) {
+        var tx = database.transaction(['appData', 'audioStore', 'questionnaireStore'], 'readwrite');
+        tx.objectStore('appData').clear();
+        tx.objectStore('audioStore').clear();
+        tx.objectStore('questionnaireStore').clear();
+        tx.oncomplete = function() {
+            var fresh = JSON.parse(JSON.stringify(defaultData));
+            if (!fresh.groups.includes('未分组')) {
+                fresh.groups.push('未分组');
+            }
+            DataHub.setAll(fresh);
+            location.reload();
+        };
+        tx.onerror = function() {
+            var fresh = JSON.parse(JSON.stringify(defaultData));
+            if (!fresh.groups.includes('未分组')) {
+                fresh.groups.push('未分组');
+            }
+            DataHub.setAll(fresh);
+            location.reload();
+        };
+    });
 }
 
 function clearChatOnly() {
