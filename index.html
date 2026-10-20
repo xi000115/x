@@ -1360,7 +1360,7 @@ color: #000000;
         <div onclick="openChatStorageManage()" style="display:flex;align-items:center;justify-content:center;padding:14px 4px;background:var(--theme-lighter, #eef5ef);border-radius:12px;cursor:pointer;font-size:14px;color:#000000;">存储</div>
 <div onclick="openChatStyleSettings()" style="display:flex;align-items:center;justify-content:center;padding:14px 4px;background:var(--theme-lighter, #eef5ef);border-radius:12px;cursor:pointer;font-size:14px;color:#000000;">装扮</div>
 <div onclick="openMonopolyHome()" style="display:flex;align-items:center;justify-content:center;padding:14px 4px;background:var(--theme-lighter, #eef5ef);border-radius:12px;cursor:pointer;font-size:14px;color:#000000;">游戏</div>
-<div onclick="showToast('问卷功能开发中')" style="display:flex;align-items:center;justify-content:center;padding:14px 4px;background:var(--theme-lighter, #eef5ef);border-radius:12px;cursor:pointer;font-size:14px;color:#000000;">问卷</div>
+<div onclick="openQuestionnaireMenu()" style="display:flex;align-items:center;justify-content:center;padding:14px 4px;background:var(--theme-lighter, #eef5ef);border-radius:12px;cursor:pointer;font-size:14px;color:#000000;">问卷</div>
 <div onclick="openMallFromChat()" style="display:flex;align-items:center;justify-content:center;padding:14px 4px;background:var(--theme-lighter, #eef5ef);border-radius:12px;cursor:pointer;font-size:14px;color:#000000;">商场</div>
 <div onclick="openVoteMenu()" style="display:flex;align-items:center;justify-content:center;padding:14px 4px;background:var(--theme-lighter, #eef5ef);border-radius:12px;cursor:pointer;font-size:14px;color:#000000;">投票</div>
     </div>
@@ -1794,7 +1794,7 @@ let appData = JSON.parse(JSON.stringify(defaultData));
 function getDB() {
     if (dbOpenPromise) return dbOpenPromise;
     dbOpenPromise = new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, 2);
+        const request = indexedDB.open(DB_NAME, 3);
         request.onupgradeneeded = (e) => {
             const db = e.target.result;
             if (!db.objectStoreNames.contains(STORE_NAME)) {
@@ -1803,6 +1803,9 @@ function getDB() {
             if (!db.objectStoreNames.contains('audioStore')) {
                 db.createObjectStore('audioStore', { keyPath: 'id' });
             }
+            if (!db.objectStoreNames.contains('questionnaireStore')) {
+    db.createObjectStore('questionnaireStore', { keyPath: 'id' });
+}
         };
         request.onsuccess = (e) => {
             db = e.target.result;
@@ -1893,6 +1896,108 @@ function deleteAudioBlob(id) {
             tx.onerror = function() { resolve(); };
         });
     });
+}
+
+// ====== 问卷存储层（独立 store，不进主系统） ======
+function saveQuestionnaireRecord(id, data) {
+    return getDB().then(function(database) {
+        return new Promise(function(resolve, reject) {
+            var tx = database.transaction('questionnaireStore', 'readwrite');
+            var store = tx.objectStore('questionnaireStore');
+            store.put({ id: id, data: data });
+            tx.oncomplete = function() { resolve(); };
+            tx.onerror = function(e) { reject(e.target.error); };
+        });
+    });
+}
+
+function loadQuestionnaireRecord(id) {
+    return getDB().then(function(database) {
+        return new Promise(function(resolve) {
+            var tx = database.transaction('questionnaireStore', 'readonly');
+            var store = tx.objectStore('questionnaireStore');
+            var req = store.get(id);
+            req.onsuccess = function() { resolve(req.result ? req.result.data : null); };
+            req.onerror = function() { resolve(null); };
+        });
+    });
+}
+
+function deleteQuestionnaireRecord(id) {
+    return getDB().then(function(database) {
+        return new Promise(function(resolve) {
+            var tx = database.transaction('questionnaireStore', 'readwrite');
+            var store = tx.objectStore('questionnaireStore');
+            store.delete(id);
+            tx.oncomplete = function() { resolve(); };
+            tx.onerror = function() { resolve(); };
+        });
+    });
+}
+
+function getAllQuestionnaireRecords() {
+    return getDB().then(function(database) {
+        return new Promise(function(resolve) {
+            var tx = database.transaction('questionnaireStore', 'readonly');
+            var store = tx.objectStore('questionnaireStore');
+            var req = store.getAll();
+            req.onsuccess = function() { resolve(req.result || []); };
+            req.onerror = function() { resolve([]); };
+        });
+    });
+}
+
+function getQuestionnairesByChat(chatId) {
+    return getAllQuestionnaireRecords().then(function(records) {
+        var result = [];
+        for (var i = 0; i < records.length; i++) {
+            var r = records[i];
+            if (r.id === 'questionBank' || r.id === 'autoLog') continue;
+            if (!r.data) continue;
+            if (r.data.chatId === chatId) result.push(r.data);
+        }
+        result.sort(function(a, b) { return (b.createdAt || 0) - (a.createdAt || 0); });
+        return result;
+    });
+}
+
+function deleteQuestionnairesByChat(chatId) {
+    return getAllQuestionnaireRecords().then(function(records) {
+        var ids = [];
+        for (var i = 0; i < records.length; i++) {
+            var r = records[i];
+            if (r.id === 'questionBank' || r.id === 'autoLog') continue;
+            if (r.data && r.data.chatId === chatId) ids.push(r.id);
+        }
+        var chain = Promise.resolve();
+        ids.forEach(function(id) {
+            chain = chain.then(function() { return deleteQuestionnaireRecord(id); });
+        });
+        return chain;
+    });
+}
+
+function loadQuestionBank() {
+    return loadQuestionnaireRecord('questionBank').then(function(data) {
+        if (!data || !data.questions) return { questions: [] };
+        if (!data.questions) data.questions = [];
+        return data;
+    });
+}
+
+function saveQuestionBank(bank) {
+    return saveQuestionnaireRecord('questionBank', bank);
+}
+
+function loadQuestionnaireAutoLog() {
+    return loadQuestionnaireRecord('autoLog').then(function(data) {
+        if (!data) return {};
+        return data;
+    });
+}
+
+function saveQuestionnaireAutoLog(log) {
+    return saveQuestionnaireRecord('autoLog', log);
 }
 
 function analyzeAudioWave(blob, callback) {
@@ -3853,7 +3958,9 @@ if (m.isPayRequest && m.payRequestId) {
     msgContent = '<div style="font-size:13px;color:#000000;word-break:break-word;">' + (m.text || '') + '</div>' + reqInfo + reqBtn;
 }
 
-        if (m.isHongbaoCard && m.hongbaoId) {
+        if (m.isQuestionnaireCard && m.questionnaireId) {
+    msgContent = renderQuestionnaireCard(m);
+} else if (m.isHongbaoCard && m.hongbaoId) {
     var _hbCardInfo = getGroupHongbaoCardInfo(m.hongbaoId);
     if (_hbCardInfo) {
         msgContent = renderGroupHongbaoCard(m.hongbaoId);
@@ -4608,9 +4715,10 @@ function saveVoteBank(bank) {
     DataHub.set('voteBank', bank);
 }
 
-function getVisibleVoteQuestions(friendId) {
+function getVisibleVoteQuestions(friendId, forFriend) {
     var bank = getVoteBank();
     return bank.questions.filter(function(q) {
+        if (forFriend && q.locked === true) return false;
         var cat = bank.categories.find(function(c) { return c.name === q.category; });
         if (!cat) return true;
         if (!cat.exclusiveFriendId) return true;
@@ -4672,9 +4780,15 @@ function renderVoteBankContent() {
     } else {
         for (var j = 0; j < questions.length; j++) {
             var q = questions[j];
-            html += '<div style="background:#ffffff;border:1px solid #eef5ef;border-radius:10px;padding:12px;margin-bottom:8px;">' +
-                '<div style="font-size:14px;color:#000000;font-weight:500;margin-bottom:6px;word-break:break-word;">' + q.title + '</div>' +
-                '<div style="font-size:12px;color:#666666;line-height:1.8;margin-bottom:8px;">';
+            var lockSvg = q.locked
+    ? '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="var(--theme-dark, #4a7a4e)" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>'
+    : '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#b8c8ba" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-2"/></svg>';
+html += '<div style="background:#ffffff;border:1px solid #eef5ef;border-radius:10px;padding:12px;margin-bottom:8px;">' +
+    '<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;">' +
+        '<div style="font-size:14px;color:#000000;font-weight:500;word-break:break-word;flex:1;min-width:0;">' + q.title + '</div>' +
+        '<span onclick="event.stopPropagation();toggleVoteQuestionLock(\'' + q.id + '\')" style="flex-shrink:0;cursor:pointer;padding:2px;display:flex;align-items:center;">' + lockSvg + '</span>' +
+    '</div>' +
+    '<div style="font-size:12px;color:#666666;line-height:1.8;margin-bottom:8px;">';
             for (var k = 0; k < q.options.length; k++) {
                 html += '<div>' + (k + 1) + '. ' + q.options[k] + '</div>';
             }
@@ -5133,6 +5247,18 @@ function saveVoteBankQuestionEdit(qid) {
     showToast('已保存');
 }
 
+function toggleVoteQuestionLock(qid) {
+    var bank = getVoteBank();
+    var q = bank.questions.find(function(x) { return x.id === qid; });
+    if (!q) return;
+    q.locked = (q.locked === true) ? false : true;
+    saveVoteBank(bank);
+    var content = document.getElementById('voteBankContent');
+    if (content) content.innerHTML = renderVoteBankContent();
+    showToast(q.locked ? '已上锁，好友不能使用' : '已解锁');
+}
+window.toggleVoteQuestionLock = toggleVoteQuestionLock;
+
 function deleteVoteBankQuestion(qid) {
     if (!confirm('确定删除这道题吗？')) return;
     var bank = getVoteBank();
@@ -5159,7 +5285,7 @@ function startFriendSpecialVoteTimer(chatId) {
         var r = Math.random();
 var type = (r < 0.34) ? 'single' : ((r < 0.67) ? 'multi' : 'order');
         createVoteCard(type, 'bank', q.title, q.options.slice(), chatId, 'me');
-    }, 60 * 60 * 1000);
+    }, 30 * 60 * 1000);
 }
 
 function stopFriendSpecialVoteTimer() {
@@ -16164,9 +16290,12 @@ function renderLetterList() {
     var friend = allFriends.find(function(f) { return f.id === chatId; });
     if (!friend) return;
     if (!friend.letters) friend.letters = { toHim: [], hisReply: [], fromHim: [], myReply: [] };
-    var list = friend.letters[tab] || [];
+var list = friend.letters[tab] || [];
+list = list.slice().sort(function(a, b) {
+    return (b.time || '').localeCompare(a.time || '');
+});
 
-    var html = '';
+var html = '';
     if (list.length === 0) {
         html = '<div style="text-align:center;color:#999999;padding:20px 0;">暂无信件</div>';
     } else {
@@ -17198,8 +17327,25 @@ window.deleteFriend = function(id) {
         c.members = c.members.filter(mid => mid !== id);
     });
     DataHub.set('chatrooms', chatrooms);
-    renderAll();
-    showToast('已删除好友');
+    deleteQuestionnairesByChat(id).then(function() {
+        return loadQuestionnaireAutoLog();
+    }).then(function(log) {
+        var changed = false;
+        for (var d in log) {
+            if (log[d] && log[d][id]) {
+                delete log[d][id];
+                changed = true;
+            }
+        }
+        if (changed) return saveQuestionnaireAutoLog(log);
+        return Promise.resolve();
+    }).then(function() {
+        renderAll();
+        showToast('已删除好友');
+    }).catch(function() {
+        renderAll();
+        showToast('已删除好友');
+    });
 };
 
 window.deleteChatroom = function(id) {
@@ -19808,6 +19954,1612 @@ window.showEditProductModal = showEditProductModal;
 window.confirmEditProduct = confirmEditProduct;
 window.confirmProductEmojiInline = confirmProductEmojiInline;
 
+// ====== 问卷：好友主动发问卷 ======
+function autoFriendSendQuestionnaire() {
+    var friends = DataHub.get('friends', []);
+    if (friends.length === 0) return;
+
+    var today = getTodayDateStr();
+    loadQuestionnaireAutoLog().then(function(log) {
+        if (!log[today]) log[today] = {};
+
+        loadQuestionBank().then(function(bank) {
+    var questions = bank.questions || [];
+    console.log('[问卷自动发送] 题库题数=', questions.length);
+
+    var available = questions.filter(function(q) { return q.locked !== true; });
+    console.log('[问卷自动发送] 未锁题数=', available.length);
+
+            var changed = false;
+            var pendingList = [];
+
+            for (var i = 0; i < friends.length; i++) {
+    var friend = friends[i];
+    if (Math.random() >= 0.01) continue;
+
+    var count = Math.floor(Math.random() * 15) + 1;
+if (count > available.length) count = available.length;
+    var shuffled = available.slice().sort(function() { return Math.random() - 0.5; });
+    var picked = shuffled.slice(0, count);
+
+                var qnId = 'qn' + Date.now() + Math.random().toString(36).substr(2, 4);
+                var nowStr = getNowTimeStringForQn();
+                var qn = {
+                    id: qnId,
+                    chatId: friend.id,
+                    from: friend.id,
+                    to: 'me',
+                    title: '问卷',
+                    questions: picked.map(function(q) {
+                        return {
+                            id: q.id,
+                            type: q.type,
+                            title: q.title,
+                            options: (q.options || []).slice()
+                        };
+                    }),
+                    status: 'pending',
+                    answers: {},
+                    createdAt: Date.now(),
+                    createdAtStr: nowStr,
+                    answeredAt: null,
+                    cardMsgId: null
+                };
+
+                pendingList.push({ qn: qn, friendId: friend.id });
+                log[today][friend.id] = true;
+                changed = true;
+            }
+
+            if (changed) {
+                saveQuestionnaireAutoLog(log);
+                var chain = Promise.resolve();
+                pendingList.forEach(function(item) {
+                    chain = chain.then(function() {
+                        return saveQuestionnaireRecord(item.qn.id, item.qn).then(function() {
+                            var msgs = DataHub.get('messages', []);
+                            var cardMsgId = 'm' + genId();
+                            msgs.push({
+                                id: cardMsgId,
+                                chatId: item.friendId,
+                                from: item.friendId,
+                                text: '',
+                                time: item.qn.createdAtStr,
+                                timestamp: Date.now(),
+                                unread: (currentChatId === item.friendId) ? 0 : 1,
+                                isQuestionnaireCard: true,
+                                questionnaireId: item.qn.id
+                            });
+                            DataHub.set('messages', msgs);
+                            item.qn.cardMsgId = cardMsgId;
+                            return saveQuestionnaireRecord(item.qn.id, item.qn);
+                        });
+                    });
+                });
+                chain.then(function() {
+                    if (currentChatId) renderChatMessages();
+                    renderMessages();
+                    if (pendingList.length > 0) {
+                        showToast(pendingList[0].qn.chatId ? '好友发来一份问卷' : '');
+                    }
+                });
+            }
+        });
+    });
+}
+
+window.autoFriendSendQuestionnaire = autoFriendSendQuestionnaire;
+
+function showQbAddBatch() {
+    var html = '<div class="modal-title">批量添加</div>' +
+        '<div style="font-size:12px;color:#999999;margin-bottom:6px;">一行一题，格式：题型|题目|选项1|选项2|选项3</div>' +
+        '<div style="font-size:12px;color:#999999;margin-bottom:6px;">题型：single 单选 / multi 多选 / judge 对错 / order 排序 / answer 解答</div>' +
+        '<textarea id="qbBatchInput" placeholder="single|今天吃什么|米饭|面条|火锅&#10;multi|喜欢哪些颜色|红|绿|蓝&#10;judge|地球是圆的|&#10;answer|说说你的想法|" style="width:100%;height:140px;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;resize:vertical;"></textarea>' +
+        '<div class="btn-row">' +
+            '<button class="cancel" onclick="closeModal()">取消</button>' +
+            '<button class="confirm" onclick="saveQbAddBatch()">导入</button>' +
+        '</div>';
+    showModal(html);
+}
+
+function parseQbBatchLines(text) {
+    var typeMap = {
+        single: 'single', multi: 'multi', judge: 'judge', order: 'order', answer: 'answer',
+        '单选': 'single', '多选': 'multi', '对错': 'judge', '排序': 'order', '解答': 'answer'
+    };
+    var lines = text.split('\n');
+    var result = [];
+    for (var i = 0; i < lines.length; i++) {
+        var line = lines[i].trim();
+        if (!line) continue;
+        var parts = line.split('|');
+        if (parts.length < 2) {
+            return { error: '第 ' + (i + 1) + ' 行格式不对' };
+        }
+        var typeRaw = parts[0].trim().toLowerCase();
+        var type = typeMap[typeRaw] || typeMap[parts[0].trim()];
+        if (!type) {
+            return { error: '第 ' + (i + 1) + ' 行题型不对：' + parts[0] };
+        }
+        var title = parts[1].trim();
+        if (!title) {
+            return { error: '第 ' + (i + 1) + ' 行题目为空' };
+        }
+        var options = [];
+        for (var j = 2; j < parts.length; j++) {
+            var o = parts[j].trim();
+            if (o) options.push(o);
+        }
+        if (type === 'judge') {
+            options = ['对', '错'];
+        } else if (type === 'answer') {
+            options = [];
+        } else {
+            var minOpt = (type === 'multi') ? 3 : 2;
+            if (options.length < minOpt) {
+                return { error: '第 ' + (i + 1) + ' 行选项不足 ' + minOpt + ' 个' };
+            }
+        }
+        result.push({ type: type, title: title, options: options });
+    }
+    if (result.length === 0) {
+        return { error: '没有有效内容' };
+    }
+    return { list: result };
+}
+
+function saveQbAddBatch() {
+    var input = document.getElementById('qbBatchInput');
+    if (!input || !input.value.trim()) {
+        showToast('请输入内容');
+        return;
+    }
+    var parsed = parseQbBatchLines(input.value);
+    if (parsed.error) {
+        showToast(parsed.error);
+        return;
+    }
+    loadQuestionBank().then(function(bank) {
+        for (var i = 0; i < parsed.list.length; i++) {
+            var item = parsed.list[i];
+            bank.questions.push({
+                id: 'qb' + Date.now() + Math.random().toString(36).substr(2, 6),
+                type: item.type,
+                title: item.title,
+                options: item.options,
+                locked: false,
+                createdAt: Date.now()
+            });
+        }
+        return saveQuestionBank(bank).then(function() {
+            closeModal();
+            qbManageState._bank = bank;
+            refreshQbManage();
+            showToast('已导入 ' + parsed.list.length + ' 题');
+        });
+    });
+}
+
+function showQbAddFile() {
+    var html = '<div class="modal-title">导入文件</div>' +
+        '<div style="font-size:12px;color:#999999;margin-bottom:6px;">支持 .txt 和 .json，内容格式：一行一题</div>' +
+        '<div style="font-size:12px;color:#999999;margin-bottom:6px;">题型|题目|选项1|选项2|选项3</div>' +
+        '<input type="file" id="qbFileInput" accept=".txt,.json" style="margin-bottom:12px;padding:8px;border:1px solid #d4e4d6;border-radius:12px;width:100%;box-sizing:border-box;">' +
+        '<div class="btn-row">' +
+            '<button class="cancel" onclick="closeModal()">取消</button>' +
+            '<button class="confirm" onclick="importQbFile()">导入</button>' +
+        '</div>';
+    showModal(html);
+}
+
+function importQbFile() {
+    var fileInput = document.getElementById('qbFileInput');
+    if (!fileInput || !fileInput.files || !fileInput.files[0]) {
+        showToast('请选择文件');
+        return;
+    }
+    var reader = new FileReader();
+    reader.onload = function(e) {
+        var text = e.target.result;
+        var parsed;
+        var fileName = fileInput.files[0].name.toLowerCase();
+        if (fileName.endsWith('.json')) {
+            try {
+                var arr = JSON.parse(text);
+                if (!Array.isArray(arr)) {
+                    showToast('JSON 需要是数组');
+                    return;
+                }
+                parsed = { list: [] };
+                for (var i = 0; i < arr.length; i++) {
+                    var item = arr[i];
+                    if (!item || !item.type || !item.title) {
+                        showToast('第 ' + (i + 1) + ' 项缺少 type 或 title');
+                        return;
+                    }
+                    var typeMap = {
+                        single: 'single', multi: 'multi', judge: 'judge', order: 'order', answer: 'answer',
+                        '单选': 'single', '多选': 'multi', '对错': 'judge', '排序': 'order', '解答': 'answer'
+                    };
+                    var typeRaw = String(item.type).trim().toLowerCase();
+                    var type = typeMap[typeRaw] || typeMap[String(item.type).trim()];
+                    if (!type) {
+                        showToast('第 ' + (i + 1) + ' 项题型不对');
+                        return;
+                    }
+                    var opts = item.options || [];
+                    if (type === 'judge') opts = ['对', '错'];
+                    else if (type === 'answer') opts = [];
+                    else {
+                        var minOpt = (type === 'multi') ? 3 : 2;
+                        if (opts.length < minOpt) {
+                            showToast('第 ' + (i + 1) + ' 项选项不足');
+                            return;
+                        }
+                    }
+                    parsed.list.push({ type: type, title: item.title, options: opts });
+                }
+                if (parsed.list.length === 0) {
+                    showToast('文件没有有效内容');
+                    return;
+                }
+            } catch (err) {
+                showToast('JSON 解析失败');
+                return;
+            }
+        } else {
+            parsed = parseQbBatchLines(text);
+            if (parsed.error) {
+                showToast(parsed.error);
+                return;
+            }
+        }
+        loadQuestionBank().then(function(bank) {
+            for (var j = 0; j < parsed.list.length; j++) {
+                var it = parsed.list[j];
+                bank.questions.push({
+                    id: 'qb' + Date.now() + Math.random().toString(36).substr(2, 6),
+                    type: it.type,
+                    title: it.title,
+                    options: it.options,
+                    locked: false,
+                    createdAt: Date.now()
+                });
+            }
+            return saveQuestionBank(bank).then(function() {
+                closeModal();
+                qbManageState._bank = bank;
+                refreshQbManage();
+                showToast('已导入 ' + parsed.list.length + ' 题');
+            });
+        });
+    };
+    reader.readAsText(fileInput.files[0]);
+}
+
+window.showQbAddBatch = showQbAddBatch;
+window.saveQbAddBatch = saveQbAddBatch;
+window.showQbAddFile = showQbAddFile;
+window.importQbFile = importQbFile;
+window.onQbAddTypeChange = onQbAddTypeChange;
+window.renderQbAddOptionsForType = renderQbAddOptionsForType;
+
+// ====== 问卷：主菜单 ======
+function openQuestionnaireMenu() {
+    if (!currentChatId) {
+        showToast('请先进入聊天');
+        return;
+    }
+    closeChatBottomPanel();
+    var html = '<div class="modal-title">问卷</div>' +
+        '<button class="btn-primary" style="width:100%;margin-bottom:8px;" onclick="closeModal();openQuestionnaireCompose()">自定义创建</button>' +
+        '<button class="btn-primary" style="width:100%;margin-bottom:8px;" onclick="closeModal();openQuestionnaireBankPicker()">题库创建</button>' +
+        '<button class="btn-primary" style="width:100%;margin-bottom:8px;" onclick="closeModal();openQuestionnaireBankManage()">题库</button>' +
+        '<button class="btn-primary" style="width:100%;margin-bottom:8px;" onclick="closeModal();openQuestionnaireInteraction()">问卷交互</button>' +
+        '<div class="btn-row" style="margin-top:8px;"><button class="cancel" onclick="closeModal()">取消</button></div>';
+    showModal(html);
+}
+window.openQuestionnaireMenu = openQuestionnaireMenu;
+
+// ====== 问卷：题库管理 ======
+var qbManageState = { currentType: 'all', selectMode: false, selectedIds: new Set() };
+
+function openQuestionnaireBankManage() {
+    qbManageState.currentType = 'all';
+    qbManageState.selectMode = false;
+    qbManageState.selectedIds = new Set();
+    var html = '<div class="sub-page active" id="qbManagePage" style="z-index:60;background:#ffffff;pointer-events:auto;display:flex;flex-direction:column;">' +
+        '<div class="sub-top">' +
+            '<div class="back-btn" onclick="closeSubPage()">' +
+                '<svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>' +
+            '</div>' +
+            '<span>题库</span>' +
+            '<span onclick="showQbAddMenu()" style="margin-left:auto;cursor:pointer;font-size:13px;color:#000000;padding:4px 8px;">添加</span>' +
+        '</div>' +
+        '<div class="sub-content" id="qbManageContent" style="padding:16px;overflow-y:auto;pointer-events:auto;flex:1;">' +
+            renderQbManageContent() +
+        '</div>' +
+    '</div>';
+    var container = document.getElementById('subPageContainer');
+    container.innerHTML = html;
+    var subPage = container.querySelector('#qbManagePage');
+    if (subPage) {
+        subPage.classList.add('active');
+        subPage.style.pointerEvents = 'auto';
+    }
+    refreshQbManage();
+}
+
+function getQbTypeName(type) {
+    if (type === 'single') return '单选';
+    if (type === 'multi') return '多选';
+    if (type === 'judge') return '对错';
+    if (type === 'order') return '排序';
+    if (type === 'answer') return '解答';
+    return '其他';
+}
+
+function renderQbManageContent() {
+    var bank = qbManageState._bank || { questions: [] };
+    var questions = bank.questions || [];
+    var current = qbManageState.currentType;
+    var html = '';
+
+    var counts = { all: questions.length, single: 0, multi: 0, judge: 0, order: 0, answer: 0 };
+    for (var ci = 0; ci < questions.length; ci++) {
+        var qt = questions[ci].type;
+        if (counts[qt] !== undefined) counts[qt]++;
+    }
+
+    var tabs = [
+        { key: 'all', label: '全部' },
+        { key: 'single', label: '单选' },
+        { key: 'multi', label: '多选' },
+        { key: 'judge', label: '对错' },
+        { key: 'order', label: '排序' },
+        { key: 'answer', label: '解答' }
+    ];
+
+    html += '<div style="display:flex;gap:6px;overflow-x:auto;padding:0 0 10px 0;scrollbar-width:none;-webkit-overflow-scrolling:touch;">';
+    for (var ti = 0; ti < tabs.length; ti++) {
+        var t = tabs[ti];
+        var active = (current === t.key);
+        html += '<button class="btn-icon qb-type-btn" data-type="' + t.key + '" onclick="switchQbType(\'' + t.key + '\')" style="flex-shrink:0;padding:6px 16px;border-radius:30px;border:none;font-size:13px;cursor:pointer;background:' + (active ? 'var(--theme-main, #d4e9d6)' : 'var(--theme-lighter, #eef5ef)') + ';color:' + (active ? '#000000' : '#888888') + ';">' + t.label + '（' + counts[t.key] + '）</button>';
+    }
+    html += '</div>';
+
+    var list = questions;
+    if (current !== 'all') {
+        list = questions.filter(function(q) { return q.type === current; });
+    }
+    list = list.slice().sort(function(a, b) { return (b.createdAt || 0) - (a.createdAt || 0); });
+
+    if (list.length === 0) {
+        html += '<div style="text-align:center;color:#999999;padding:30px 0;font-size:13px;">暂无题目</div>';
+    } else {
+        for (var li = 0; li < list.length; li++) {
+            var q = list[li];
+            var lockSvg = q.locked
+                ? '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="var(--theme-dark, #4a7a4e)" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>'
+                : '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#b8c8ba" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-2"/></svg>';
+            html += '<div style="background:#ffffff;border:1px solid #eef5ef;border-radius:10px;padding:12px;margin-bottom:8px;">' +
+                '<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;">' +
+                    '<span style="font-size:11px;color:#888888;background:var(--theme-lighter, #eef5ef);border-radius:10px;padding:2px 8px;flex-shrink:0;">' + getQbTypeName(q.type) + '</span>' +
+                    '<div style="font-size:14px;color:#000000;font-weight:500;word-break:break-word;flex:1;min-width:0;">' + (q.title || '') + '</div>' +
+                    '<span onclick="event.stopPropagation();toggleQbLock(\'' + q.id + '\')" style="flex-shrink:0;cursor:pointer;padding:2px;display:flex;align-items:center;">' + lockSvg + '</span>' +
+                '</div>';
+            if (q.options && q.options.length > 0) {
+                html += '<div style="font-size:12px;color:#666666;line-height:1.8;margin-bottom:8px;">';
+                for (var oi = 0; oi < q.options.length; oi++) {
+                    html += '<div>' + (oi + 1) + '. ' + q.options[oi] + '</div>';
+                }
+                html += '</div>';
+            }
+            html += '<div style="display:flex;gap:8px;">' +
+                '<button class="btn-icon" onclick="showQbEditQuestion(\'' + q.id + '\')" style="padding:4px 12px;font-size:12px;">编辑</button>' +
+                '<button class="btn-icon" onclick="deleteQbQuestion(\'' + q.id + '\')" style="padding:4px 12px;font-size:12px;">删除</button>' +
+            '</div>' +
+            '</div>';
+        }
+    }
+    return html;
+}
+
+function refreshQbManage() {
+    var content = document.getElementById('qbManageContent');
+    if (!content) return;
+    loadQuestionBank().then(function(bank) {
+        qbManageState._bank = bank;
+        content.innerHTML = renderQbManageContent();
+    });
+}
+
+function switchQbType(type) {
+    qbManageState.currentType = type;
+    qbManageState.selectMode = false;
+    qbManageState.selectedIds = new Set();
+    refreshQbManage();
+}
+
+function toggleQbLock(qid) {
+    loadQuestionBank().then(function(bank) {
+        var q = bank.questions.find(function(x) { return x.id === qid; });
+        if (!q) return;
+        q.locked = (q.locked === true) ? false : true;
+        return saveQuestionBank(bank).then(function() {
+            qbManageState._bank = bank;
+            refreshQbManage();
+            showToast(q.locked ? '已锁定，好友不能使用' : '已解锁');
+        });
+    });
+}
+
+function deleteQbQuestion(qid) {
+    if (!confirm('确定删除这道题吗？')) return;
+    loadQuestionBank().then(function(bank) {
+        bank.questions = bank.questions.filter(function(q) { return q.id !== qid; });
+        return saveQuestionBank(bank).then(function() {
+            qbManageState._bank = bank;
+            refreshQbManage();
+            showToast('已删除');
+        });
+    });
+}
+
+function showQbAddMenu() {
+    var html = '<div class="modal-title">添加题目</div>' +
+        '<button class="btn-primary" style="width:100%;margin-bottom:8px;" onclick="closeModal();showQbAddSingle()">单条添加</button>' +
+        '<button class="btn-primary" style="width:100%;margin-bottom:8px;" onclick="closeModal();showQbAddBatch()">批量添加</button>' +
+        '<button class="btn-primary" style="width:100%;margin-bottom:8px;" onclick="closeModal();showQbAddFile()">导入文件</button>' +
+        '<div class="btn-row" style="margin-top:8px;"><button class="cancel" onclick="closeModal()">取消</button></div>';
+    showModal(html);
+}
+
+function showQbAddSingle() {
+    var html = '<div class="modal-title">单条添加</div>' +
+        '<div style="font-size:12px;color:#999999;margin-bottom:4px;">题型</div>' +
+        '<select id="qbAddType" onchange="onQbAddTypeChange()" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
+            '<option value="single">单选</option>' +
+            '<option value="multi">多选</option>' +
+            '<option value="judge">对错</option>' +
+            '<option value="order">排序</option>' +
+            '<option value="answer">解答</option>' +
+        '</select>' +
+        '<input type="text" id="qbAddTitle" placeholder="题目" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
+        '<div id="qbAddOptionsWrap"></div>' +
+        '<div class="btn-row">' +
+            '<button class="cancel" onclick="closeModal()">取消</button>' +
+            '<button class="confirm" onclick="saveQbAddSingle()">保存</button>' +
+        '</div>';
+    showModal(html);
+    setTimeout(function() { renderQbAddOptionsForType('single'); }, 50);
+}
+
+function renderQbAddOptionsForType(type) {
+    var wrap = document.getElementById('qbAddOptionsWrap');
+    if (!wrap) return;
+    if (type === 'judge') {
+        wrap.innerHTML = '<div style="font-size:12px;color:#999999;margin-bottom:8px;">对错题选项固定为「对」「错」</div>';
+    } else if (type === 'answer') {
+        wrap.innerHTML = '<div style="font-size:12px;color:#999999;margin-bottom:8px;">解答题没有选项</div>';
+    } else {
+        var minCount = (type === 'multi') ? 3 : 2;
+        var inner = '<div id="qbAddOptions">';
+        for (var i = 0; i < minCount; i++) {
+            inner += '<input type="text" class="qb-add-option" placeholder="选项' + (i + 1) + '" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">';
+        }
+        inner += '</div>' +
+            '<button class="btn-icon" onclick="addQbOptionInput()" style="margin-bottom:8px;">+ 添加选项</button>';
+        wrap.innerHTML = inner;
+    }
+}
+
+function onQbAddTypeChange() {
+    var sel = document.getElementById('qbAddType');
+    if (!sel) return;
+    renderQbAddOptionsForType(sel.value);
+}
+
+function saveQbAddSingle() {
+    var typeSel = document.getElementById('qbAddType');
+    var titleInput = document.getElementById('qbAddTitle');
+    if (!typeSel || !titleInput || !titleInput.value.trim()) {
+        showToast('请输入题目');
+        return;
+    }
+    var type = typeSel.value;
+    var options = [];
+    if (type === 'judge') {
+        options = ['对', '错'];
+    } else if (type === 'answer') {
+        options = [];
+    } else {
+        var optInputs = document.querySelectorAll('.qb-add-option');
+        for (var i = 0; i < optInputs.length; i++) {
+            var v = optInputs[i].value.trim();
+            if (v) options.push(v);
+        }
+        var minOpt = (type === 'multi') ? 3 : 2;
+        if (options.length < minOpt) {
+            showToast('至少需要 ' + minOpt + ' 个选项');
+            return;
+        }
+    }
+    loadQuestionBank().then(function(bank) {
+        bank.questions.push({
+            id: 'qb' + Date.now() + Math.random().toString(36).substr(2, 4),
+            type: type,
+            title: titleInput.value.trim(),
+            options: options,
+            locked: false,
+            createdAt: Date.now()
+        });
+        return saveQuestionBank(bank).then(function() {
+            closeModal();
+            qbManageState._bank = bank;
+            refreshQbManage();
+            showToast('已添加');
+        });
+    });
+}
+
+function addQbOptionInput() {
+    var container = document.getElementById('qbAddOptions');
+    if (!container) return;
+    var count = container.querySelectorAll('.qb-add-option').length;
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'qb-add-option';
+    input.placeholder = '选项' + (count + 1);
+    input.style.cssText = 'width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;';
+    container.appendChild(input);
+}
+
+function saveQbAddSingle() {
+    var typeSel = document.getElementById('qbAddType');
+    var titleInput = document.getElementById('qbAddTitle');
+    if (!typeSel || !titleInput || !titleInput.value.trim()) {
+        showToast('请输入题目');
+        return;
+    }
+    var type = typeSel.value;
+    var options = [];
+    if (type === 'judge') {
+        options = ['对', '错'];
+    } else if (type === 'answer') {
+        options = [];
+    } else {
+        var optInputs = document.querySelectorAll('.qb-add-option');
+        for (var i = 0; i < optInputs.length; i++) {
+            var v = optInputs[i].value.trim();
+            if (v) options.push(v);
+        }
+        var minOpt = (type === 'multi') ? 3 : 2;
+        if (options.length < minOpt) {
+            showToast('至少需要 ' + minOpt + ' 个选项');
+            return;
+        }
+    }
+    loadQuestionBank().then(function(bank) {
+        bank.questions.push({
+            id: 'qb' + Date.now() + Math.random().toString(36).substr(2, 4),
+            type: type,
+            title: titleInput.value.trim(),
+            options: options,
+            locked: false,
+            createdAt: Date.now()
+        });
+        return saveQuestionBank(bank).then(function() {
+            closeModal();
+            qbManageState._bank = bank;
+            refreshQbManage();
+            showToast('已添加');
+        });
+    });
+}
+
+function renderQbAddOptionsForType(type) {
+    var wrap = document.getElementById('qbAddOptionsWrap');
+    if (!wrap) return;
+    if (type === 'judge') {
+        wrap.innerHTML = '<div style="font-size:12px;color:#999999;margin-bottom:8px;">对错题选项固定为「对」「错」</div>';
+    } else if (type === 'answer') {
+        wrap.innerHTML = '<div style="font-size:12px;color:#999999;margin-bottom:8px;">解答题没有选项</div>';
+    } else {
+        var minCount = (type === 'multi') ? 3 : 2;
+        var inner = '<div id="qbAddOptions">';
+        for (var i = 0; i < minCount; i++) {
+            inner += '<input type="text" class="qb-add-option" placeholder="选项' + (i + 1) + '" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">';
+        }
+        inner += '</div>' +
+            '<button class="btn-icon" onclick="addQbOptionInput()" style="margin-bottom:8px;">+ 添加选项</button>';
+        wrap.innerHTML = inner;
+    }
+}
+
+function onQbAddTypeChange() {
+    var sel = document.getElementById('qbAddType');
+    if (!sel) return;
+    renderQbAddOptionsForType(sel.value);
+}
+
+function showQbEditQuestion(qid) {
+    loadQuestionBank().then(function(bank) {
+        var q = bank.questions.find(function(x) { return x.id === qid; });
+        if (!q) return;
+        var typeName = getQbTypeName(q.type);
+        var optHtml = '';
+        if (q.type === 'judge') {
+            optHtml = '<div style="font-size:12px;color:#999999;margin-bottom:8px;">对错题选项固定为「对」「错」，不可修改</div>';
+        } else if (q.type === 'answer') {
+            optHtml = '<div style="font-size:12px;color:#999999;margin-bottom:8px;">解答题没有选项</div>';
+        } else {
+            optHtml = '<div id="qbEditOptions">';
+            for (var i = 0; i < q.options.length; i++) {
+                optHtml += '<input type="text" class="qb-edit-option" value="' + (q.options[i] || '').replace(/"/g, '&quot;') + '" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">';
+            }
+            optHtml += '</div>' +
+                '<button class="btn-icon" onclick="addQbEditOptionInput()" style="margin-bottom:8px;">+ 添加选项</button>';
+        }
+        var html = '<div class="modal-title">编辑' + typeName + '题</div>' +
+            '<input type="text" id="qbEditTitle" value="' + (q.title || '').replace(/"/g, '&quot;') + '" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
+            optHtml +
+            '<div class="btn-row">' +
+                '<button class="cancel" onclick="closeModal()">取消</button>' +
+                '<button class="confirm" onclick="saveQbEditQuestion(\'' + qid + '\')">保存</button>' +
+            '</div>';
+        showModal(html);
+    });
+}
+
+function addQbEditOptionInput() {
+    var container = document.getElementById('qbEditOptions');
+    if (!container) return;
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'qb-edit-option';
+    input.placeholder = '新选项';
+    input.style.cssText = 'width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;';
+    container.appendChild(input);
+}
+
+function saveQbEditQuestion(qid) {
+    var titleInput = document.getElementById('qbEditTitle');
+    if (!titleInput || !titleInput.value.trim()) {
+        showToast('请输入题目');
+        return;
+    }
+    loadQuestionBank().then(function(bank) {
+        var q = bank.questions.find(function(x) { return x.id === qid; });
+        if (!q) return;
+        var options = [];
+        if (q.type === 'judge') {
+            options = ['对', '错'];
+        } else if (q.type === 'answer') {
+            options = [];
+        } else {
+            var optInputs = document.querySelectorAll('.qb-edit-option');
+            for (var i = 0; i < optInputs.length; i++) {
+                var v = optInputs[i].value.trim();
+                if (v) options.push(v);
+            }
+            var minOpt = (q.type === 'multi') ? 3 : 2;
+            if (options.length < minOpt) {
+                showToast('至少需要 ' + minOpt + ' 个选项');
+                return;
+            }
+        }
+        q.title = titleInput.value.trim();
+        q.options = options;
+        return saveQuestionBank(bank).then(function() {
+            closeModal();
+            qbManageState._bank = bank;
+            refreshQbManage();
+            showToast('已保存');
+        });
+    });
+}
+
+window.openQuestionnaireBankManage = openQuestionnaireBankManage;
+window.switchQbType = switchQbType;
+window.toggleQbLock = toggleQbLock;
+window.deleteQbQuestion = deleteQbQuestion;
+window.showQbAddMenu = showQbAddMenu;
+window.showQbAddSingle = showQbAddSingle;
+window.addQbOptionInput = addQbOptionInput;
+window.saveQbAddSingle = saveQbAddSingle;
+window.showQbEditQuestion = showQbEditQuestion;
+window.addQbEditOptionInput = addQbEditOptionInput;
+window.saveQbEditQuestion = saveQbEditQuestion;
+
+// ====== 问卷：数据操作与发送 ======
+function genQuestionnaireId() {
+    return 'qn' + Date.now() + Math.random().toString(36).substr(2, 4);
+}
+
+function getNowTimeStringForQn() {
+    var now = new Date();
+    return now.getFullYear() + '.' + String(now.getMonth()+1).padStart(2,'0') + '.' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
+}
+
+function generateAnswerFromLexicon(chatId) {
+    var allItems = [];
+    var publicData = DataHub.get('lexiconData', null);
+    if (publicData && publicData.items) {
+        publicData.items.forEach(function(item) {
+            if (item.type === 'word' || item.type === 'emoji' || item.type === 'yanwenzi' || item.type === 'status' || item.type === 'weather') {
+                if (item.content) allItems.push(item.content);
+            }
+        });
+    }
+    var friends = DataHub.get('friends', []);
+    var friend = friends.find(function(f) { return f.id === chatId; });
+    if (friend && friend.privateLexicon && friend.privateLexicon.items) {
+        friend.privateLexicon.items.forEach(function(item) {
+            if (item.type === 'word' || item.type === 'emoji' || item.type === 'yanwenzi' || item.type === 'status' || item.type === 'weather') {
+                if (item.content) allItems.push(item.content);
+            }
+        });
+    }
+    if (allItems.length === 0) {
+        var dictData = DataHub.get('dictionary', null);
+        if (dictData && dictData.items && dictData.items.length > 0) {
+            var sentence = generateDictionarySentence();
+            if (sentence) return sentence;
+        }
+        return '嗯嗯';
+    }
+    var count = Math.floor(Math.random() * 8) + 3;
+    var selected = [];
+    for (var i = 0; i < count; i++) {
+        selected.push(allItems[Math.floor(Math.random() * allItems.length)]);
+    }
+    return selected.join(' ');
+}
+
+function buildFriendAnswerForQuestion(q) {
+    var answer = null;
+    if (q.type === 'single') {
+        answer = [Math.floor(Math.random() * q.options.length)];
+    } else if (q.type === 'multi') {
+        var count = Math.floor(Math.random() * q.options.length) + 1;
+        var idxs = [];
+        for (var i = 0; i < q.options.length; i++) idxs.push(i);
+        for (var j = idxs.length - 1; j > 0; j--) {
+            var r = Math.floor(Math.random() * (j + 1));
+            var t = idxs[j]; idxs[j] = idxs[r]; idxs[r] = t;
+        }
+        answer = idxs.slice(0, count).sort(function(a, b) { return a - b; });
+    } else if (q.type === 'judge') {
+        answer = [Math.random() < 0.5 ? 0 : 1];
+    } else if (q.type === 'order') {
+        var nums = [];
+        for (var k = 0; k < q.options.length; k++) nums.push(k);
+        for (var m = nums.length - 1; m > 0; m--) {
+            var ro = Math.floor(Math.random() * (m + 1));
+            var to = nums[m]; nums[m] = nums[ro]; nums[ro] = to;
+        }
+        answer = nums;
+    } else if (q.type === 'answer') {
+        answer = generateAnswerFromLexicon(currentChatId);
+    }
+    return answer;
+}
+
+function sendQuestionnaireToChat(questions, title) {
+    if (!currentChatId) {
+        showToast('请先进入聊天');
+        return false;
+    }
+    if (!questions || questions.length === 0) {
+        showToast('问卷没有题目');
+        return false;
+    }
+    var chatId = currentChatId;
+    var qnId = genQuestionnaireId();
+    var nowStr = getNowTimeStringForQn();
+    var qn = {
+        id: qnId,
+        chatId: chatId,
+        from: 'me',
+        to: chatId,
+        title: title || '问卷',
+        questions: questions.map(function(q) {
+            return {
+                id: q.id,
+                type: q.type,
+                title: q.title,
+                options: (q.options || []).slice()
+            };
+        }),
+        status: 'pending',
+        answers: {},
+        createdAt: Date.now(),
+        createdAtStr: nowStr,
+        answeredAt: null,
+        cardMsgId: null
+    };
+    return saveQuestionnaireRecord(qnId, qn).then(function() {
+        var msgs = DataHub.get('messages', []);
+        var cardMsgId = 'm' + genId();
+        msgs.push({
+            id: cardMsgId,
+            chatId: chatId,
+            from: 'me',
+            text: '',
+            time: nowStr,
+            timestamp: Date.now(),
+            unread: 0,
+            isQuestionnaireCard: true,
+            questionnaireId: qnId
+        });
+        DataHub.set('messages', msgs);
+        qn.cardMsgId = cardMsgId;
+        return saveQuestionnaireRecord(qnId, qn);
+    }).then(function() {
+        renderChatMessages();
+        renderMessages();
+        jumpChatToBottom();
+        showToast('问卷已发出');
+        scheduleFriendAnswerQuestionnaire(qnId);
+        return true;
+    });
+}
+
+function scheduleFriendAnswerQuestionnaire(qnId) {
+    var delay = (3 + Math.random() * 7) * 1000;
+    setTimeout(function() {
+        loadQuestionnaireRecord(qnId).then(function(qn) {
+            if (!qn) return;
+            if (qn.status !== 'pending') return;
+            if (qn.from !== 'me') return;
+            var answers = {};
+            for (var i = 0; i < qn.questions.length; i++) {
+                var q = qn.questions[i];
+                answers[q.id] = buildFriendAnswerForQuestion(q);
+            }
+            qn.answers = answers;
+            qn.status = 'answered';
+            qn.answeredAt = Date.now();
+            return saveQuestionnaireRecord(qnId, qn).then(function() {
+                if (currentChatId === qn.chatId) {
+                    renderChatMessages();
+                }
+                renderMessages();
+                showToast('好友已答完问卷');
+            });
+        });
+    }, delay);
+}
+
+function submitMyQuestionnaireAnswer(qnId) {
+    loadQuestionnaireRecord(qnId).then(function(qn) {
+        if (!qn) return;
+        if (qn.to !== 'me') return;
+        if (qn.status !== 'pending') {
+            showToast('已提交，无法修改');
+            return;
+        }
+        var answers = {};
+        for (var i = 0; i < qn.questions.length; i++) {
+            var q = qn.questions[i];
+            var ans = window._qnTempAnswers && window._qnTempAnswers[q.id];
+            if (ans === undefined || ans === null) {
+                showToast('请先完成所有题目');
+                return;
+            }
+            answers[q.id] = ans;
+        }
+        qn.answers = answers;
+        qn.status = 'answered';
+        qn.answeredAt = Date.now();
+        saveQuestionnaireRecord(qnId, qn).then(function() {
+            window._qnTempAnswers = null;
+            closeModal();
+            if (currentChatId === qn.chatId) renderChatMessages();
+            renderMessages();
+            showToast('已提交');
+        });
+    });
+}
+
+window.sendQuestionnaireToChat = sendQuestionnaireToChat;
+window.scheduleFriendAnswerQuestionnaire = scheduleFriendAnswerQuestionnaire;
+window.submitMyQuestionnaireAnswer = submitMyQuestionnaireAnswer;
+window.setQnTempAnswer = setQnTempAnswer;
+window.genQuestionnaireId = genQuestionnaireId;
+window.getNowTimeStringForQn = getNowTimeStringForQn;
+window.generateAnswerFromLexicon = generateAnswerFromLexicon;
+window.buildFriendAnswerForQuestion = buildFriendAnswerForQuestion;
+
+// ====== 问卷：自定义创建 ======
+var qnComposeState = { questions: [] };
+
+function openQuestionnaireCompose() {
+    if (!currentChatId) {
+        showToast('请先进入聊天');
+        return;
+    }
+    qnComposeState.questions = [];
+    var html = '<div class="sub-page active" id="qnComposePage" style="z-index:60;background:#ffffff;pointer-events:auto;display:flex;flex-direction:column;">' +
+        '<div class="sub-top">' +
+            '<div class="back-btn" onclick="closeSubPage()">' +
+                '<svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>' +
+            '</div>' +
+            '<span>自定义创建</span>' +
+        '</div>' +
+        '<div class="sub-content" id="qnComposeContent" style="padding:16px;overflow-y:auto;pointer-events:auto;flex:1;">' +
+            renderQnComposeContent() +
+        '</div>' +
+    '</div>';
+    var container = document.getElementById('subPageContainer');
+    container.innerHTML = html;
+    var subPage = container.querySelector('#qnComposePage');
+    if (subPage) {
+        subPage.classList.add('active');
+        subPage.style.pointerEvents = 'auto';
+    }
+}
+
+function renderQnComposeContent() {
+    var html = '';
+    var qs = qnComposeState.questions;
+
+    if (qs.length === 0) {
+        html += '<div style="text-align:center;color:#999999;padding:30px 0;font-size:13px;">还没有题目，点击下方添加</div>';
+    }
+
+    for (var i = 0; i < qs.length; i++) {
+        var q = qs[i];
+        var typeName = getQbTypeName(q.type);
+        html += '<div style="background:#ffffff;border:1px solid #eef5ef;border-radius:10px;padding:12px;margin-bottom:8px;">' +
+            '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">' +
+                '<span style="font-size:11px;color:#888888;background:var(--theme-lighter, #eef5ef);border-radius:10px;padding:2px 8px;">第' + (i + 1) + '题 · ' + typeName + '</span>' +
+                '<span onclick="removeQnComposeQuestion(' + i + ')" style="cursor:pointer;color:#d4b0b0;font-size:16px;padding:0 4px;">×</span>' +
+            '</div>' +
+            '<div style="font-size:14px;color:#000000;font-weight:500;word-break:break-word;margin-bottom:6px;">' + (q.title || '') + '</div>';
+        if (q.options && q.options.length > 0) {
+            html += '<div style="font-size:12px;color:#666666;line-height:1.8;">';
+            for (var oi = 0; oi < q.options.length; oi++) {
+                html += '<div>' + (oi + 1) + '. ' + q.options[oi] + '</div>';
+            }
+            html += '</div>';
+        }
+        html += '</div>';
+    }
+
+    html += '<button class="btn-primary" onclick="showQnComposeAddMenu()" style="width:100%;padding:10px 0;margin-top:12px;">添加题目</button>';
+    html += '<button class="btn-primary" onclick="confirmSendQnCompose()" style="width:100%;padding:10px 0;margin-top:8px;background:var(--theme-main, #d4e9d6);">发出问卷</button>';
+    return html;
+}
+
+function refreshQnCompose() {
+    var content = document.getElementById('qnComposeContent');
+    if (content) content.innerHTML = renderQnComposeContent();
+}
+
+function removeQnComposeQuestion(idx) {
+    qnComposeState.questions.splice(idx, 1);
+    refreshQnCompose();
+}
+
+function showQnComposeAddMenu() {
+    var html = '<div class="modal-title">添加题目</div>' +
+        '<button class="btn-primary" style="width:100%;margin-bottom:8px;" onclick="closeModal();showQnComposeAddForm(\'single\')">单选</button>' +
+        '<button class="btn-primary" style="width:100%;margin-bottom:8px;" onclick="closeModal();showQnComposeAddForm(\'multi\')">多选</button>' +
+        '<button class="btn-primary" style="width:100%;margin-bottom:8px;" onclick="closeModal();showQnComposeAddForm(\'judge\')">对错</button>' +
+        '<button class="btn-primary" style="width:100%;margin-bottom:8px;" onclick="closeModal();showQnComposeAddForm(\'order\')">排序</button>' +
+        '<button class="btn-primary" style="width:100%;margin-bottom:8px;" onclick="closeModal();showQnComposeAddForm(\'answer\')">解答</button>' +
+        '<div class="btn-row" style="margin-top:8px;"><button class="cancel" onclick="closeModal()">取消</button></div>';
+    showModal(html);
+}
+
+function showQnComposeAddForm(type) {
+    var typeName = getQbTypeName(type);
+    var optHtml = '';
+    if (type === 'judge') {
+        optHtml = '<div style="font-size:12px;color:#999999;margin-bottom:8px;">对错题选项固定为「对」「错」</div>';
+    } else if (type === 'answer') {
+        optHtml = '<div style="font-size:12px;color:#999999;margin-bottom:8px;">解答题没有选项</div>';
+    } else {
+        optHtml = '<div id="qnAddOptions">' +
+            '<input type="text" class="qn-add-option" placeholder="选项1" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
+            '<input type="text" class="qn-add-option" placeholder="选项2" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
+            (type === 'multi' ? '<input type="text" class="qn-add-option" placeholder="选项3" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' : '') +
+        '</div>' +
+        '<button class="btn-icon" onclick="addQnComposeOptionInput()" style="margin-bottom:8px;">+ 添加选项</button>';
+    }
+    var html = '<div class="modal-title">添加' + typeName + '题</div>' +
+        '<input type="text" id="qnAddTitle" placeholder="题目" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
+        optHtml +
+        '<div class="btn-row">' +
+            '<button class="cancel" onclick="closeModal()">取消</button>' +
+            '<button class="confirm" onclick="confirmAddQnComposeQuestion(\'' + type + '\')">保存</button>' +
+        '</div>';
+    showModal(html);
+}
+
+function addQnComposeOptionInput() {
+    var container = document.getElementById('qnAddOptions');
+    if (!container) return;
+    var count = container.querySelectorAll('.qn-add-option').length;
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'qn-add-option';
+    input.placeholder = '选项' + (count + 1);
+    input.style.cssText = 'width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;';
+    container.appendChild(input);
+}
+
+function confirmAddQnComposeQuestion(type) {
+    var titleInput = document.getElementById('qnAddTitle');
+    if (!titleInput || !titleInput.value.trim()) {
+        showToast('请输入题目');
+        return;
+    }
+    var options = [];
+    if (type === 'judge') {
+        options = ['对', '错'];
+    } else if (type === 'answer') {
+        options = [];
+    } else {
+        var optInputs = document.querySelectorAll('.qn-add-option');
+        for (var i = 0; i < optInputs.length; i++) {
+            var v = optInputs[i].value.trim();
+            if (v) options.push(v);
+        }
+        var minOpt = (type === 'multi') ? 3 : 2;
+        if (options.length < minOpt) {
+            showToast('至少需要 ' + minOpt + ' 个选项');
+            return;
+        }
+    }
+    qnComposeState.questions.push({
+        id: 'cq' + Date.now() + Math.random().toString(36).substr(2, 4),
+        type: type,
+        title: titleInput.value.trim(),
+        options: options,
+        locked: false,
+        createdAt: Date.now()
+    });
+    closeModal();
+    refreshQnCompose();
+    showToast('已添加第 ' + qnComposeState.questions.length + ' 题');
+}
+
+function confirmSendQnCompose() {
+    if (qnComposeState.questions.length === 0) {
+        showToast('请先添加题目');
+        return;
+    }
+    var qs = qnComposeState.questions.slice();
+    sendQuestionnaireToChat(qs, '问卷').then(function(ok) {
+        if (ok) {
+            closeSubPage();
+        }
+    });
+}
+
+// ====== 问卷：题库创建 ======
+var qnBankPickState = { currentType: 'all', selectedIds: new Set(), _bank: null };
+
+function openQuestionnaireBankPicker() {
+    if (!currentChatId) {
+        showToast('请先进入聊天');
+        return;
+    }
+    qnBankPickState.currentType = 'all';
+    qnBankPickState.selectedIds = new Set();
+    var html = '<div class="sub-page active" id="qnBankPickPage" style="z-index:60;background:#ffffff;pointer-events:auto;display:flex;flex-direction:column;">' +
+        '<div class="sub-top">' +
+            '<div class="back-btn" onclick="closeSubPage()">' +
+                '<svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>' +
+            '</div>' +
+            '<span>题库创建</span>' +
+            '<span onclick="confirmSendQnFromBank()" style="margin-left:auto;cursor:pointer;font-size:13px;color:#000000;padding:4px 8px;">发出</span>' +
+        '</div>' +
+        '<div class="sub-content" id="qnBankPickContent" style="padding:16px;overflow-y:auto;pointer-events:auto;flex:1;">' +
+            '<div style="text-align:center;color:#999999;padding:20px 0;font-size:13px;">加载中...</div>' +
+        '</div>' +
+    '</div>';
+    var container = document.getElementById('subPageContainer');
+    container.innerHTML = html;
+    var subPage = container.querySelector('#qnBankPickPage');
+    if (subPage) {
+        subPage.classList.add('active');
+        subPage.style.pointerEvents = 'auto';
+    }
+    refreshQnBankPick();
+}
+
+function refreshQnBankPick() {
+    loadQuestionBank().then(function(bank) {
+        qnBankPickState._bank = bank;
+        var content = document.getElementById('qnBankPickContent');
+        if (content) content.innerHTML = renderQnBankPickContent();
+    });
+}
+
+function renderQnBankPickContent() {
+    var bank = qnBankPickState._bank || { questions: [] };
+    var questions = bank.questions || [];
+    var current = qnBankPickState.currentType;
+    var html = '';
+
+    var counts = { all: questions.length, single: 0, multi: 0, judge: 0, order: 0, answer: 0 };
+    for (var ci = 0; ci < questions.length; ci++) {
+        var qt = questions[ci].type;
+        if (counts[qt] !== undefined) counts[qt]++;
+    }
+
+    var tabs = [
+        { key: 'all', label: '全部' },
+        { key: 'single', label: '单选' },
+        { key: 'multi', label: '多选' },
+        { key: 'judge', label: '对错' },
+        { key: 'order', label: '排序' },
+        { key: 'answer', label: '解答' }
+    ];
+
+    html += '<div style="display:flex;gap:6px;overflow-x:auto;padding:0 0 10px 0;scrollbar-width:none;-webkit-overflow-scrolling:touch;">';
+    for (var ti = 0; ti < tabs.length; ti++) {
+        var t = tabs[ti];
+        var active = (current === t.key);
+        html += '<button class="btn-icon" onclick="switchQnBankPickType(\'' + t.key + '\')" style="flex-shrink:0;padding:6px 16px;border-radius:30px;border:none;font-size:13px;cursor:pointer;background:' + (active ? 'var(--theme-main, #d4e9d6)' : 'var(--theme-lighter, #eef5ef)') + ';color:' + (active ? '#000000' : '#888888') + ';">' + t.label + '（' + counts[t.key] + '）</button>';
+    }
+    html += '</div>';
+
+    html += '<div style="font-size:12px;color:#999999;margin-bottom:8px;">已选 ' + qnBankPickState.selectedIds.size + ' 题</div>';
+
+    var list = questions;
+    if (current !== 'all') {
+        list = questions.filter(function(q) { return q.type === current; });
+    }
+    list = list.slice().sort(function(a, b) { return (b.createdAt || 0) - (a.createdAt || 0); });
+
+    if (list.length === 0) {
+        html += '<div style="text-align:center;color:#999999;padding:30px 0;font-size:13px;">暂无题目</div>';
+    } else {
+        for (var li = 0; li < list.length; li++) {
+            var q = list[li];
+            var isSel = qnBankPickState.selectedIds.has(q.id);
+            var lockTag = q.locked ? '<span style="font-size:10px;color:var(--theme-dark, #4a7a4e);margin-left:6px;">已锁定</span>' : '';
+            html += '<div onclick="toggleQnBankPickQuestion(\'' + q.id + '\')" style="background:#ffffff;border:2px solid ' + (isSel ? 'var(--theme-main, #d4e9d6)' : '#eef5ef') + ';border-radius:10px;padding:12px;margin-bottom:8px;cursor:pointer;">' +
+                '<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;">' +
+                    '<span style="font-size:11px;color:#888888;background:var(--theme-lighter, #eef5ef);border-radius:10px;padding:2px 8px;flex-shrink:0;">' + getQbTypeName(q.type) + '</span>' +
+                    '<div style="font-size:14px;color:#000000;font-weight:500;word-break:break-word;flex:1;min-width:0;">' + (q.title || '') + lockTag + '</div>' +
+                    '<span style="flex-shrink:0;font-size:16px;color:' + (isSel ? 'var(--theme-dark, #4a7a4e)' : '#cccccc') + ';">' + (isSel ? '✓' : '○') + '</span>' +
+                '</div>';
+            if (q.options && q.options.length > 0) {
+                html += '<div style="font-size:12px;color:#666666;line-height:1.8;">';
+                for (var oi = 0; oi < q.options.length; oi++) {
+                    html += '<div>' + (oi + 1) + '. ' + q.options[oi] + '</div>';
+                }
+                html += '</div>';
+            }
+            html += '</div>';
+        }
+    }
+    return html;
+}
+
+function switchQnBankPickType(type) {
+    qnBankPickState.currentType = type;
+    var content = document.getElementById('qnBankPickContent');
+    if (content) content.innerHTML = renderQnBankPickContent();
+}
+
+function toggleQnBankPickQuestion(qid) {
+    if (qnBankPickState.selectedIds.has(qid)) {
+        qnBankPickState.selectedIds.delete(qid);
+    } else {
+        qnBankPickState.selectedIds.add(qid);
+    }
+    var content = document.getElementById('qnBankPickContent');
+    if (content) content.innerHTML = renderQnBankPickContent();
+}
+
+function confirmSendQnFromBank() {
+    if (qnBankPickState.selectedIds.size === 0) {
+        showToast('请先选择题目');
+        return;
+    }
+    var bank = qnBankPickState._bank;
+    if (!bank) return;
+    var picked = bank.questions.filter(function(q) { return qnBankPickState.selectedIds.has(q.id); });
+    if (picked.length === 0) {
+        showToast('请先选择题目');
+        return;
+    }
+    sendQuestionnaireToChat(picked, '问卷').then(function(ok) {
+        if (ok) {
+            closeSubPage();
+        }
+    });
+}
+
+window.openQuestionnaireCompose = openQuestionnaireCompose;
+window.removeQnComposeQuestion = removeQnComposeQuestion;
+window.showQnComposeAddMenu = showQnComposeAddMenu;
+window.showQnComposeAddForm = showQnComposeAddForm;
+window.addQnComposeOptionInput = addQnComposeOptionInput;
+window.confirmAddQnComposeQuestion = confirmAddQnComposeQuestion;
+window.confirmSendQnCompose = confirmSendQnCompose;
+window.openQuestionnaireBankPicker = openQuestionnaireBankPicker;
+window.switchQnBankPickType = switchQnBankPickType;
+window.toggleQnBankPickQuestion = toggleQnBankPickQuestion;
+window.confirmSendQnFromBank = confirmSendQnFromBank;
+
+// ====== 问卷：答题卡片渲染 ======
+function renderQuestionnaireCard(msg) {
+    var qnId = msg.questionnaireId;
+    var wrap = '<div id="qnCardWrap_' + qnId + '" style="background:#ffffff;border:1px solid var(--theme-main, #d4e9d6);border-radius:12px;padding:14px;width:220px;box-sizing:border-box;">' +
+        '<div style="text-align:center;font-size:13px;color:#999999;padding:12px 0;">加载中...</div>' +
+    '</div>';
+    loadQuestionnaireRecord(qnId).then(function(qn) {
+        var el = document.getElementById('qnCardWrap_' + qnId);
+        if (!el) return;
+        if (!qn) {
+            el.innerHTML = '<div style="text-align:center;font-size:12px;color:#999999;padding:8px 0;">问卷已失效</div>';
+            return;
+        }
+        el.innerHTML = renderQuestionnaireCardInner(qn);
+    });
+    return wrap;
+}
+
+function renderQuestionnaireCardInner(qn) {
+    var html = '';
+    
+    // 不再加白色背景和边框，直接借用外层气泡，避免双层框
+    html += '<div style="width:200px;box-sizing:border-box;text-align:left;">';
+    
+    // 标题
+    html += '<div style="font-size:14px;font-weight:600;color:#000000;margin-bottom:12px;word-break:break-word;">' + (qn.title || '问卷') + '</div>';
+    
+    // 统计与状态
+    var statusText = '';
+    if (qn.status === 'pending') {
+        if (qn.to === 'me') {
+            statusText = '待我作答';
+        } else {
+            statusText = '等待好友作答';
+        }
+    } else if (qn.status === 'answered') {
+        if (qn.to === 'me') {
+            statusText = '我已作答';
+        } else {
+            statusText = '好友已作答';
+        }
+    }
+    
+    html += '<div style="font-size:12px;color:#666666;margin-bottom:4px;">共 ' + qn.questions.length + ' 题</div>';
+    // 状态文字统一用黑色
+    html += '<div style="font-size:12px;color:#000000;margin-bottom:12px;">' + statusText + '</div>';
+
+    // 按钮
+    html += '<button onclick="openQuestionnaireAnswerView(\'' + qn.id + '\')" style="width:100%;padding:8px 0;background:#ffffff;color:#000000;border:none;border-radius:20px;font-size:13px;cursor:pointer;">' + (qn.to === 'me' && qn.status === 'pending' ? '去作答' : '查看详情') + '</button>';
+    
+    html += '</div>';
+    return html;
+}
+
+function refreshQnAnswerCard(qnId) {
+    loadQuestionnaireRecord(qnId).then(function(qn) {
+        if (!qn) return;
+        var el = document.getElementById('qnCardWrap_' + qnId);
+        if (el) el.innerHTML = renderQuestionnaireCardInner(qn);
+    });
+}
+
+// ====== 问卷：答题详情 / 答题界面 ======
+function openQuestionnaireAnswerView(qnId) {
+    loadQuestionnaireRecord(qnId).then(function(qn) {
+        if (!qn) {
+            showToast('问卷不存在');
+            return;
+        }
+        window._qnTempAnswers = null;
+        if (qn.to === 'me' && qn.status === 'pending') {
+            window._qnTempAnswers = {};
+        }
+        renderQuestionnaireAnswerModal(qn);
+    });
+}
+
+function renderQuestionnaireAnswerModal(qn) {
+    window._qnCurrentModal = qn;
+    var canAnswer = (qn.to === 'me' && qn.status === 'pending');
+    var html = '<div class="modal-title">' + (qn.title || '问卷') + '</div>';
+    html += '<div style="font-size:12px;color:#999999;margin-bottom:12px;text-align:center;">共 ' + qn.questions.length + ' 题</div>';
+
+    for (var i = 0; i < qn.questions.length; i++) {
+        var q = qn.questions[i];
+        html += '<div style="background:#ffffff;border:1px solid #eef5ef;border-radius:10px;padding:12px;margin-bottom:8px;">';
+        html += '<div style="font-size:13px;color:#000000;font-weight:500;word-break:break-word;margin-bottom:8px;">' + (i + 1) + '. ' + (q.title || '') + ' <span style="font-size:11px;color:#888888;background:var(--theme-lighter, #eef5ef);border-radius:10px;padding:2px 8px;margin-left:4px;">' + getQbTypeName(q.type) + '</span></div>';
+        html += renderQuestionAnswerBody(qn, q, canAnswer);
+        html += '</div>';
+    }
+
+    if (canAnswer) {
+        html += '<div class="btn-row" style="margin-top:12px;">' +
+            '<button class="cancel" onclick="closeModal()">取消</button>' +
+            '<button class="confirm" onclick="submitMyQuestionnaireAnswer(\'' + qn.id + '\')">提交</button>' +
+        '</div>';
+    } else {
+        html += '<div class="btn-row" style="margin-top:12px;"><button class="cancel" onclick="closeModal()">关闭</button></div>';
+    }
+    showModal(html);
+}
+
+function renderQuestionAnswerBody(qn, q, canAnswer) {
+    var answer = null;
+    if (canAnswer) {
+        answer = window._qnTempAnswers ? window._qnTempAnswers[q.id] : null;
+    } else {
+        answer = qn.answers ? qn.answers[q.id] : null;
+    }
+
+    var html = '';
+
+    if (q.type === 'single' || q.type === 'judge') {
+var ansIdx = -1;
+if (answer !== null && answer !== undefined) {
+    if (Array.isArray(answer)) ansIdx = answer[0];
+    else ansIdx = answer;
+}
+if (ansIdx === undefined) ansIdx = -1;
+    for (var i = 0; i < q.options.length; i++) {
+        var sel = (ansIdx === i);
+        var clickAttr = canAnswer ? ' onclick="setQnTempAnswer(\'' + qn.id + '\',\'' + q.id + '\',[' + i + '])"' : '';
+        html += '<div' + clickAttr + ' style="display:flex;align-items:center;padding:8px 0;' + (canAnswer ? 'cursor:pointer;' : '') + '">' +
+            '<span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;flex-shrink:0;margin-right:10px;box-sizing:border-box;' + (sel ? 'background:var(--theme-dark, #4a7a4e);border:2px solid var(--theme-dark, #4a7a4e);' : 'border:2px solid #cccccc;') + '">' +
+                (sel ? '<span style="width:6px;height:6px;background:#ffffff;border-radius:50%;"></span>' : '') +
+            '</span>' +
+            '<span style="font-size:14px;color:#000000;word-break:break-word;">' + q.options[i] + '</span>' +
+        '</div>';
+    }
+} else if (q.type === 'multi') {
+    var selArr = Array.isArray(answer) ? answer : [];
+    for (var mi = 0; mi < q.options.length; mi++) {
+        var msel = selArr.indexOf(mi) !== -1;
+        var clickAttrM = canAnswer ? ' onclick="toggleQnMultiAnswer(\'' + qn.id + '\',\'' + q.id + '\',' + mi + ')"' : '';
+        html += '<div' + clickAttrM + ' style="display:flex;align-items:center;padding:8px 0;' + (canAnswer ? 'cursor:pointer;' : '') + '">' +
+            '<span style="display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:4px;flex-shrink:0;margin-right:10px;box-sizing:border-box;font-size:11px;color:#ffffff;' + (msel ? 'background:var(--theme-dark, #4a7a4e);border:2px solid var(--theme-dark, #4a7a4e);' : 'border:2px solid #cccccc;') + '">' + (msel ? '✓' : '') + '</span>' +
+            '<span style="font-size:14px;color:#000000;word-break:break-word;">' + q.options[mi] + '</span>' +
+        '</div>';
+    }
+} else if (q.type === 'order') {
+    var orderArr = Array.isArray(answer) ? answer : [];
+    for (var oi = 0; oi < q.options.length; oi++) {
+        var num = 0;
+        var pos = orderArr.indexOf(oi);
+        if (pos !== -1) num = pos + 1;
+        var clickAttrO = canAnswer ? ' onclick="handleQnOrderClick(\'' + qn.id + '\',\'' + q.id + '\',' + oi + ')"' : '';
+        html += '<div' + clickAttrO + ' style="display:flex;align-items:center;padding:8px 0;' + (canAnswer ? 'cursor:pointer;' : '') + '">' +
+            '<span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;flex-shrink:0;margin-right:10px;box-sizing:border-box;font-size:12px;background:' + (num > 0 ? 'var(--theme-main, #d4e9d6)' : '#ffffff') + ';color:' + (num > 0 ? '#000000' : '#888888') + ';border:1px solid ' + (num > 0 ? 'var(--theme-main, #d4e9d6)' : '#cccccc') + ';">' + (num > 0 ? num : '') + '</span>' +
+            '<span style="font-size:14px;color:#000000;word-break:break-word;">' + q.options[oi] + '</span>' +
+        '</div>';
+    }
+} else if (q.type === 'answer') {
+        if (canAnswer) {
+            var val = answer || '';
+            html += '<textarea id="qnAnswerText_' + q.id + '" placeholder="输入你的回答..." style="width:100%;min-height:70px;padding:8px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;resize:vertical;box-sizing:border-box;outline:none;" onchange="setQnTempAnswer(\'' + qn.id + '\',\'' + q.id + '\',this.value)">' + val + '</textarea>';
+        } else {
+            html += '<div style="font-size:14px;color:#000000;line-height:1.7;white-space:pre-wrap;word-break:break-word;">' + (answer || '（无回答）') + '</div>';
+        }
+    }
+    return html;
+}
+
+function toggleQnMultiAnswer(qnId, qid, idx) {
+    if (!window._qnTempAnswers) window._qnTempAnswers = {};
+    var cur = window._qnTempAnswers[qid];
+    if (!Array.isArray(cur)) cur = [];
+    var pos = cur.indexOf(idx);
+    if (pos === -1) cur.push(idx);
+    else cur.splice(pos, 1);
+    cur.sort(function(a, b) { return a - b; });
+    window._qnTempAnswers[qid] = cur;
+    refreshQnAnswerModalLocal();
+}
+
+function handleQnOrderClick(qnId, qid, idx) {
+    if (!window._qnTempAnswers) window._qnTempAnswers = {};
+    var cur = window._qnTempAnswers[qid];
+    if (!Array.isArray(cur)) cur = [];
+
+    var pos = cur.indexOf(idx);
+    if (pos !== -1) {
+        cur.splice(pos, 1);
+    } else {
+        cur.push(idx);
+    }
+    window._qnTempAnswers[qid] = cur;
+    refreshQnAnswerModalLocal();
+}
+
+function setQnTempAnswer(qnId, qid, value) {
+    if (!window._qnTempAnswers) window._qnTempAnswers = {};
+    window._qnTempAnswers[qid] = value;
+    var qn = window._qnCurrentModal;
+    if (qn) {
+        renderQuestionnaireAnswerModal(qn);
+    }
+}
+window.setQnTempAnswer = setQnTempAnswer;
+
+function refreshQnAnswerModalLocal() {
+    var qn = window._qnCurrentModal;
+    if (!qn) return;
+    renderQuestionnaireAnswerModal(qn);
+}
+
+window.refreshQnAnswerModalLocal = refreshQnAnswerModalLocal;
+window.renderQuestionnaireCard = renderQuestionnaireCard;
+window.renderQuestionnaireCardInner = renderQuestionnaireCardInner;
+window.refreshQnAnswerCard = refreshQnAnswerCard;
+window.openQuestionnaireAnswerView = openQuestionnaireAnswerView;
+window.toggleQnMultiAnswer = toggleQnMultiAnswer;
+window.handleQnOrderClick = handleQnOrderClick;
+
+// ====== 问卷：交互记录（我给他的 / 他给我的） ======
+var qnInteractionState = { chatId: null, currentTab: 'toHim' };
+
+function openQuestionnaireInteraction() {
+    if (!currentChatId) {
+        showToast('请先进入聊天');
+        return;
+    }
+    qnInteractionState.chatId = currentChatId;
+    qnInteractionState.currentTab = 'toHim';
+    renderQnInteractionPage();
+}
+
+function renderQnInteractionPage() {
+    var chatId = qnInteractionState.chatId;
+    if (!chatId) return;
+    var friends = DataHub.get('friends', []);
+    var friend = friends.find(function(f) { return f.id === chatId; });
+    var friendName = friend ? friend.name : '好友';
+
+    var html = '<div class="sub-page active" id="qnInteractionPage" style="z-index:60;background:#ffffff;pointer-events:auto;display:flex;flex-direction:column;">' +
+        '<div class="sub-top">' +
+            '<div class="back-btn" onclick="closeSubPage()">' +
+                '<svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>' +
+            '</div>' +
+            '<span>问卷交互</span>' +
+        '</div>' +
+        '<div class="sub-content" style="padding:16px;overflow-y:auto;pointer-events:auto;flex:1;">' +
+            '<div id="qnInteractionContent">' +
+                renderQnInteractionContent(chatId) +
+            '</div>' +
+        '</div>' +
+    '</div>';
+    var container = document.getElementById('subPageContainer');
+    container.innerHTML = html;
+    var subPage = container.querySelector('#qnInteractionPage');
+    if (subPage) {
+        subPage.classList.add('active');
+        subPage.style.pointerEvents = 'auto';
+    }
+}
+
+function renderQnInteractionContent(chatId) {
+    var friendName = '好友';
+    var friends = DataHub.get('friends', []);
+    var friend = friends.find(function(f) { return f.id === chatId; });
+    if (friend) friendName = friend.name;
+
+    var toHimCount = 0;
+    var fromHimCount = 0;
+    var currentTab = qnInteractionState.currentTab;
+
+    var html = '<div style="display:flex;gap:6px;margin-bottom:12px;">' +
+        '<button class="btn-icon" onclick="switchQnInteractionTab(\'toHim\')" style="flex:1;padding:8px 0;border:none;border-radius:20px;font-size:13px;cursor:pointer;background:' + (currentTab === 'toHim' ? 'var(--theme-main, #d4e9d6)' : 'var(--theme-lighter, #eef5ef)') + ';color:' + (currentTab === 'toHim' ? '#000000' : '#888888') + ';">我给他的</button>' +
+        '<button class="btn-icon" onclick="switchQnInteractionTab(\'fromHim\')" style="flex:1;padding:8px 0;border:none;border-radius:20px;font-size:13px;cursor:pointer;background:' + (currentTab === 'fromHim' ? 'var(--theme-main, #d4e9d6)' : 'var(--theme-lighter, #eef5ef)') + ';color:' + (currentTab === 'fromHim' ? '#000000' : '#888888') + ';">他给我的</button>' +
+    '</div>';
+
+    html += '<div id="qnInteractionList"><div style="text-align:center;color:#999999;padding:20px 0;font-size:13px;">加载中...</div></div>';
+
+    getQuestionnairesByChat(chatId).then(function(list) {
+        var toHim = list.filter(function(q) { return q.from === 'me'; });
+        var fromHim = list.filter(function(q) { return q.to === 'me'; });
+        toHimCount = toHim.length;
+        fromHimCount = fromHim.length;
+
+        var tabsEl = document.querySelector('#qnInteractionPage .sub-content > div:first-child');
+        if (tabsEl) {
+            tabsEl.innerHTML = '<div style="display:flex;gap:6px;margin-bottom:12px;">' +
+                '<button class="btn-icon" onclick="switchQnInteractionTab(\'toHim\')" style="flex:1;padding:8px 0;border:none;border-radius:20px;font-size:13px;cursor:pointer;background:' + (qnInteractionState.currentTab === 'toHim' ? 'var(--theme-main, #d4e9d6)' : 'var(--theme-lighter, #eef5ef)') + ';color:' + (qnInteractionState.currentTab === 'toHim' ? '#000000' : '#888888') + ';">我给他的（' + toHimCount + '）</button>' +
+                '<button class="btn-icon" onclick="switchQnInteractionTab(\'fromHim\')" style="flex:1;padding:8px 0;border:none;border-radius:20px;font-size:13px;cursor:pointer;background:' + (qnInteractionState.currentTab === 'fromHim' ? 'var(--theme-main, #d4e9d6)' : 'var(--theme-lighter, #eef5ef)') + ';color:' + (qnInteractionState.currentTab === 'fromHim' ? '#000000' : '#888888') + ';">他给我的（' + fromHimCount + '）</button>' +
+            '</div>';
+        }
+
+        var showList = (qnInteractionState.currentTab === 'toHim') ? toHim : fromHim;
+        var listEl = document.getElementById('qnInteractionList');
+        if (!listEl) return;
+
+        if (showList.length === 0) {
+            listEl.innerHTML = '<div style="text-align:center;color:#999999;padding:30px 0;font-size:13px;">暂无问卷</div>';
+            return;
+        }
+
+        var html2 = '';
+        for (var i = 0; i < showList.length; i++) {
+            var qn = showList[i];
+            var isMe = (qn.from === 'me');
+            var statusText = '';
+            if (qn.status === 'pending') {
+                statusText = isMe ? '等待好友作答' : '待我作答';
+            } else {
+                statusText = isMe ? '好友已作答' : '我已作答';
+            }
+            var statusColor = (qn.status === 'answered') ? 'var(--theme-dark, #4a7a4e)' : '#999999';
+            html2 += '<div onclick="openQuestionnaireAnswerView(\'' + qn.id + '\')" style="background:#ffffff;border:1px solid #eef5ef;border-radius:12px;padding:12px 14px;margin-bottom:8px;cursor:pointer;">' +
+                '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">' +
+                    '<span style="font-size:14px;color:#000000;font-weight:500;word-break:break-word;flex:1;min-width:0;">' + (qn.title || '问卷') + '</span>' +
+                    '<span style="font-size:12px;color:' + statusColor + ';flex-shrink:0;margin-left:8px;">' + statusText + '</span>' +
+                '</div>' +
+                '<div style="font-size:12px;color:#999999;">共 ' + qn.questions.length + ' 题 · ' + (qn.createdAtStr || '') + '</div>' +
+            '</div>';
+        }
+        listEl.innerHTML = html2;
+    });
+
+    return html;
+}
+
+function switchQnInteractionTab(tab) {
+    qnInteractionState.currentTab = tab;
+    var chatId = qnInteractionState.chatId;
+    getQuestionnairesByChat(chatId).then(function(list) {
+        var toHim = list.filter(function(q) { return q.from === 'me'; });
+        var fromHim = list.filter(function(q) { return q.to === 'me'; });
+
+        var tabsEl = document.querySelector('#qnInteractionPage .sub-content > div:first-child');
+        if (tabsEl) {
+            tabsEl.innerHTML = '<div style="display:flex;gap:6px;margin-bottom:12px;">' +
+                '<button class="btn-icon" onclick="switchQnInteractionTab(\'toHim\')" style="flex:1;padding:8px 0;border:none;border-radius:20px;font-size:13px;cursor:pointer;background:' + (qnInteractionState.currentTab === 'toHim' ? 'var(--theme-main, #d4e9d6)' : 'var(--theme-lighter, #eef5ef)') + ';color:' + (qnInteractionState.currentTab === 'toHim' ? '#000000' : '#888888') + ';">我给他的（' + toHim.length + '）</button>' +
+                '<button class="btn-icon" onclick="switchQnInteractionTab(\'fromHim\')" style="flex:1;padding:8px 0;border:none;border-radius:20px;font-size:13px;cursor:pointer;background:' + (qnInteractionState.currentTab === 'fromHim' ? 'var(--theme-main, #d4e9d6)' : 'var(--theme-lighter, #eef5ef)') + ';color:' + (qnInteractionState.currentTab === 'fromHim' ? '#000000' : '#888888') + ';">他给我的（' + fromHim.length + '）</button>' +
+            '</div>';
+        }
+
+        var showList = (tab === 'toHim') ? toHim : fromHim;
+        var listEl = document.getElementById('qnInteractionList');
+        if (!listEl) return;
+
+        if (showList.length === 0) {
+            listEl.innerHTML = '<div style="text-align:center;color:#999999;padding:30px 0;font-size:13px;">暂无问卷</div>';
+            return;
+        }
+
+        var html2 = '';
+        for (var i = 0; i < showList.length; i++) {
+            var qn = showList[i];
+            var isMe = (qn.from === 'me');
+            var statusText = '';
+            if (qn.status === 'pending') {
+                statusText = isMe ? '等待好友作答' : '待我作答';
+            } else {
+                statusText = isMe ? '好友已作答' : '我已作答';
+            }
+            var statusColor = (qn.status === 'answered') ? 'var(--theme-dark, #4a7a4e)' : '#999999';
+            html2 += '<div onclick="openQuestionnaireAnswerView(\'' + qn.id + '\')" style="background:#ffffff;border:1px solid #eef5ef;border-radius:12px;padding:12px 14px;margin-bottom:8px;cursor:pointer;">' +
+                '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">' +
+                    '<span style="font-size:14px;color:#000000;font-weight:500;word-break:break-word;flex:1;min-width:0;">' + (qn.title || '问卷') + '</span>' +
+                    '<span style="font-size:12px;color:' + statusColor + ';flex-shrink:0;margin-left:8px;">' + statusText + '</span>' +
+                '</div>' +
+                '<div style="font-size:12px;color:#999999;">共 ' + qn.questions.length + ' 题 · ' + (qn.createdAtStr || '') + '</div>' +
+            '</div>';
+        }
+        listEl.innerHTML = html2;
+    });
+}
+
+window.openQuestionnaireInteraction = openQuestionnaireInteraction;
+window.switchQnInteractionTab = switchQnInteractionTab;
+
 function openSubPage(type) {
     const container = document.getElementById('subPageContainer');
     let html = '';
@@ -21449,6 +23201,34 @@ window.switchBgMode = function(mode) {
     openSubPage('appearance');
 };
 
+window.updateAllRangeSliders = function() {
+    var sliders = document.querySelectorAll('.range-slider');
+    sliders.forEach(function(slider) {
+        var min = parseFloat(slider.min) || 0;
+        var max = parseFloat(slider.max) || 100;
+        var val = parseFloat(slider.value) || 0;
+        var percent = ((val - min) / (max - min)) * 100;
+        if (percent < 0) percent = 0;
+        if (percent > 100) percent = 100;
+        var style = 'linear-gradient(to right, var(--theme-main, #d4e9d6) 0%, var(--theme-main, #d4e9d6) ' + percent + '%, var(--theme-lighter, #eef5ef) ' + percent + '%, var(--theme-lighter, #eef5ef) 100%)';
+        slider.style.background = style;
+    });
+};
+
+document.addEventListener('input', function(e) {
+    if (e.target && e.target.classList && e.target.classList.contains('range-slider')) {
+        var slider = e.target;
+        var min = parseFloat(slider.min) || 0;
+        var max = parseFloat(slider.max) || 100;
+        var val = parseFloat(slider.value) || 0;
+        var percent = ((val - min) / (max - min)) * 100;
+        if (percent < 0) percent = 0;
+        if (percent > 100) percent = 100;
+        var style = 'linear-gradient(to right, var(--theme-main, #d4e9d6) 0%, var(--theme-main, #d4e9d6) ' + percent + '%, var(--theme-lighter, #eef5ef) ' + percent + '%, var(--theme-lighter, #eef5ef) 100%)';
+        slider.style.background = style;
+    }
+});
+
 window.updateThemeColor = function(h, s, l) {
     var settings = DataHub.get('settings', {});
     if (h !== null && h !== undefined) settings.themeH = parseInt(h);
@@ -21460,6 +23240,7 @@ window.updateThemeColor = function(h, s, l) {
     var ll = (settings.themeL !== undefined) ? settings.themeL : 87;
     applyThemeColor(hh, ss, ll);
     if (currentChatId) applyChatStyle(currentChatId);
+    updateAllRangeSliders();
 };
 
 window.updateBubbleStyle = function(s) {
@@ -21529,7 +23310,9 @@ root.style.setProperty('--theme-bright-text', brightTextColor);
         '#app .modal-box .btn-row .confirm{background:var(--theme-main);}' +
         '#app .modal-box .btn-row .confirm:hover{background:var(--theme-dark);}' +
         '#app .modal-box .btn-row .cancel{background:var(--theme-lighter);}' +
-        '#app .range-slider{accent-color:var(--theme-main);}' +
+        '#app .range-slider{-webkit-appearance:none;appearance:none;width:100%;height:6px;border-radius:3px;background:var(--theme-lighter, #eef5ef);outline:none;margin:8px 0;}' +
+'#app .range-slider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:16px;height:16px;border-radius:50%;background:var(--theme-dark, #4a7a4e);cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,0.2);}' +
+'#app .range-slider::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:var(--theme-dark, #4a7a4e);cursor:pointer;border:none;box-shadow:0 1px 3px rgba(0,0,0,0.2);}' +
         '#app .profile-avatar-large{background:var(--theme-main);border-color:var(--theme-main);}' +
         '#app .profile-avatar-large:hover{border-color:var(--theme-dark);}' +
         '#app .profile-row:hover{background:var(--theme-lighter);}' +
@@ -21604,7 +23387,7 @@ function applyGlobalBgColor() {
 layer.id = 'globalBgLayer';
 layer.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:0;background-image:url(' + img + ');background-size:cover;background-position:center;opacity:' + (opacity / 100) + ';z-index:0;pointer-events:none;';
 appEl.insertBefore(layer, appEl.firstChild);
-var transparentSelectors = ['.top-bar', '.bottom-bar', '.chat-page', '.sub-page', '.chat-messages', '.sub-content', '.main-content', '.page-container'];
+var transparentSelectors = ['.main-content', '.page-container', '.chat-messages', '.sub-content'];
 for (var ti = 0; ti < transparentSelectors.length; ti++) {
     var els = appEl.querySelectorAll(transparentSelectors[ti]);
     for (var tj = 0; tj < els.length; tj++) {
@@ -21612,6 +23395,13 @@ for (var ti = 0; ti < transparentSelectors.length; ti++) {
         els[tj].style.position = 'relative';
         els[tj].style.zIndex = '1';
     }
+}
+// 强制恢复输入框和顶部栏的实底背景，防止与背景图重叠
+var solidBars = appEl.querySelectorAll('.top-bar, .bottom-bar, .chat-top, .chat-input-area, .sub-top');
+for (var si = 0; si < solidBars.length; si++) {
+    solidBars[si].style.background = '#ffffff';
+    solidBars[si].style.position = 'relative';
+    solidBars[si].style.zIndex = '2';
 }
 }
     }
@@ -21861,22 +23651,46 @@ window.exportData = function() {
                     };
                 });
             });
-            
+
             Promise.all(promises).then(function(processedBlobs) {
-                var exportObj = {
-                    version: 3,
-                    appData: DataHub.getAll(),
-                    blobs: processedBlobs
+                var qtx = database.transaction('questionnaireStore', 'readonly');
+                var qstore = qtx.objectStore('questionnaireStore');
+                var qreq = qstore.getAll();
+                qreq.onsuccess = function() {
+                    var questionnaireStoreData = qreq.result || [];
+                    var exportObj = {
+                        version: 4,
+                        appData: DataHub.getAll(),
+                        blobs: processedBlobs,
+                        questionnaireStore: questionnaireStoreData
+                    };
+                    const json = JSON.stringify(exportObj, null, 2);
+                    const blob = new Blob([json], {type: 'application/json'});
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = '时间数据_备份.json';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    showToast('导出成功');
                 };
-                const json = JSON.stringify(exportObj, null, 2);
-                const blob = new Blob([json], {type: 'application/json'});
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = '时间数据_备份.json';
-                a.click();
-                URL.revokeObjectURL(url);
-                showToast('导出成功');
+                qreq.onerror = function() {
+                    var exportObj = {
+                        version: 4,
+                        appData: DataHub.getAll(),
+                        blobs: processedBlobs,
+                        questionnaireStore: []
+                    };
+                    const json = JSON.stringify(exportObj, null, 2);
+                    const blob = new Blob([json], {type: 'application/json'});
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = '时间数据_备份.json';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    showToast('导出成功');
+                };
             });
         };
     });
@@ -21896,10 +23710,10 @@ window.importData = function() {
     reader.onload = function(e) {
         try {
             const data = JSON.parse(e.target.result);
-            if (data && data.version === 3 && data.appData) {
+            if (data && (data.version === 3 || data.version === 4) && data.appData) {
                 DataHub.setAll(data.appData);
                 DataHub.delete('votes');
-                
+
                 var blobs = data.blobs || [];
                 var promises = blobs.map(function(item) {
                     var blob = base64ToBlob(item.base64);
@@ -21910,12 +23724,31 @@ window.importData = function() {
                         friendId: item.friendId
                     });
                 });
-                
+
+                var questionnaireStoreData = data.questionnaireStore || [];
+
                 Promise.all(promises).then(function() {
+                    return getDB().then(function(database) {
+                        return new Promise(function(resolve) {
+                            var tx = database.transaction('questionnaireStore', 'readwrite');
+                            var store = tx.objectStore('questionnaireStore');
+                            store.clear();
+                            for (var qi = 0; qi < questionnaireStoreData.length; qi++) {
+                                store.put(questionnaireStoreData[qi]);
+                            }
+                            tx.oncomplete = function() { resolve(); };
+                            tx.onerror = function() { resolve(); };
+                        });
+                    });
+                }).then(function() {
                     renderAll();
                     updateTopBar();
                     closeSubPage();
-                    showToast('导入成功，已包含语音数据');
+                    if (questionnaireStoreData.length > 0) {
+                        showToast('导入成功，已包含语音和问卷数据');
+                    } else {
+                        showToast('导入成功，已包含语音数据');
+                    }
                 });
             } else {
                 DataHub.setAll(data);
@@ -27512,6 +29345,7 @@ startMonthlyStatsChecker();
 startPiggyAutoDepositChecker();
 startFriendCollectChecker();
 startFriendBuyMyCollectionChecker();
+startQuestionnaireAutoChecker();
 
     function initFriendAI() {
     var friends = DataHub.get('friends', []);
@@ -27614,6 +29448,14 @@ if (settings.fontFamily) {
 handleVisualViewport();
 }
 
+function startQuestionnaireAutoChecker() {
+    autoFriendSendQuestionnaire();
+    setInterval(function() {
+        autoFriendSendQuestionnaire();
+    }, 60 * 60 * 1000);
+}
+
+window.startQuestionnaireAutoChecker = startQuestionnaireAutoChecker;
 window.renderAll = renderAll;
 window.switchPage = switchPage;
 window.closeChatBottomPanel = closeChatBottomPanel;
