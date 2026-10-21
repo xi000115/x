@@ -3814,6 +3814,186 @@ var html = '<div style="background:' + doneGradient + ';border-radius:12px;paddi
 window.renderHongbaoCard = renderHongbaoCard;
 window.renderHongbaoResultCard = renderHongbaoResultCard;
 
+// 渲染大富翁邀请卡片
+function renderMonopolyInviteCard(m) {
+    var inv = m.monopolyInvite;
+    var friendId = (inv.from === 'me') ? m.chatId : inv.from;
+    var friendName = getFriendSpecialName(friendId);
+    var modeText = (inv.mode === 'single') ? '单人模式' : '双人模式';
+    var isFromMe = (m.from === 'me');
+
+    var mainText = '';
+    var subText = '';
+    var buttonsHtml = '';
+
+    if (isFromMe) {
+        if (inv.status === 'accepted') {
+            mainText = '已接受 ' + friendName + ' 的大富翁游戏邀请';
+            subText = '';
+        } else if (inv.status === 'rejected') {
+            mainText = '已拒绝 ' + friendName + ' 的大富翁游戏邀请';
+            subText = '';
+        } else if (inv.status === 'expired') {
+            mainText = '已过期 ' + friendName + ' 的大富翁游戏邀请';
+            subText = '';
+        } else {
+            mainText = '已发出的大富翁游戏邀请';
+            subText = '等待回应';
+        }
+    } else {
+        mainText = friendName + ' 邀请你玩大富翁（' + modeText + '）';
+        if (inv.status === 'pending') {
+            subText = '等待你的回应';
+            buttonsHtml = '<div style="display:flex;gap:8px;margin-top:8px;">' +
+                '<button onclick="rejectMonopolyInvite(\'' + inv.inviteId + '\')" style="flex:1;padding:6px 0;background:#f0f0f0;border:none;border-radius:16px;font-size:13px;cursor:pointer;color:#000000;">拒绝</button>' +
+                '<button onclick="acceptMonopolyInvite(\'' + inv.inviteId + '\')" style="flex:1;padding:6px 0;background:var(--theme-main, #d4e9d6);border:none;border-radius:16px;font-size:13px;cursor:pointer;color:#000000;">接受</button>' +
+            '</div>';
+        } else if (inv.status === 'accepted') {
+            subText = '已接受';
+        } else if (inv.status === 'rejected') {
+            subText = '已拒绝';
+        } else if (inv.status === 'expired') {
+            subText = '已过期';
+        }
+    }
+
+    var html = '<div style="min-width:180px;max-width:220px;box-sizing:border-box;">' +
+        '<div style="font-size:14px;color:#000000;font-weight:500;word-break:break-word;line-height:1.5;">' + mainText + '</div>';
+    if (subText) {
+        html += '<div style="font-size:12px;color:#999999;margin-top:4px;">' + subText + '</div>';
+    }
+    html += buttonsHtml;
+    html += '</div>';
+    return html;
+}
+
+// 接受大富翁邀请
+function acceptMonopolyInvite(inviteId) {
+    if (!inviteId) return;
+    var msgs = DataHub.get('messages', []);
+    var invMsg = null;
+    for (var i = 0; i < msgs.length; i++) {
+        if (msgs[i].isMonopolyInvite && msgs[i].monopolyInvite && msgs[i].monopolyInvite.inviteId === inviteId) {
+            invMsg = msgs[i];
+            break;
+        }
+    }
+    if (!invMsg) {
+        showToast('邀请不存在');
+        return;
+    }
+    var inv = invMsg.monopolyInvite;
+    if (inv.status !== 'pending') {
+        showToast('该邀请已处理');
+        return;
+    }
+    if (inv.expireAt && Date.now() > inv.expireAt) {
+        inv.status = 'expired';
+        DataHub.set('messages', msgs);
+        if (currentChatId === invMsg.chatId) renderChatMessages();
+        showToast('邀请已过期');
+        return;
+    }
+
+    inv.status = 'accepted';
+    DataHub.set('messages', msgs);
+
+    var chatId = invMsg.chatId;
+    var friendName = getFriendSpecialName(chatId);
+
+    var now = new Date();
+    var time = now.getFullYear() + '.' + String(now.getMonth()+1).padStart(2,'0') + '.' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
+    var replyMsgs = DataHub.get('messages', []);
+    replyMsgs.push({
+        id: 'm' + genId(),
+        chatId: chatId,
+        from: 'me',
+        text: '',
+        time: time,
+        timestamp: Date.now(),
+        unread: 0,
+        isMonopolyInvite: true,
+        monopolyInvite: {
+            inviteId: inviteId + '_reply',
+            mode: inv.mode,
+            status: 'accepted',
+            expireAt: 0,
+            from: 'me'
+        }
+    });
+    DataHub.set('messages', replyMsgs);
+
+    if (currentChatId === chatId) renderChatMessages();
+    renderMessages();
+
+    setTimeout(function() {
+        openMonopolyGame(inv.mode);
+    }, 300);
+}
+
+window.acceptMonopolyInvite = acceptMonopolyInvite;
+
+// 拒绝大富翁邀请
+function rejectMonopolyInvite(inviteId) {
+    if (!inviteId) return;
+    var msgs = DataHub.get('messages', []);
+    var invMsg = null;
+    for (var i = 0; i < msgs.length; i++) {
+        if (msgs[i].isMonopolyInvite && msgs[i].monopolyInvite && msgs[i].monopolyInvite.inviteId === inviteId) {
+            invMsg = msgs[i];
+            break;
+        }
+    }
+    if (!invMsg) {
+        showToast('邀请不存在');
+        return;
+    }
+    var inv = invMsg.monopolyInvite;
+    if (inv.status !== 'pending') {
+        showToast('该邀请已处理');
+        return;
+    }
+    if (inv.expireAt && Date.now() > inv.expireAt) {
+        inv.status = 'expired';
+        DataHub.set('messages', msgs);
+        if (currentChatId === invMsg.chatId) renderChatMessages();
+        showToast('邀请已过期');
+        return;
+    }
+
+    inv.status = 'rejected';
+    DataHub.set('messages', msgs);
+
+    var chatId = invMsg.chatId;
+    var now = new Date();
+    var time = now.getFullYear() + '.' + String(now.getMonth()+1).padStart(2,'0') + '.' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
+    var replyMsgs = DataHub.get('messages', []);
+    replyMsgs.push({
+        id: 'm' + genId(),
+        chatId: chatId,
+        from: 'me',
+        text: '',
+        time: time,
+        timestamp: Date.now(),
+        unread: 0,
+        isMonopolyInvite: true,
+        monopolyInvite: {
+            inviteId: inviteId + '_reply',
+            mode: inv.mode,
+            status: 'rejected',
+            expireAt: 0,
+            from: 'me'
+        }
+    });
+    DataHub.set('messages', replyMsgs);
+
+    if (currentChatId === chatId) renderChatMessages();
+    renderMessages();
+    showToast('已拒绝');
+}
+
+window.rejectMonopolyInvite = rejectMonopolyInvite;
+
 function renderChatMessages() {
     var container = document.getElementById('chatMessages');
     if (!container || !currentChatId) return;
@@ -3927,13 +4107,17 @@ quoteHtml = '<div class="quote-bubble" data-quote-jump="' + qJumpId + '" style="
 
         var msgContent = m.text || '';
 
-if (m.isPat) {
+        if (m.isPat) {
     html += '<div style="display:flex;justify-content:center;margin-bottom:14px;">' +
         '<div style="max-width:75%;padding:6px 14px;border-radius:12px;background:#f7f7f7;border:1px solid #e0e0e0;color:#666666;font-size:10px;line-height:1.5;text-align:center;white-space:pre-wrap;word-wrap:break-word;">' +
             m.text +
         '</div>' +
     '</div>';
     continue;
+}
+
+if (m.isMonopolyInvite && m.monopolyInvite) {
+    msgContent = renderMonopolyInviteCard(m);
 }
 
 if (m.isVoteCard && m.voteCard) {
@@ -18438,7 +18622,16 @@ if (player.id === 'me') {
     avatarContent = '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:' + (dotSize * 0.7) + 'px;">🤖</div>';
 }
 
-html += '<div style="position:absolute;left:' + dotLeft + '%;top:' + dotTop + '%;width:' + dotSize + '%;height:' + dotSize + '%;border-radius:50%;overflow:hidden;transition:left 0.3s ease,top 0.3s ease;z-index:10;">' + avatarContent + '</div>';
+var bankruptOverlay = '';
+if (player.bankrupt) {
+    bankruptOverlay = '<div style="position:absolute;left:0;top:0;right:0;bottom:0;background:rgba(180,180,180,0.55);pointer-events:none;"></div>' +
+        '<div style="position:absolute;left:50%;top:100%;transform:translateX(-50%);margin-top:1px;font-size:8px;color:#ffffff;background:#c03030;border-radius:6px;padding:0 4px;line-height:12px;white-space:nowrap;">破产</div>';
+}
+
+html += '<div style="position:absolute;left:' + dotLeft + '%;top:' + dotTop + '%;width:' + dotSize + '%;height:' + dotSize + '%;border-radius:50%;overflow:visible;transition:left 0.3s ease,top 0.3s ease;z-index:10;' + (player.bankrupt ? 'filter:grayscale(1);' : '') + '">' +
+    '<div style="width:100%;height:100%;border-radius:50%;overflow:hidden;">' + avatarContent + '</div>' +
+    bankruptOverlay +
+'</div>';
         }
     }
 
@@ -18451,6 +18644,35 @@ function generateMonopolyCellTypesIfNeeded() {
     if (!MONOPOLY_CELL_TYPES || MONOPOLY_CELL_TYPES.length === 0) {
         generateMonopolyCellTypes();
     }
+}
+
+// 生成一条大富翁邀请卡片消息
+function createMonopolyInviteMessage(chatId, fromId, mode) {
+    var now = new Date();
+    var time = now.getFullYear() + '.' + String(now.getMonth()+1).padStart(2,'0') + '.' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
+    var inviteId = 'mi' + Date.now() + Math.random().toString(36).substr(2, 4);
+    var expireAt = Date.now() + 60 * 60 * 1000;
+    var msgs = DataHub.get('messages', []);
+    var msg = {
+        id: 'm' + genId(),
+        chatId: chatId,
+        from: fromId,
+        text: '',
+        time: time,
+        timestamp: Date.now(),
+        unread: (fromId !== 'me' && currentChatId !== chatId) ? 1 : 0,
+        isMonopolyInvite: true,
+        monopolyInvite: {
+            inviteId: inviteId,
+            mode: mode,
+            status: 'pending',
+            expireAt: expireAt,
+            from: fromId
+        }
+    };
+    msgs.push(msg);
+    DataHub.set('messages', msgs);
+    return msg;
 }
 
 // ====== 大富翁：对局 ======
@@ -18563,7 +18785,9 @@ function renderMonopolyGamePage(state) {
     var logsHtml = '';
 if (state.logs && state.logs.length > 0) {
     var lastLog = state.logs[state.logs.length - 1];
-    logsHtml = '<div style="padding:0 12px;height:18px;line-height:18px;font-size:10px;color:#666666;background:#fafafa;border-bottom:1px solid #e0e0e0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0;">' + lastLog + '</div>';
+    var lastLogText = (typeof lastLog === 'object') ? lastLog.text : lastLog;
+    var lastLogColor = (typeof lastLog === 'object' && lastLog.color) ? lastLog.color : '#666666';
+    logsHtml = '<div style="padding:0 12px;height:18px;line-height:18px;font-size:10px;color:' + lastLogColor + ';background:#fafafa;border-bottom:1px solid #e0e0e0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0;">' + lastLogText + '</div>';
 } else {
     logsHtml = '<div style="padding:0 12px;height:18px;line-height:18px;font-size:10px;color:#999999;background:#fafafa;border-bottom:1px solid #e0e0e0;flex-shrink:0;">游戏开始</div>';
 }
@@ -18717,6 +18941,11 @@ function monopolyRollDice() {
         return;
     }
 
+    var friendPlayerRoll = state.players.find(function(p) { return p.id === 'friend'; });
+    if (friendPlayerRoll && friendPlayerRoll.bankrupt && Math.random() < 0.5) {
+        monopolyFriendSay(state, getMonopolyFriendReply(state.chatId));
+    }
+
     var dice = Math.floor(Math.random() * 6) + 1;
     state.diceValue = dice;
     DataHub.set('monopolyCurrentGame', state);
@@ -18858,14 +19087,31 @@ function monopolyHandleCell(state, playerId) {
             // 好友/NPC 自动答（50% 对）
             var autoCorrect = Math.random() < 0.5;
             if (autoCorrect) {
-                player.money += 200;
-                monopolyAddLog(state, player.name + ' 答对了，获得 ¥200');
-            } else {
-                player.money -= 100;
-                monopolyAddLog(state, player.name + ' 答错了，扣 ¥100');
-            }
-            DataHub.set('monopolyCurrentGame', state);
-            monopolyNextTurn(state);
+    player.money += 200;
+    monopolyAddLog(state, player.name + ' 答对了，获得 ¥200', '#4caf50');
+} else {
+    var deduct = Math.min(player.money, 100);
+    if (deduct < 0) deduct = 0;
+    player.money -= deduct;
+    monopolyAddLog(state, player.name + ' 答错了，扣 ¥' + deduct, '#c03030');
+}
+DataHub.set('monopolyCurrentGame', state);
+if (player.money <= 0) {
+    player.money = 0;
+    player.bankrupt = true;
+    monopolyAddLog(state, player.name + ' 破产出局');
+    removeBankruptFromTurnOrder(state, playerId);
+    DataHub.set('monopolyCurrentGame', state);
+    monopolyRefreshBoardOnly(state);
+    monopolyRefreshStatusAndButtonOnly(state);
+    if (checkTeamAllBankrupt(state)) {
+        monopolyEndGame(state);
+    } else {
+        monopolyResumeAfterBankrupt(state);
+    }
+    return;
+}
+monopolyNextTurn(state);
         }
         return;
     }
@@ -18903,12 +19149,36 @@ function monopolyHandleCell(state, playerId) {
     }
 
     // 别人的房产，交过路费
-    if (owner === playerId) {
-        monopolyAddLog(state, player.name + ' 停在自己的房产上');
+if (owner === playerId) {
+    monopolyAddLog(state, player.name + ' 停在自己的房产上');
+    DataHub.set('monopolyCurrentGame', state);
+    monopolyNextTurn(state);
+    return;
+}
+
+// 房主已破产，地视为无主，可购买
+var ownerPlayerForBuy = state.players.find(function(p) { return p.id === owner; });
+if (!ownerPlayerForBuy || ownerPlayerForBuy.bankrupt) {
+    owner = null;
+    state.cellOwners[pos] = null;
+    state.cellLevels[pos] = 0;
+    if (playerId === 'me') {
+        monopolyAskBuy(state, playerId, pos);
+    } else {
+        var priceFree = 200;
+        if (player.money >= priceFree && Math.random() < 0.5) {
+            player.money -= priceFree;
+            state.cellOwners[pos] = playerId;
+            state.cellLevels[pos] = 1;
+            monopolyAddLog(state, player.name + ' 买下第 ' + (pos + 1) + ' 格，花费 ¥' + priceFree, '#c03030');
+        } else {
+            monopolyAddLog(state, player.name + ' 放弃购买第 ' + (pos + 1) + ' 格');
+        }
         DataHub.set('monopolyCurrentGame', state);
         monopolyNextTurn(state);
-        return;
     }
+    return;
+}
 
     // 判断是否同一队（双人模式：me+friend 一队，npc1+npc2 一队）
     var isSameTeam = false;
@@ -18927,21 +19197,40 @@ function monopolyHandleCell(state, playerId) {
     }
 
     // 交过路费
-    var toll = 100 * level;
-    player.money -= toll;
+var toll = 100 * level;
+var actualPay = Math.min(player.money, toll);
+if (actualPay < 0) actualPay = 0;
+player.money -= actualPay;
 
-    // 找房主
-    var ownerIdx = -1;
-    for (var oi = 0; oi < state.players.length; oi++) {
-        if (state.players[oi].id === owner) { ownerIdx = oi; break; }
-    }
-    if (ownerIdx >= 0) {
-        state.players[ownerIdx].money += toll;
-        monopolyAddLog(state, player.name + ' 向 ' + state.players[ownerIdx].name + ' 支付过路费 ¥' + toll);
-    }
+// 找房主
+var ownerIdx = -1;
+for (var oi = 0; oi < state.players.length; oi++) {
+    if (state.players[oi].id === owner) { ownerIdx = oi; break; }
+}
+if (ownerIdx >= 0) {
+    state.players[ownerIdx].money += actualPay;
+    monopolyAddLog(state, player.name + ' 向 ' + state.players[ownerIdx].name + ' 支付过路费 ¥' + actualPay, '#c03030');
+}
 
+// 破产判定
+if (player.money <= 0) {
+    player.money = 0;
+    player.bankrupt = true;
+    monopolyAddLog(state, player.name + ' 破产出局');
+    removeBankruptFromTurnOrder(state, playerId);
     DataHub.set('monopolyCurrentGame', state);
-    monopolyNextTurn(state);
+    monopolyRefreshBoardOnly(state);
+    monopolyRefreshStatusAndButtonOnly(state);
+    if (checkTeamAllBankrupt(state)) {
+        monopolyEndGame(state);
+    } else {
+        monopolyResumeAfterBankrupt(state);
+    }
+    return;
+}
+
+DataHub.set('monopolyCurrentGame', state);
+monopolyNextTurn(state);
 }
 
 // 询问购买
@@ -19030,18 +19319,35 @@ function monopolyAnswerQuestion(idx) {
     if (!player) return;
 
     var correct = (idx === q.answer);
-    closeModal();
+closeModal();
 
-    if (correct) {
-        player.money += 200;
-        monopolyAddLog(state, '我 答对了，获得 ¥200');
-    } else {
-        player.money -= 100;
-        monopolyAddLog(state, '我 答错了，扣 ¥100');
-    }
+if (correct) {
+    player.money += 200;
+    monopolyAddLog(state, '我 答对了，获得 ¥200', '#4caf50');
+} else {
+    var deduct2 = Math.min(player.money, 100);
+    if (deduct2 < 0) deduct2 = 0;
+    player.money -= deduct2;
+    monopolyAddLog(state, '我 答错了，扣 ¥' + deduct2, '#c03030');
+}
+DataHub.set('monopolyCurrentGame', state);
+window._monopolyCurrentQuestion = null;
+if (player.money <= 0) {
+    player.money = 0;
+    player.bankrupt = true;
+    monopolyAddLog(state, '我 破产出局');
+    removeBankruptFromTurnOrder(state, 'me');
     DataHub.set('monopolyCurrentGame', state);
-    window._monopolyCurrentQuestion = null;
-    monopolyNextTurn(state);
+    monopolyRefreshBoardOnly(state);
+    monopolyRefreshStatusAndButtonOnly(state);
+    if (checkTeamAllBankrupt(state)) {
+        monopolyEndGame(state);
+    } else {
+        monopolyResumeAfterBankrupt(state);
+    }
+    return;
+}
+monopolyNextTurn(state);
 }
 
 function monopolySkipQuestion() {
@@ -19051,6 +19357,73 @@ function monopolySkipQuestion() {
     DataHub.set('monopolyCurrentGame', state);
     window._monopolyCurrentQuestion = null;
     monopolyNextTurn(state);
+}
+
+// 破产者移出行动队列
+function removeBankruptFromTurnOrder(state, playerId) {
+    if (!state || !state.turnOrder) return;
+    var idx = state.turnOrder.indexOf(playerId);
+    if (idx === -1) return;
+    state.turnOrder.splice(idx, 1);
+    if (state.turnIndex > idx) {
+        state.turnIndex--;
+    }
+    if (state.turnIndex >= state.turnOrder.length) {
+        state.turnIndex = 0;
+    }
+}
+
+// 判断是否有队伍全破产
+function checkTeamAllBankrupt(state) {
+    if (!state || !state.players) return true;
+    if (state.mode === 'single') {
+        var aliveSingle = 0;
+        for (var i = 0; i < state.players.length; i++) {
+            if (!state.players[i].bankrupt) aliveSingle++;
+        }
+        return aliveSingle <= 1;
+    }
+    var myAlive = 0;
+    var oppAlive = 0;
+    for (var j = 0; j < state.players.length; j++) {
+        var p = state.players[j];
+        if (p.bankrupt) continue;
+        if (p.id === 'me' || p.id === 'friend') myAlive++;
+        else if (p.id === 'npc1' || p.id === 'npc2') oppAlive++;
+    }
+    return (myAlive === 0 || oppAlive === 0);
+}
+
+// 破产后，不递增 turnIndex，直接让当前 turnIndex 指向的玩家行动
+function monopolyResumeAfterBankrupt(state) {
+    if (!state) return;
+    if (state.finished) return;
+    if (state.turnOrder.length === 0) {
+        monopolyEndGame(state);
+        return;
+    }
+    if (state.turnIndex >= state.turnOrder.length) {
+        state.turnIndex = 0;
+    }
+    state.turn = state.turnOrder[state.turnIndex];
+    DataHub.set('monopolyCurrentGame', state);
+    monopolyRefreshBoardOnly(state);
+    monopolyRefreshStatusAndButtonOnly(state);
+
+    if (state.turn !== 'me') {
+        setTimeout(function() {
+            var latest = DataHub.get('monopolyCurrentGame', null);
+            if (!latest || latest.finished) return;
+            if (latest.turn !== state.turn) return;
+            var actor = latest.players.find(function(p) { return p.id === latest.turn; });
+            if (!actor || actor.bankrupt) return;
+            if (latest.turn === 'friend' && Math.random() < 0.5) {
+                monopolyFriendSay(latest, getMonopolyFriendReply(latest.chatId));
+            }
+            var dice = Math.floor(Math.random() * 6) + 1;
+            monopolyMovePlayer(latest, latest.turn, dice);
+        }, 800 + Math.random() * 800);
+    }
 }
 
 // 下一个回合
@@ -19103,25 +19476,45 @@ if (state.turn !== 'me') {
 function monopolyEndGame(state) {
     state.finished = true;
 
-    // 单人模式：比资金
-    // 双人模式：我方两人总资金 vs 敌方两人总资金
-    var myMoney = 0;
-    var oppMoney = 0;
+    // 先判断是否有队伍全破产；没有则按资金比大小
+var myMoney = 0;
+var oppMoney = 0;
+var result = 'lose';
+var hasBankrupt = false;
 
-    if (state.mode === 'single') {
-        var me = state.players.find(function(p) { return p.id === 'me'; });
-        var fr = state.players.find(function(p) { return p.id === 'friend'; });
-        myMoney = (me ? me.money : 0);
-        oppMoney = (fr ? fr.money : 0);
+for (var bi = 0; bi < state.players.length; bi++) {
+    if (state.players[bi].bankrupt) { hasBankrupt = true; break; }
+}
+
+if (state.mode === 'single') {
+    var me = state.players.find(function(p) { return p.id === 'me'; });
+    var fr = state.players.find(function(p) { return p.id === 'friend'; });
+    myMoney = (me ? me.money : 0);
+    oppMoney = (fr ? fr.money : 0);
+    if (hasBankrupt) {
+        result = (me && !me.bankrupt) ? 'win' : 'lose';
     } else {
-        for (var i = 0; i < state.players.length; i++) {
-            var p = state.players[i];
-            if (p.id === 'me' || p.id === 'friend') myMoney += p.money;
-            else oppMoney += p.money;
+        result = (myMoney >= oppMoney) ? 'win' : 'lose';
+    }
+} else {
+    var myAliveEnd = 0;
+    var oppAliveEnd = 0;
+    for (var i = 0; i < state.players.length; i++) {
+        var p = state.players[i];
+        if (p.id === 'me' || p.id === 'friend') {
+            myMoney += p.money;
+            if (!p.bankrupt) myAliveEnd++;
+        } else {
+            oppMoney += p.money;
+            if (!p.bankrupt) oppAliveEnd++;
         }
     }
-
-    var result = (myMoney >= oppMoney) ? 'win' : 'lose';
+    if (hasBankrupt) {
+        result = (myAliveEnd > 0 && oppAliveEnd === 0) ? 'win' : 'lose';
+    } else {
+        result = (myMoney >= oppMoney) ? 'win' : 'lose';
+    }
+}
 
     // 写入战绩
     var monopoly = DataHub.get('monopoly', { records: { single: [], double: [] } });
@@ -19166,9 +19559,9 @@ function monopolyEndGame(state) {
 }
 
 // 日志
-function monopolyAddLog(state, text) {
+function monopolyAddLog(state, text, color) {
     if (!state.logs) state.logs = [];
-    state.logs.push(text);
+    state.logs.push({ text: text, color: color || '' });
     if (state.logs.length > 200) state.logs.shift();
 }
 
@@ -19178,11 +19571,15 @@ function monopolyRefreshBoardOnly(state) {
     if (inner) {
         inner.innerHTML = renderMonopolyBoard(state);
     }
-    var logBar = document.getElementById('monopolyLogBar');
+        var logBar = document.getElementById('monopolyLogBar');
     if (logBar) {
         var logEl = logBar.querySelector('div');
         if (logEl) {
-            logEl.textContent = (state.logs && state.logs.length > 0) ? state.logs[state.logs.length - 1] : '游戏开始';
+            var lastLogObj = (state.logs && state.logs.length > 0) ? state.logs[state.logs.length - 1] : null;
+            var lastText = lastLogObj ? ((typeof lastLogObj === 'object') ? lastLogObj.text : lastLogObj) : '游戏开始';
+            var lastColor = (lastLogObj && typeof lastLogObj === 'object' && lastLogObj.color) ? lastLogObj.color : '#666666';
+            logEl.textContent = lastText;
+            logEl.style.color = lastColor;
         }
         var btn = logBar.querySelector('button');
         if (btn) {
@@ -19198,6 +19595,11 @@ function monopolyRefreshBoardOnly(state) {
 function monopolyRefreshStatusAndButtonOnly(state) {
     if (!state) return;
 
+    var titleEl = document.querySelector('#monopolyGamePage .sub-top span');
+    if (titleEl) {
+        titleEl.textContent = '大富翁 · ' + (state.mode === 'single' ? '单人模式' : '双人模式') + ' · ' + state.round + '/' + state.maxRound + '回合';
+    }
+
     var statusBar = document.getElementById('monopolyStatusBar');
     if (statusBar) {
         statusBar.innerHTML = renderMonopolyStatusBar(state);
@@ -19207,7 +19609,11 @@ function monopolyRefreshStatusAndButtonOnly(state) {
     if (logBar) {
         var logEl = logBar.querySelector('div');
         if (logEl) {
-            logEl.textContent = (state.logs && state.logs.length > 0) ? state.logs[state.logs.length - 1] : '游戏开始';
+            var lastLogObj2 = (state.logs && state.logs.length > 0) ? state.logs[state.logs.length - 1] : null;
+            var lastText2 = lastLogObj2 ? ((typeof lastLogObj2 === 'object') ? lastLogObj2.text : lastLogObj2) : '游戏开始';
+            var lastColor2 = (lastLogObj2 && typeof lastLogObj2 === 'object' && lastLogObj2.color) ? lastLogObj2.color : '#666666';
+            logEl.textContent = lastText2;
+            logEl.style.color = lastColor2;
         }
         var btn = logBar.querySelector('button');
         if (btn) {
@@ -19349,6 +19755,51 @@ function getMonopolyFriendReply(chatId) {
 
     return '嗯嗯';
 }
+
+// 好友随机主动发大富翁邀请（每个好友每小时 1%）
+function autoFriendSendMonopolyInvite() {
+    var friends = DataHub.get('friends', []);
+    if (friends.length === 0) return;
+    var changed = false;
+    for (var i = 0; i < friends.length; i++) {
+        var f = friends[i];
+        if (Math.random() >= 0.01) continue;
+        var mode = (Math.random() < 0.5) ? 'single' : 'double';
+        createMonopolyInviteMessage(f.id, f.id, mode);
+        changed = true;
+        if (currentChatId === f.id) {
+            renderChatMessages();
+        }
+    }
+    if (changed) {
+        renderMessages();
+    }
+}
+
+window.autoFriendSendMonopolyInvite = autoFriendSendMonopolyInvite;
+
+// 检查大富翁邀请是否过期（1 小时）
+function checkMonopolyInviteExpire() {
+    var msgs = DataHub.get('messages', []);
+    var now = Date.now();
+    var changed = false;
+    for (var i = 0; i < msgs.length; i++) {
+        var m = msgs[i];
+        if (!m.isMonopolyInvite || !m.monopolyInvite) continue;
+        if (m.monopolyInvite.status !== 'pending') continue;
+        if (!m.monopolyInvite.expireAt) continue;
+        if (now < m.monopolyInvite.expireAt) continue;
+        m.monopolyInvite.status = 'expired';
+        changed = true;
+    }
+    if (changed) {
+        DataHub.set('messages', msgs);
+        if (currentChatId) renderChatMessages();
+        renderMessages();
+    }
+}
+
+window.checkMonopolyInviteExpire = checkMonopolyInviteExpire;
 
 // ====== 大富翁：战绩 ======
 var monopolyRecordsTab = 'single';
@@ -20807,29 +21258,17 @@ function sendQuestionnaireToChat(questions, title) {
 }
 
 function scheduleFriendAnswerQuestionnaire(qnId) {
-    var delay = (3 + Math.random() * 7) * 1000;
-    setTimeout(function() {
-        loadQuestionnaireRecord(qnId).then(function(qn) {
-            if (!qn) return;
-            if (qn.status !== 'pending') return;
-            if (qn.from !== 'me') return;
-            var answers = {};
-            for (var i = 0; i < qn.questions.length; i++) {
-                var q = qn.questions[i];
-                answers[q.id] = buildFriendAnswerForQuestion(q);
-            }
-            qn.answers = answers;
-            qn.status = 'answered';
-            qn.answeredAt = Date.now();
-            return saveQuestionnaireRecord(qnId, qn).then(function() {
-                if (currentChatId === qn.chatId) {
-                    renderChatMessages();
-                }
-                renderMessages();
-                showToast('好友已答完问卷');
-            });
-        });
-    }, delay);
+    var pending = DataHub.get('questionnairePendingAnswers', []);
+    var needMs = Math.floor(Math.random() * 12 * 60 * 60 * 1000);
+    pending.push({
+        id: 'qpa' + Date.now() + Math.random().toString(36).substr(2, 4),
+        qnId: qnId,
+        needMs: needMs,
+        accumulatedMs: 0,
+        lastTickAt: Date.now(),
+        createdAt: Date.now()
+    });
+    DataHub.set('questionnairePendingAnswers', pending);
 }
 
 function submitMyQuestionnaireAnswer(qnId) {
@@ -21451,79 +21890,53 @@ function renderQnInteractionContent(chatId) {
     var friend = friends.find(function(f) { return f.id === chatId; });
     if (friend) friendName = friend.name;
 
-    var toHimCount = 0;
-    var fromHimCount = 0;
     var currentTab = qnInteractionState.currentTab;
-
-    var html = '<div style="display:flex;gap:6px;margin-bottom:12px;">' +
-        '<button class="btn-icon" onclick="switchQnInteractionTab(\'toHim\')" style="flex:1;padding:8px 0;border:none;border-radius:20px;font-size:13px;cursor:pointer;background:' + (currentTab === 'toHim' ? 'var(--theme-main, #d4e9d6)' : 'var(--theme-lighter, #eef5ef)') + ';color:' + (currentTab === 'toHim' ? '#000000' : '#888888') + ';">我给他的</button>' +
-        '<button class="btn-icon" onclick="switchQnInteractionTab(\'fromHim\')" style="flex:1;padding:8px 0;border:none;border-radius:20px;font-size:13px;cursor:pointer;background:' + (currentTab === 'fromHim' ? 'var(--theme-main, #d4e9d6)' : 'var(--theme-lighter, #eef5ef)') + ';color:' + (currentTab === 'fromHim' ? '#000000' : '#888888') + ';">他给我的</button>' +
+    var html = '<div id="qnInteractionTabs" style="display:flex;gap:6px;margin-bottom:12px;">' +
+        '<button class="btn-icon" onclick="switchQnInteractionTab(\'toHim\')" style="flex:1;padding:8px 0;border:none;border-radius:20px;font-size:13px;cursor:pointer;">我给他的</button>' +
+        '<button class="btn-icon" onclick="switchQnInteractionTab(\'fromHim\')" style="flex:1;padding:8px 0;border:none;border-radius:20px;font-size:13px;cursor:pointer;">他给我的</button>' +
     '</div>';
 
     html += '<div id="qnInteractionList"><div style="text-align:center;color:#999999;padding:20px 0;font-size:13px;">加载中...</div></div>';
-
-    getQuestionnairesByChat(chatId).then(function(list) {
-        var toHim = list.filter(function(q) { return q.from === 'me'; });
-        var fromHim = list.filter(function(q) { return q.to === 'me'; });
-        toHimCount = toHim.length;
-        fromHimCount = fromHim.length;
-
-        var tabsEl = document.querySelector('#qnInteractionPage .sub-content > div:first-child');
-        if (tabsEl) {
-            tabsEl.innerHTML = '<div style="display:flex;gap:6px;margin-bottom:12px;">' +
-                '<button class="btn-icon" onclick="switchQnInteractionTab(\'toHim\')" style="flex:1;padding:8px 0;border:none;border-radius:20px;font-size:13px;cursor:pointer;background:' + (qnInteractionState.currentTab === 'toHim' ? 'var(--theme-main, #d4e9d6)' : 'var(--theme-lighter, #eef5ef)') + ';color:' + (qnInteractionState.currentTab === 'toHim' ? '#000000' : '#888888') + ';">我给他的（' + toHimCount + '）</button>' +
-                '<button class="btn-icon" onclick="switchQnInteractionTab(\'fromHim\')" style="flex:1;padding:8px 0;border:none;border-radius:20px;font-size:13px;cursor:pointer;background:' + (qnInteractionState.currentTab === 'fromHim' ? 'var(--theme-main, #d4e9d6)' : 'var(--theme-lighter, #eef5ef)') + ';color:' + (qnInteractionState.currentTab === 'fromHim' ? '#000000' : '#888888') + ';">他给我的（' + fromHimCount + '）</button>' +
-            '</div>';
-        }
-
-        var showList = (qnInteractionState.currentTab === 'toHim') ? toHim : fromHim;
-        var listEl = document.getElementById('qnInteractionList');
-        if (!listEl) return;
-
-        if (showList.length === 0) {
-            listEl.innerHTML = '<div style="text-align:center;color:#999999;padding:30px 0;font-size:13px;">暂无问卷</div>';
-            return;
-        }
-
-        var html2 = '';
-        for (var i = 0; i < showList.length; i++) {
-            var qn = showList[i];
-            var isMe = (qn.from === 'me');
-            var statusText = '';
-            if (qn.status === 'pending') {
-                statusText = isMe ? '等待好友作答' : '待我作答';
-            } else {
-                statusText = isMe ? '好友已作答' : '我已作答';
-            }
-            var statusColor = (qn.status === 'answered') ? 'var(--theme-dark, #4a7a4e)' : '#999999';
-            html2 += '<div onclick="openQuestionnaireAnswerView(\'' + qn.id + '\')" style="background:#ffffff;border:1px solid #eef5ef;border-radius:12px;padding:12px 14px;margin-bottom:8px;cursor:pointer;">' +
-                '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">' +
-                    '<span style="font-size:14px;color:#000000;font-weight:500;word-break:break-word;flex:1;min-width:0;">' + (qn.title || '问卷') + '</span>' +
-                    '<span style="font-size:12px;color:' + statusColor + ';flex-shrink:0;margin-left:8px;">' + statusText + '</span>' +
-                '</div>' +
-                '<div style="font-size:12px;color:#999999;">共 ' + qn.questions.length + ' 题 · ' + (qn.createdAtStr || '') + '</div>' +
-            '</div>';
-        }
-        listEl.innerHTML = html2;
-    });
-
+    setTimeout(function() { switchQnInteractionTab(currentTab); }, 10);
     return html;
 }
 
 function switchQnInteractionTab(tab) {
     qnInteractionState.currentTab = tab;
     var chatId = qnInteractionState.chatId;
+    
+    var tabsEl = document.getElementById('qnInteractionTabs');
+    if (tabsEl) {
+        var btnTo = tabsEl.children[0];
+        var btnFrom = tabsEl.children[1];
+        if (tab === 'toHim') {
+            btnTo.style.background = 'var(--theme-main, #d4e9d6)';
+            btnTo.style.color = '#000000';
+            btnFrom.style.background = 'var(--theme-lighter, #eef5ef)';
+            btnFrom.style.color = '#888888';
+        } else {
+            btnTo.style.background = 'var(--theme-lighter, #eef5ef)';
+            btnTo.style.color = '#888888';
+            btnFrom.style.background = 'var(--theme-main, #d4e9d6)';
+            btnFrom.style.color = '#000000';
+        }
+    }
+
     getQuestionnairesByChat(chatId).then(function(list) {
         var toHim = list.filter(function(q) { return q.from === 'me'; });
         var fromHim = list.filter(function(q) { return q.to === 'me'; });
-
-        var tabsEl = document.querySelector('#qnInteractionPage .sub-content > div:first-child');
+        
         if (tabsEl) {
-            tabsEl.innerHTML = '<div style="display:flex;gap:6px;margin-bottom:12px;">' +
-                '<button class="btn-icon" onclick="switchQnInteractionTab(\'toHim\')" style="flex:1;padding:8px 0;border:none;border-radius:20px;font-size:13px;cursor:pointer;background:' + (qnInteractionState.currentTab === 'toHim' ? 'var(--theme-main, #d4e9d6)' : 'var(--theme-lighter, #eef5ef)') + ';color:' + (qnInteractionState.currentTab === 'toHim' ? '#000000' : '#888888') + ';">我给他的（' + toHim.length + '）</button>' +
-                '<button class="btn-icon" onclick="switchQnInteractionTab(\'fromHim\')" style="flex:1;padding:8px 0;border:none;border-radius:20px;font-size:13px;cursor:pointer;background:' + (qnInteractionState.currentTab === 'fromHim' ? 'var(--theme-main, #d4e9d6)' : 'var(--theme-lighter, #eef5ef)') + ';color:' + (qnInteractionState.currentTab === 'fromHim' ? '#000000' : '#888888') + ';">他给我的（' + fromHim.length + '）</button>' +
-            '</div>';
+    var unreadCount = 0;
+    for (var ui = 0; ui < fromHim.length; ui++) {
+        if (fromHim[ui].status === 'pending') {
+            unreadCount++;
         }
+    }
+    var dotHtml = unreadCount > 0 ? '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#ff4d4d;margin-left:4px;vertical-align:middle;"></span>' : '';
+    tabsEl.children[0].innerHTML = '我给他的（' + toHim.length + '）';
+    tabsEl.children[1].innerHTML = '他给我的（' + fromHim.length + '）' + dotHtml;
+}
 
         var showList = (tab === 'toHim') ? toHim : fromHim;
         var listEl = document.getElementById('qnInteractionList');
@@ -21535,25 +21948,35 @@ function switchQnInteractionTab(tab) {
         }
 
         var html2 = '';
-        for (var i = 0; i < showList.length; i++) {
-            var qn = showList[i];
-            var isMe = (qn.from === 'me');
-            var statusText = '';
-            if (qn.status === 'pending') {
-                statusText = isMe ? '等待好友作答' : '待我作答';
-            } else {
-                statusText = isMe ? '好友已作答' : '我已作答';
-            }
-            var statusColor = (qn.status === 'answered') ? 'var(--theme-dark, #4a7a4e)' : '#999999';
-            html2 += '<div onclick="openQuestionnaireAnswerView(\'' + qn.id + '\')" style="background:#ffffff;border:1px solid #eef5ef;border-radius:12px;padding:12px 14px;margin-bottom:8px;cursor:pointer;">' +
-                '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">' +
-                    '<span style="font-size:14px;color:#000000;font-weight:500;word-break:break-word;flex:1;min-width:0;">' + (qn.title || '问卷') + '</span>' +
-                    '<span style="font-size:12px;color:' + statusColor + ';flex-shrink:0;margin-left:8px;">' + statusText + '</span>' +
-                '</div>' +
-                '<div style="font-size:12px;color:#999999;">共 ' + qn.questions.length + ' 题 · ' + (qn.createdAtStr || '') + '</div>' +
-            '</div>';
+for (var i = 0; i < showList.length; i++) {
+    var qn = showList[i];
+    var isMe = (qn.from === 'me');
+    var statusText = '';
+    var statusColor = '#999999';
+    var dotHtml = '';
+
+    if (qn.status === 'pending') {
+        if (isMe) {
+            statusText = '等待好友作答';
+        } else {
+            statusText = '待我作答';
+            statusColor = '#ff4d4d';
+            dotHtml = '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ff4d4d;margin-right:6px;vertical-align:middle;"></span>';
         }
-        listEl.innerHTML = html2;
+    } else {
+        statusText = isMe ? '好友已作答' : '我已作答';
+        statusColor = 'var(--theme-dark, #4a7a4e)';
+    }
+
+    html2 += '<div onclick="openQuestionnaireAnswerView(\'' + qn.id + '\')" style="background:#ffffff;border:1px solid #eef5ef;border-radius:12px;padding:12px 14px;margin-bottom:8px;cursor:pointer;">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">' +
+            '<span style="font-size:14px;color:#000000;font-weight:500;word-break:break-word;flex:1;min-width:0;">' + (qn.title || '问卷') + '</span>' +
+            '<span style="font-size:12px;color:' + statusColor + ';flex-shrink:0;margin-left:8px;display:flex;align-items:center;">' + dotHtml + statusText + '</span>' +
+        '</div>' +
+        '<div style="font-size:12px;color:#999999;">共 ' + qn.questions.length + ' 题 · ' + (qn.createdAtStr || '') + '</div>' +
+    '</div>';
+}
+listEl.innerHTML = html2;
     });
 }
 
@@ -29355,13 +29778,22 @@ setInterval(function() {
 setInterval(function() {
     autoFriendSendGroupRedpacket();
 }, 30 * 60 * 1000);
+setInterval(function() {
+    autoFriendSendMonopolyInvite();
+}, 60 * 60 * 1000);
+setInterval(function() {
+    checkMonopolyInviteExpire();
+}, 60 * 1000);
+
 startRandomDeleteChecker();
+checkMonopolyInviteExpire();
 startShoppingDiaryReplyScheduler();
 startMonthlyStatsChecker();
 startPiggyAutoDepositChecker();
 startFriendCollectChecker();
 startFriendBuyMyCollectionChecker();
 startQuestionnaireAutoChecker();
+setInterval(function() { checkQuestionnairePendingAnswers(); }, 60000);
 
     function initFriendAI() {
     var friends = DataHub.get('friends', []);
@@ -29463,6 +29895,58 @@ if (settings.fontFamily) {
 }
 handleVisualViewport();
 }
+
+function checkQuestionnairePendingAnswers() {
+    var pending = DataHub.get('questionnairePendingAnswers', []);
+    if (pending.length === 0) return;
+    var now = Date.now();
+    var remaining = [];
+    var needRenderChatId = null;
+
+    var chain = Promise.resolve();
+    pending.forEach(function(p) {
+        var elapsed = now - (p.lastTickAt || now);
+        if (elapsed < 0) elapsed = 0;
+        p.accumulatedMs = (p.accumulatedMs || 0) + elapsed;
+        p.lastTickAt = now;
+
+        if (p.accumulatedMs < p.needMs) {
+            remaining.push(p);
+            return;
+        }
+        
+        chain = chain.then(function() {
+            return loadQuestionnaireRecord(p.qnId).then(function(qn) {
+                if (!qn || qn.status !== 'pending' || qn.from !== 'me') return;
+                var answers = {};
+                for (var i = 0; i < qn.questions.length; i++) {
+                    var q = qn.questions[i];
+                    answers[q.id] = buildFriendAnswerForQuestion(q);
+                }
+                qn.answers = answers;
+                qn.status = 'answered';
+                qn.answeredAt = Date.now();
+                return saveQuestionnaireRecord(p.qnId, qn).then(function() {
+                    needRenderChatId = qn.chatId;
+                });
+            });
+        });
+    });
+
+    DataHub.set('questionnairePendingAnswers', remaining);
+
+    chain.then(function() {
+        if (needRenderChatId) {
+            if (currentChatId === needRenderChatId) {
+                renderChatMessages();
+            }
+            renderMessages();
+            showToast('好友已答完一份问卷');
+        }
+    });
+}
+
+window.checkQuestionnairePendingAnswers = checkQuestionnairePendingAnswers;
 
 function startQuestionnaireAutoChecker() {
     autoFriendSendQuestionnaire();
