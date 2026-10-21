@@ -1333,27 +1333,28 @@ color: #000000;
 
     <input type="text" id="chatInput" placeholder="输入消息..." style="flex:1;padding:8px 14px;border:1px solid var(--theme-main, #d4e4d6);border-radius:20px;font-size:14px;outline:none;color:#000000;background:#ffffff;min-height:36px;max-height:80px;resize:none;box-sizing:border-box;" oninput="autoResizeInput(this)">
     
-    <button id="sendBtn" onclick="sendChatMessage()" style="padding:0;background:var(--theme-main, #d4e9d6);color:#000000;border:none;border-radius:50%;cursor:pointer;flex-shrink:0;width:36px;height:36px;display:flex;align-items:center;justify-content:center;">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
-    </button>
-</div>
-            <div style="display:flex;justify-content:space-around;padding:2px 4px;align-items:center;width:100%;">
-<div onclick="openImagePicker()" style="background:none;border:none;cursor:pointer;padding:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
-    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="var(--theme-dark, #5a7a5e)" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-</div>
-<div onclick="startVideoCallToCurrentChat()" style="background:none;border:none;cursor:pointer;padding:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
-    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="var(--theme-dark, #5a7a5e)" stroke-width="2"><rect x="2" y="4" width="14" height="14" rx="2"/><path d="M16 9l5-3v12l-5-3"/></svg>
-</div>
-<div onclick="toggleEmojiPanel()" style="background:none;border:none;cursor:pointer;padding:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
-    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="var(--theme-dark, #5a7a5e)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><circle cx="9" cy="9" r="1"/><circle cx="15" cy="9" r="1"/></svg>
-</div>
-<div onclick="showSendHongbaoMenu()" style="background:none;border:none;cursor:pointer;padding:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
-    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="var(--theme-dark, #5a7a5e)" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 8h20M12 8v12"/></svg>
-</div>
-<div onclick="showChatMoreMenu()" style="background:none;border:none;cursor:pointer;padding:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
-    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="var(--theme-dark, #5a7a5e)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
-</div>
+<button id="sendBtn" onclick="sendChatMessage()" style="padding:0;background:var(--theme-main, #d4e9d6);color:#000000;border:none;border-radius:50%;cursor:pointer;flex-shrink:0;width:36px;height:36px;display:flex;align-items:center;justify-content:center;">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+</button>
+        </div>
+        
+        <div style="display:flex;justify-content:space-around;padding:2px 4px;align-items:center;width:100%;">
+            <div onclick="openImagePicker()" style="background:none;border:none;cursor:pointer;padding:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="var(--theme-dark, #5a7a5e)" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
             </div>
+            <div onclick="startVideoCallToCurrentChat()" style="background:none;border:none;cursor:pointer;padding:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="var(--theme-dark, #5a7a5e)" stroke-width="2"><rect x="2" y="4" width="14" height="14" rx="2"/><path d="M16 9l5-3v12l-5-3"/></svg>
+            </div>
+            <div onclick="toggleEmojiPanel()" style="background:none;border:none;cursor:pointer;padding:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="var(--theme-dark, #5a7a5e)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><circle cx="9" cy="9" r="1"/><circle cx="15" cy="9" r="1"/></svg>
+            </div>
+            <div onclick="showSendHongbaoMenu()" style="background:none;border:none;cursor:pointer;padding:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="var(--theme-dark, #5a7a5e)" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 8h20M12 8v12"/></svg>
+            </div>
+            <div onclick="showChatMoreMenu()" style="background:none;border:none;cursor:pointer;padding:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="var(--theme-dark, #5a7a5e)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+            </div>
+        </div>
         </div>
 <div id="chatBottomPanel" style="display:none;position:relative;height:25%;background:#ffffff;border-top:1px solid var(--theme-border, #d4e9d6);z-index:60;flex-direction:column;padding:10px 12px;box-sizing:border-box;flex-shrink:0;">
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;overflow-y:auto;flex:1;align-content:start;">
@@ -1789,24 +1790,44 @@ activeSend: true, combo: true, videoCall: true,
 momentsPendingReplies: [],
 };
 
+let currentMonopolyData = {
+    colors: { me: '#4a90d9', friend: '#9b6bc4' },
+    questions: [],
+    records: { single: [], double: [] }
+};
+
+function saveMonopolyData() {
+    saveGameData('monopoly', currentMonopolyData).catch(function(err) {
+        console.error('保存大富翁数据失败:', err);
+    });
+}
+
+function getMonopolyData() {
+    return currentMonopolyData;
+}
+window.getMonopolyData = getMonopolyData;
+
 let appData = JSON.parse(JSON.stringify(defaultData));
 
 function getDB() {
     if (dbOpenPromise) return dbOpenPromise;
     dbOpenPromise = new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, 3);
-        request.onupgradeneeded = (e) => {
-            const db = e.target.result;
-            if (!db.objectStoreNames.contains(STORE_NAME)) {
-                db.createObjectStore(STORE_NAME, { keyPath: 'id' });
-            }
-            if (!db.objectStoreNames.contains('audioStore')) {
-                db.createObjectStore('audioStore', { keyPath: 'id' });
-            }
-            if (!db.objectStoreNames.contains('questionnaireStore')) {
-    db.createObjectStore('questionnaireStore', { keyPath: 'id' });
-}
-        };
+        const request = indexedDB.open(DB_NAME, 4);
+request.onupgradeneeded = (e) => {
+    const db = e.target.result;
+    if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+    }
+    if (!db.objectStoreNames.contains('audioStore')) {
+        db.createObjectStore('audioStore', { keyPath: 'id' });
+    }
+    if (!db.objectStoreNames.contains('questionnaireStore')) {
+        db.createObjectStore('questionnaireStore', { keyPath: 'id' });
+    }
+    if (!db.objectStoreNames.contains('gameStore')) {
+        db.createObjectStore('gameStore', { keyPath: 'id' });
+    }
+};
         request.onsuccess = (e) => {
             db = e.target.result;
             resolve(db);
@@ -1894,6 +1915,43 @@ function deleteAudioBlob(id) {
             store.delete(id);
             tx.oncomplete = function() { resolve(); };
             tx.onerror = function() { resolve(); };
+        });
+    });
+}
+
+// ====== 游戏数据存储层（独立 store，不进主系统） ======
+function saveGameData(gameId, data) {
+    return getDB().then(function(database) {
+        return new Promise(function(resolve, reject) {
+            var tx = database.transaction('gameStore', 'readwrite');
+            var store = tx.objectStore('gameStore');
+            store.put({ id: gameId, data: data });
+            tx.oncomplete = function() { resolve(); };
+            tx.onerror = function(e) { reject(e.target.error); };
+        });
+    });
+}
+
+function loadGameData(gameId) {
+    return getDB().then(function(database) {
+        return new Promise(function(resolve) {
+            var tx = database.transaction('gameStore', 'readonly');
+            var store = tx.objectStore('gameStore');
+            var req = store.get(gameId);
+            req.onsuccess = function() { resolve(req.result ? req.result.data : null); };
+            req.onerror = function() { resolve(null); };
+        });
+    });
+}
+
+function getAllGameData() {
+    return getDB().then(function(database) {
+        return new Promise(function(resolve) {
+            var tx = database.transaction('gameStore', 'readonly');
+            var store = tx.objectStore('gameStore');
+            var req = store.getAll();
+            req.onsuccess = function() { resolve(req.result || []); };
+            req.onerror = function() { resolve([]); };
         });
     });
 }
@@ -18084,9 +18142,10 @@ var MONOPOLY_COLOR_OPTIONS = [
 
 function openMonopolyCustom() {
     var container = document.getElementById('subPageContainer');
-    var monopoly = DataHub.get('monopoly', { colors: { me: '#4a90d9', friend: '#9b6bc4' }, questions: [] });
-    var myColor = monopoly.colors.me || '#4a90d9';
-    var friendColor = monopoly.colors.friend || '#9b6bc4';
+var monopoly = currentMonopolyData;
+var colors = monopoly.colors || { me: '#4a90d9', friend: '#9b6bc4' };
+var myColor = colors.me;
+var friendColor = colors.friend;
 
     var myColorsHtml = '';
     for (var i = 0; i < MONOPOLY_COLOR_OPTIONS.length; i++) {
@@ -18102,55 +18161,26 @@ function openMonopolyCustom() {
         friendColorsHtml += '<div onclick="setMonopolyColor(\'friend\',\'' + c2 + '\')" style="width:36px;height:36px;border-radius:50%;cursor:pointer;background:' + c2 + ';border:3px solid ' + (active2 ? '#333333' : 'transparent') + ';box-sizing:border-box;"></div>';
     }
 
-    var questions = monopoly.questions || [];
-    var questionsHtml = '';
-    if (questions.length === 0) {
-        questionsHtml = '<div style="text-align:center;color:#999999;padding:20px 0;font-size:13px;">暂无题目</div>';
-    } else {
-        for (var k = 0; k < questions.length; k++) {
-            var q = questions[k];
-            questionsHtml += '<div style="background:#ffffff;border:1px solid #e0e0e0;border-radius:10px;padding:10px 12px;margin-bottom:8px;">' +
-                '<div style="font-size:14px;color:#000000;word-break:break-word;margin-bottom:6px;">' + (k + 1) + '. ' + (q.question || '') + '</div>' +
-                '<div style="font-size:12px;color:#666666;line-height:1.7;">';
-            for (var oi = 0; oi < (q.options || []).length; oi++) {
-                var isAnswer = (oi === q.answer);
-                questionsHtml += '<div style="color:' + (isAnswer ? '#4caf50' : '#666666') + ';">' + String.fromCharCode(65 + oi) + '. ' + q.options[oi] + (isAnswer ? '（正确答案）' : '') + '</div>';
-            }
-            questionsHtml += '</div>' +
-                '<div style="display:flex;gap:8px;margin-top:8px;">' +
-                    '<button class="btn-icon" onclick="editMonopolyQuestion(\'' + q.id + '\')" style="padding:4px 12px;font-size:12px;">编辑</button>' +
-                    '<button class="btn-icon" onclick="deleteMonopolyQuestion(\'' + q.id + '\')" style="padding:4px 12px;font-size:12px;">删除</button>' +
-                '</div>' +
-            '</div>';
-        }
-    }
-
     var html = '<div class="sub-page active" id="monopolyCustomPage" style="z-index:60;background:#ffffff;pointer-events:auto;display:flex;flex-direction:column;">' +
-        '<div class="sub-top">' +
-            '<div class="back-btn" onclick="openMonopolyMain()">' +
-                '<svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>' +
-            '</div>' +
-            '<span>自定义</span>' +
+    '<div class="sub-top">' +
+        '<div class="back-btn" onclick="openMonopolyMain()">' +
+            '<svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>' +
         '</div>' +
-        '<div class="sub-content" style="padding:16px;overflow-y:auto;pointer-events:auto;flex:1;">' +
+        '<span>自定义</span>' +
+    '</div>' +
+    '<div class="sub-content" style="padding:16px;overflow-y:auto;pointer-events:auto;flex:1;">' +
 
-            '<div class="section-title">棋子颜色</div>' +
-            '<div class="setting-block no-click" style="margin:0 0 12px 0;">' +
-                '<div style="font-size:13px;color:#000000;margin-bottom:8px;">我的棋子</div>' +
-                '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">' + myColorsHtml + '</div>' +
-                '<div style="font-size:13px;color:#000000;margin-bottom:8px;">好友的棋子</div>' +
-                '<div style="display:flex;gap:10px;flex-wrap:wrap;">' + friendColorsHtml + '</div>' +
-                '<div style="font-size:12px;color:#999999;margin-top:12px;">NPC 固定灰色，不可修改</div>' +
-            '</div>' +
-
-            '<div class="section-title">机会题库</div>' +
-            '<div class="setting-block no-click" style="margin:0 0 12px 0;">' +
-                '<button class="btn-primary" onclick="showAddMonopolyQuestion()" style="width:100%;padding:8px 0;">新增题目</button>' +
-            '</div>' +
-            '<div>' + questionsHtml + '</div>' +
-
+        '<div style="display:flex;gap:8px;margin-bottom:16px;">' +
+            '<div onclick="switchMonopolyCustomTab(\'color\')" style="flex:1;padding:8px 0;text-align:center;border-radius:20px;font-size:14px;font-weight:500;cursor:pointer;background:' + ((window._monopolyCustomTab || 'color') === 'color' ? 'var(--theme-main, #d4e9d6)' : 'var(--theme-lighter, #eef5ef)') + ';color:' + ((window._monopolyCustomTab || 'color') === 'color' ? '#000000' : '#888888') + ';">棋子颜色</div>' +
+            '<div onclick="switchMonopolyCustomTab(\'question\')" style="flex:1;padding:8px 0;text-align:center;border-radius:20px;font-size:14px;font-weight:500;cursor:pointer;background:' + ((window._monopolyCustomTab || 'color') === 'question' ? 'var(--theme-main, #d4e9d6)' : 'var(--theme-lighter, #eef5ef)') + ';color:' + ((window._monopolyCustomTab || 'color') === 'question' ? '#000000' : '#888888') + ';">机会题库</div>' +
         '</div>' +
-    '</div>';
+
+        '<div id="monopolyCustomContent">' +
+            renderMonopolyCustomContent() +
+        '</div>' +
+
+    '</div>' +
+'</div>';
     container.innerHTML = html;
     var subPage = container.querySelector('#monopolyCustomPage');
     if (subPage) {
@@ -18159,75 +18189,234 @@ function openMonopolyCustom() {
     }
 }
 
+function switchMonopolyQuestionTab(tab) {
+    window._monopolyQuestionSubTab = tab;
+    var container = document.getElementById('monopolyCustomContent');
+    if (container) {
+        container.innerHTML = renderMonopolyCustomContent();
+    }
+}
+
+function switchMonopolyCustomTab(tab) {
+    window._monopolyCustomTab = tab;
+    loadMonopolyDataFromDB().then(function() {
+        openMonopolyCustom();
+    });
+}
+window.switchMonopolyCustomTab = switchMonopolyCustomTab;
+window.switchMonopolyQuestionTab = switchMonopolyQuestionTab;
+
+function renderMonopolyCustomContent() {
+    var monopoly = getMonopolyData();
+    var colors = monopoly.colors || { me: '#4a90d9', friend: '#9b6bc4' };
+    var myColor = colors.me;
+    var friendColor = colors.friend;
+    var currentTab = window._monopolyCustomTab || 'color';
+    var html = '';
+
+    if (currentTab === 'color') {
+        var myColorsHtml = '';
+        for (var i = 0; i < MONOPOLY_COLOR_OPTIONS.length; i++) {
+            var c = MONOPOLY_COLOR_OPTIONS[i];
+            var active = (c === myColor);
+            myColorsHtml += '<div onclick="setMonopolyColor(\'me\',\'' + c + '\')" style="width:36px;height:36px;border-radius:50%;cursor:pointer;background:' + c + ';border:3px solid ' + (active ? '#333333' : 'transparent') + ';box-sizing:border-box;"></div>';
+        }
+
+        var friendColorsHtml = '';
+        for (var j = 0; j < MONOPOLY_COLOR_OPTIONS.length; j++) {
+            var c2 = MONOPOLY_COLOR_OPTIONS[j];
+            var active2 = (c2 === friendColor);
+            friendColorsHtml += '<div onclick="setMonopolyColor(\'friend\',\'' + c2 + '\')" style="width:36px;height:36px;border-radius:50%;cursor:pointer;background:' + c2 + ';border:3px solid ' + (active2 ? '#333333' : 'transparent') + ';box-sizing:border-box;"></div>';
+        }
+
+        html += '<div class="setting-block no-click" style="margin:0;">' +
+            '<div style="font-size:13px;color:#000000;margin-bottom:8px;">我的棋子</div>' +
+            '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">' + myColorsHtml + '</div>' +
+            '<div style="font-size:13px;color:#000000;margin-bottom:8px;">好友的棋子</div>' +
+            '<div style="display:flex;gap:10px;flex-wrap:wrap;">' + friendColorsHtml + '</div>' +
+            '<div style="font-size:12px;color:#999999;margin-top:12px;">NPC 固定灰色，不可修改</div>' +
+        '</div>';
+    } else if (currentTab === 'question') {
+    var questions = monopoly.questions || [];
+    
+    var quizList = questions.filter(function(q) { return q.type === 'quiz' || !q.type; });
+    var addList = questions.filter(function(q) { return q.type === 'add'; });
+    var deductList = questions.filter(function(q) { return q.type === 'deduct'; });
+
+    var currentSubTab = window._monopolyQuestionSubTab || 'quiz';
+
+    var quizActive = currentSubTab === 'quiz';
+    var addActive = currentSubTab === 'add';
+    var deductActive = currentSubTab === 'deduct';
+
+    html += '<div style="display:flex;gap:6px;margin-bottom:12px;">' +
+        '<button class="btn-primary" onclick="switchMonopolyQuestionTab(\'quiz\')" style="flex:1;padding:8px 0;font-size:13px;background:' + (quizActive ? 'var(--theme-main, #d4e9d6)' : 'var(--theme-lighter, #eef5ef)') + ';color:' + (quizActive ? '#000000' : '#888888') + ';">脑筋急转弯</button>' +
+        '<button class="btn-primary" onclick="switchMonopolyQuestionTab(\'add\')" style="flex:1;padding:8px 0;font-size:13px;background:' + (addActive ? 'var(--theme-main, #d4e9d6)' : 'var(--theme-lighter, #eef5ef)') + ';color:' + (addActive ? '#000000' : '#888888') + ';">加钱题库</button>' +
+        '<button class="btn-primary" onclick="switchMonopolyQuestionTab(\'deduct\')" style="flex:1;padding:8px 0;font-size:13px;background:' + (deductActive ? 'var(--theme-main, #d4e9d6)' : 'var(--theme-lighter, #eef5ef)') + ';color:' + (deductActive ? '#000000' : '#888888') + ';">扣钱题库</button>' +
+    '</div>';
+
+    var displayList = quizList;
+    var typeName = '脑筋急转弯';
+    
+    if (currentSubTab === 'add') {
+        displayList = addList;
+        typeName = '加钱';
+    } else if (currentSubTab === 'deduct') {
+        displayList = deductList;
+        typeName = '扣钱';
+    }
+
+    html += '<div style="margin-bottom:12px;text-align:right;">' +
+        '<button class="btn-icon" onclick="showAddMonopolyQuestion(\'' + currentSubTab + '\')" style="padding:6px 16px;font-size:13px;background:var(--theme-main, #d4e9d6);color:#000000;">+ 新增' + typeName + '</button>' +
+    '</div>';
+
+    var questionsHtml = '';
+    if (displayList.length === 0) {
+        questionsHtml = '<div style="text-align:center;color:#999999;padding:20px 0;font-size:13px;">暂无' + typeName + '题目</div>';
+    } else {
+        for (var k = 0; k < displayList.length; k++) {
+            var q = displayList[k];
+            var typeText = '';
+            var color = '#000000';
+            if (q.type === 'add') { typeText = '（加钱）'; color = '#4caf50'; }
+            else if (q.type === 'deduct') { typeText = '（扣钱）'; color = '#c03030'; }
+            else { typeText = '（急转弯）'; color = '#4a7a4e'; }
+
+            questionsHtml += '<div style="background:#ffffff;border:1px solid #e0e0e0;border-radius:10px;padding:10px 12px;margin-bottom:8px;">' +
+                '<div style="font-size:14px;color:#000000;word-break:break-word;margin-bottom:6px;">' + (k + 1) + '. ' + (q.question || '') + ' <span style="font-size:12px;color:' + color + ';">' + typeText + '</span></div>' +
+                '<div style="font-size:12px;color:#666666;line-height:1.7;">';
+            
+            if (q.type === 'add' || q.type === 'deduct') {
+                questionsHtml += '<div style="font-size:14px;font-weight:600;color:' + color + ';">金额：¥' + (q.amount || 0) + '</div>';
+            } else {
+                for (var oi = 0; oi < (q.options || []).length; oi++) {
+                    var isAnswer = (oi === q.answer);
+                    questionsHtml += '<div style="color:' + (isAnswer ? '#4caf50' : '#666666') + ';">' + String.fromCharCode(65 + oi) + '. ' + q.options[oi] + (isAnswer ? '（正确答案）' : '') + '</div>';
+                }
+            }
+            
+            questionsHtml += '</div>' +
+                '<div style="display:flex;gap:8px;margin-top:8px;">' +
+                    '<button class="btn-icon" onclick="editMonopolyQuestion(\'' + q.id + '\')" style="padding:4px 12px;font-size:12px;">编辑</button>' +
+                    '<button class="btn-icon" onclick="deleteMonopolyQuestion(\'' + q.id + '\')" style="padding:4px 12px;font-size:12px;">删除</button>' +
+                '</div>' +
+            '</div>';
+        }
+    }
+    html += '<div>' + questionsHtml + '</div>';
+}
+
+    return html;
+}
+
 function setMonopolyColor(who, color) {
-    var monopoly = DataHub.get('monopoly', { colors: { me: '#4a90d9', friend: '#9b6bc4' }, questions: [], records: { single: [], double: [] } });
+    var monopoly = currentMonopolyData;
     if (!monopoly.colors) monopoly.colors = { me: '#4a90d9', friend: '#9b6bc4' };
     if (who === 'me') monopoly.colors.me = color;
     else if (who === 'friend') monopoly.colors.friend = color;
-    DataHub.set('monopoly', monopoly);
+    saveMonopolyData();
     showToast('已保存');
     openMonopolyCustom();
 }
 
-function showAddMonopolyQuestion() {
-    var html = '<div class="modal-title">新增题目</div>' +
-        '<input type="text" id="mqQuestionInput" placeholder="题目" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
-        '<input type="text" id="mqOptionA" placeholder="选项 A" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
-        '<input type="text" id="mqOptionB" placeholder="选项 B" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
-        '<input type="text" id="mqOptionC" placeholder="选项 C" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
-        '<input type="text" id="mqOptionD" placeholder="选项 D" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
-        '<div style="font-size:13px;color:#000000;margin-bottom:6px;">正确答案</div>' +
-        '<select id="mqAnswerSelect" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
-            '<option value="0">A</option>' +
-            '<option value="1">B</option>' +
-            '<option value="2">C</option>' +
-            '<option value="3">D</option>' +
-        '</select>' +
-        '<div class="btn-row">' +
-            '<button class="cancel" onclick="closeModal()">取消</button>' +
-            '<button class="confirm" onclick="saveMonopolyQuestion()">保存</button>' +
-        '</div>';
+function showAddMonopolyQuestion(type) {
+    if (!type) type = 'quiz';
+    var html = '<div class="modal-title">新增题目</div>';
+    
+    if (type === 'add' || type === 'deduct') {
+        var typeName = type === 'add' ? '加钱' : '扣钱';
+        html += '<div style="font-size:12px;color:#999999;margin-bottom:4px;">题目描述</div>' +
+            '<input type="text" id="mqQuestionInput" placeholder="例如：好运降临，获得奖励" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
+            '<div style="font-size:12px;color:#999999;margin-bottom:4px;">金额</div>' +
+            '<input type="number" id="mqAmountInput" placeholder="金额" step="1" value="100" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
+            '<input type="hidden" id="mqTypeInput" value="' + type + '">' +
+            '<div class="btn-row">' +
+                '<button class="cancel" onclick="closeModal()">取消</button>' +
+                '<button class="confirm" onclick="saveMonopolyQuestion()">保存</button>' +
+            '</div>';
+    } else {
+        html += '<div style="font-size:12px;color:#999999;margin-bottom:4px;">题目</div>' +
+            '<input type="text" id="mqQuestionInput" placeholder="请输入题目" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
+            '<div style="font-size:12px;color:#999999;margin-bottom:4px;">选项</div>' +
+            '<input type="text" id="mqOptionA" placeholder="选项 A" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
+            '<input type="text" id="mqOptionB" placeholder="选项 B" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
+            '<input type="text" id="mqOptionC" placeholder="选项 C" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
+            '<input type="text" id="mqOptionD" placeholder="选项 D" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
+            '<div style="font-size:13px;color:#000000;margin-bottom:6px;">正确答案</div>' +
+            '<select id="mqAnswerSelect" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
+                '<option value="0">A</option>' +
+                '<option value="1">B</option>' +
+                '<option value="2">C</option>' +
+                '<option value="3">D</option>' +
+            '</select>' +
+            '<input type="hidden" id="mqTypeInput" value="quiz">' +
+            '<div class="btn-row">' +
+                '<button class="cancel" onclick="closeModal()">取消</button>' +
+                '<button class="confirm" onclick="saveMonopolyQuestion()">保存</button>' +
+            '</div>';
+    }
     showModal(html);
 }
 
 function saveMonopolyQuestion() {
     var qInput = document.getElementById('mqQuestionInput');
-    var aInput = document.getElementById('mqOptionA');
-    var bInput = document.getElementById('mqOptionB');
-    var cInput = document.getElementById('mqOptionC');
-    var dInput = document.getElementById('mqOptionD');
-    var ansSelect = document.getElementById('mqAnswerSelect');
-    if (!qInput || !aInput || !bInput || !cInput || !dInput) return;
-    var question = qInput.value.trim();
-    var options = [aInput.value.trim(), bInput.value.trim(), cInput.value.trim(), dInput.value.trim()];
-    if (!question) {
+    var typeInput = document.getElementById('mqTypeInput');
+    if (!qInput || !qInput.value.trim()) {
         showToast('请输入题目');
         return;
     }
-    for (var i = 0; i < options.length; i++) {
-        if (!options[i]) {
-            showToast('请填写所有选项');
+    var question = qInput.value.trim();
+    var type = typeInput ? typeInput.value : 'quiz';
+    
+    var monopoly = getMonopolyData();
+    if (!monopoly.questions) monopoly.questions = [];
+
+    if (type === 'add' || type === 'deduct') {
+        var amtInput = document.getElementById('mqAmountInput');
+        var amount = parseFloat(amtInput.value);
+        if (isNaN(amount) || amount <= 0) {
+            showToast('请输入有效金额');
             return;
         }
+        monopoly.questions.push({
+            id: 'mq' + Date.now() + Math.random().toString(36).substr(2, 4),
+            type: type,
+            question: question,
+            amount: amount
+        });
+    } else {
+        var aInput = document.getElementById('mqOptionA');
+        var bInput = document.getElementById('mqOptionB');
+        var cInput = document.getElementById('mqOptionC');
+        var dInput = document.getElementById('mqOptionD');
+        var ansSelect = document.getElementById('mqAnswerSelect');
+        if (!aInput || !bInput || !cInput || !dInput || !ansSelect) return;
+        
+        var options = [aInput.value.trim(), bInput.value.trim(), cInput.value.trim(), dInput.value.trim()];
+        for (var i = 0; i < options.length; i++) {
+            if (!options[i]) {
+                showToast('请填写所有选项');
+                return;
+            }
+        }
+        var answer = parseInt(ansSelect.value) || 0;
+        monopoly.questions.push({
+            id: 'mq' + Date.now() + Math.random().toString(36).substr(2, 4),
+            type: 'quiz',
+            question: question,
+            options: options,
+            answer: answer
+        });
     }
-    var answer = parseInt(ansSelect.value) || 0;
 
-    var monopoly = DataHub.get('monopoly', { colors: { me: '#4a90d9', friend: '#9b6bc4' }, questions: [], records: { single: [], double: [] } });
-    if (!monopoly.questions) monopoly.questions = [];
-    monopoly.questions.push({
-        id: 'mq' + Date.now() + Math.random().toString(36).substr(2, 4),
-        question: question,
-        options: options,
-        answer: answer
-    });
-    DataHub.set('monopoly', monopoly);
+    saveMonopolyData();
     closeModal();
     showToast('已新增');
     openMonopolyCustom();
 }
 
 function editMonopolyQuestion(qid) {
-    var monopoly = DataHub.get('monopoly', { questions: [] });
+    var monopoly = currentMonopolyData;
     var q = (monopoly.questions || []).find(function(x) { return x.id === qid; });
     if (!q) return;
     var opts = q.options || ['', '', '', ''];
@@ -18273,13 +18462,13 @@ function updateMonopolyQuestion(qid) {
     }
     var answer = parseInt(ansSelect.value) || 0;
 
-    var monopoly = DataHub.get('monopoly', { questions: [] });
+    var monopoly = currentMonopolyData;
     var q = (monopoly.questions || []).find(function(x) { return x.id === qid; });
     if (!q) return;
     q.question = question;
     q.options = options;
     q.answer = answer;
-    DataHub.set('monopoly', monopoly);
+    saveMonopolyData();
     closeModal();
     showToast('已保存');
     openMonopolyCustom();
@@ -18287,9 +18476,9 @@ function updateMonopolyQuestion(qid) {
 
 function deleteMonopolyQuestion(qid) {
     if (!confirm('确定删除这道题吗？')) return;
-    var monopoly = DataHub.get('monopoly', { questions: [] });
+    var monopoly = currentMonopolyData;
     monopoly.questions = (monopoly.questions || []).filter(function(x) { return x.id !== qid; });
-    DataHub.set('monopoly', monopoly);
+    saveMonopolyData();
     showToast('已删除');
     openMonopolyCustom();
 }
@@ -18511,8 +18700,8 @@ function darkenColor(hex, percent) {
 // 渲染棋盘
 // state: 对局状态对象
 function renderMonopolyBoard(state) {
-    var monopoly = DataHub.get('monopoly', {});
-    var colors = monopoly.colors || { me: '#4a90d9', friend: '#9b6bc4' };
+    var monopoly = currentMonopolyData;
+var colors = monopoly.colors || { me: '#4a90d9', friend: '#9b6bc4' };
     var myColor = colors.me || '#4a90d9';
     var friendColor = colors.friend || '#9b6bc4';
     var npcColor = '#9e9e9e';
@@ -18686,8 +18875,8 @@ function openMonopolyGame(mode) {
     var friend = friends.find(function(f) { return f.id === currentChatId; });
     if (!friend) return;
 
-    var monopoly = DataHub.get('monopoly', {});
-    var colors = monopoly.colors || { me: '#4a90d9', friend: '#9b6bc4' };
+    var monopoly = currentMonopolyData;
+var colors = monopoly.colors || { me: '#4a90d9', friend: '#9b6bc4' };
 
     var state = {
         mode: mode,
@@ -19079,42 +19268,83 @@ function monopolyHandleCell(state, playerId) {
     }
 
     if (type === 2) {
-        // 机会
-        DataHub.set('monopolyCurrentGame', state);
-        if (playerId === 'me') {
-            monopolyShowQuestion(state, playerId);
-        } else {
-            // 好友/NPC 自动答（50% 对）
-            var autoCorrect = Math.random() < 0.5;
-            if (autoCorrect) {
-    player.money += 200;
-    monopolyAddLog(state, player.name + ' 答对了，获得 ¥200', '#4caf50');
-} else {
-    var deduct = Math.min(player.money, 100);
-    if (deduct < 0) deduct = 0;
-    player.money -= deduct;
-    monopolyAddLog(state, player.name + ' 答错了，扣 ¥' + deduct, '#c03030');
-}
-DataHub.set('monopolyCurrentGame', state);
-if (player.money <= 0) {
-    player.money = 0;
-    player.bankrupt = true;
-    monopolyAddLog(state, player.name + ' 破产出局');
-    removeBankruptFromTurnOrder(state, playerId);
+    // 机会
     DataHub.set('monopolyCurrentGame', state);
-    monopolyRefreshBoardOnly(state);
-    monopolyRefreshStatusAndButtonOnly(state);
-    if (checkTeamAllBankrupt(state)) {
-        monopolyEndGame(state);
-    } else {
-        monopolyResumeAfterBankrupt(state);
+
+    var questions = currentMonopolyData.questions || [];
+    if (questions.length === 0) {
+        // 题库为空，直接 +100
+        player.money += 100;
+        monopolyAddLog(state, player.name + ' 获得 ¥100', '#4caf50');
+        DataHub.set('monopolyCurrentGame', state);
+        monopolyNextTurn(state);
+        return;
     }
-    return;
-}
-monopolyNextTurn(state);
+
+    var q = questions[Math.floor(Math.random() * questions.length)];
+
+    if (q.type === 'add' || q.type === 'deduct') {
+        // 加钱/扣钱：不涉及求助，直接结算
+        var isAdd = (q.type === 'add');
+        var amount = q.amount || 100;
+        if (playerId === 'me') {
+            var title = isAdd ? '机会 · 加钱' : '机会 · 扣钱';
+            var color = isAdd ? '#4caf50' : '#c03030';
+            var desc = isAdd ? '恭喜获得 ¥' : '遭遇不幸，扣除 ¥';
+            window._monopolyCurrentQuestion = null;
+            var html = '<div class="modal-title">' + title + '</div>' +
+                '<div style="text-align:center;padding:20px 0;">' +
+                    '<div style="font-size:16px;color:#000000;margin-bottom:12px;">' + (q.question || '触发机会') + '</div>' +
+                    '<div style="font-size:24px;font-weight:600;color:' + color + ';">' + desc + amount + '</div>' +
+                '</div>' +
+                '<div class="btn-row">' +
+                    '<button class="confirm" onclick="closeModal();monopolyApplyEvent(' + amount + ',' + isAdd + ')">确定</button>' +
+                '</div>';
+            showModal(html);
+        } else {
+            if (isAdd) {
+                player.money += amount;
+                monopolyAddLog(state, player.name + ' 触发加钱，获得 ¥' + amount, '#4caf50');
+            } else {
+                var dAmt = Math.min(player.money, amount);
+                player.money -= dAmt;
+                monopolyAddLog(state, player.name + ' 触发扣钱，扣除 ¥' + dAmt, '#c03030');
+            }
+            DataHub.set('monopolyCurrentGame', state);
+            if (player.money <= 0) {
+                player.money = 0;
+                player.bankrupt = true;
+                monopolyAddLog(state, player.name + ' 破产出局');
+                removeBankruptFromTurnOrder(state, playerId);
+                DataHub.set('monopolyCurrentGame', state);
+                monopolyRefreshBoardOnly(state);
+                monopolyRefreshStatusAndButtonOnly(state);
+                if (checkTeamAllBankrupt(state)) {
+                    monopolyEndGame(state);
+                } else {
+                    monopolyResumeAfterBankrupt(state);
+                }
+                return;
+            }
+            monopolyNextTurn(state);
         }
         return;
     }
+
+    // 脑筋急转弯：按角色分流
+    if (playerId === 'me') {
+        monopolyShowQuestion(state, playerId);
+    } else if (playerId === 'friend') {
+        if (Math.random() < 0.5) {
+            monopolyFriendAskMeForHelp(state, playerId, q);
+        } else {
+            monopolyFriendSelfAnswerQuiz(state, playerId, q);
+        }
+    } else {
+        monopolyFriendSelfAnswerQuiz(state, playerId, q);
+    }
+    return;
+}
 
     if (type === 3) {
         // 监狱
@@ -19277,21 +19507,287 @@ function monopolyBuyDecision(buy) {
     monopolyNextTurn(state);
 }
 
-// 脑筋急转弯
+// ====== 大富翁：求助相关 ======
+function monopolyFriendSelfAnswerQuiz(state, playerId, q) {
+    var player = state.players.find(function(x) { return x.id === playerId; });
+    if (!player) return;
+
+    var autoCorrect = Math.random() < 0.5;
+    if (autoCorrect) {
+        player.money += 200;
+        monopolyAddLog(state, player.name + ' 答对了，获得 ¥200', '#4caf50');
+    } else {
+        var deduct = Math.min(player.money, 100);
+        player.money -= deduct;
+        monopolyAddLog(state, player.name + ' 答错了，扣 ¥' + deduct, '#c03030');
+    }
+
+    DataHub.set('monopolyCurrentGame', state);
+    if (player.money <= 0) {
+        player.money = 0;
+        player.bankrupt = true;
+        monopolyAddLog(state, player.name + ' 破产出局');
+        removeBankruptFromTurnOrder(state, playerId);
+        DataHub.set('monopolyCurrentGame', state);
+        monopolyRefreshBoardOnly(state);
+        monopolyRefreshStatusAndButtonOnly(state);
+        if (checkTeamAllBankrupt(state)) {
+            monopolyEndGame(state);
+        } else {
+            monopolyResumeAfterBankrupt(state);
+        }
+        return;
+    }
+    monopolyNextTurn(state);
+}
+
+function monopolyAskFriendForHelp() {
+    var state = DataHub.get('monopolyCurrentGame', null);
+    if (!state || state.finished) return;
+
+    var friendName = state.friendName || '好友';
+    var myName = '我';
+
+    monopolyAddLog(state, myName + ' 向 ' + friendName + ' 求助', '#4a7a4e');
+    DataHub.set('monopolyCurrentGame', state);
+    monopolyRefreshBoardOnly(state);
+    monopolyRefreshStatusAndButtonOnly(state);
+
+    monopolyFriendSay(state, '好，我帮你看看');
+
+    setTimeout(function() {
+        var latest = DataHub.get('monopolyCurrentGame', null);
+        if (!latest || latest.finished) return;
+
+        if (Math.random() < 0.5) {
+            monopolyFriendHelpAnswer(latest, 'me');
+        } else {
+            monopolyFriendRefuseHelp(latest, 'me');
+        }
+    }, 1500 + Math.random() * 1500);
+}
+
+function monopolyFriendHelpAnswer(state, requesterId) {
+    var questions = currentMonopolyData.questions || [];
+    var quizQuestions = questions.filter(function(q) {
+        return q.type === 'quiz' || !q.type;
+    });
+
+    var requester = state.players.find(function(x) { return x.id === requesterId; });
+    if (!requester) return;
+
+    var friendName = state.friendName || '好友';
+
+    if (quizQuestions.length === 0) {
+        requester.money += 100;
+        monopolyAddLog(state, friendName + ' 帮答，但题库为空，获得 ¥100', '#4caf50');
+        monopolyFriendSay(state, '题库空了，给你 +100');
+        DataHub.set('monopolyCurrentGame', state);
+        monopolyRefreshBoardOnly(state);
+        monopolyRefreshStatusAndButtonOnly(state);
+        monopolyNextTurn(state);
+        return;
+    }
+
+    var q = quizQuestions[Math.floor(Math.random() * quizQuestions.length)];
+    var correct = Math.random() < 0.5;
+
+    if (correct) {
+        requester.money += 200;
+        monopolyAddLog(state, friendName + ' 帮你答对了，获得 ¥200', '#4caf50');
+        monopolyFriendSay(state, '答对了，给你 +200');
+    } else {
+        var deduct = Math.min(requester.money, 100);
+        requester.money -= deduct;
+        monopolyAddLog(state, friendName + ' 帮你答错了，扣 ¥' + deduct, '#c03030');
+        monopolyFriendSay(state, '哎呀答错了，-100');
+    }
+
+    DataHub.set('monopolyCurrentGame', state);
+    monopolyRefreshBoardOnly(state);
+    monopolyRefreshStatusAndButtonOnly(state);
+
+    if (requester.money <= 0) {
+        requester.money = 0;
+        requester.bankrupt = true;
+        monopolyAddLog(state, requester.name + ' 破产出局');
+        removeBankruptFromTurnOrder(state, requesterId);
+        DataHub.set('monopolyCurrentGame', state);
+        monopolyRefreshBoardOnly(state);
+        monopolyRefreshStatusAndButtonOnly(state);
+        if (checkTeamAllBankrupt(state)) {
+            monopolyEndGame(state);
+        } else {
+            monopolyResumeAfterBankrupt(state);
+        }
+        return;
+    }
+
+    monopolyNextTurn(state);
+}
+
+function monopolyFriendRefuseHelp(state, requesterId) {
+    var friendName = state.friendName || '好友';
+    monopolyAddLog(state, friendName + ' 拒绝了你的求助', '#c03030');
+    monopolyFriendSay(state, '抱歉，这题我也不会，你自己答吧');
+
+    DataHub.set('monopolyCurrentGame', state);
+    monopolyRefreshBoardOnly(state);
+    monopolyRefreshStatusAndButtonOnly(state);
+
+    setTimeout(function() {
+        var latest = DataHub.get('monopolyCurrentGame', null);
+        if (!latest || latest.finished) return;
+        monopolyShowQuestion(latest, requesterId);
+    }, 800);
+}
+
+function monopolyFriendAskMeForHelp(state, playerId, q) {
+    var friendName = state.friendName || '好友';
+
+    monopolyAddLog(state, friendName + ' 向你求助', '#4a7a4e');
+    DataHub.set('monopolyCurrentGame', state);
+    monopolyRefreshBoardOnly(state);
+    monopolyRefreshStatusAndButtonOnly(state);
+
+    monopolyFriendSay(state, '这题我有点拿不准，你能帮我答吗？');
+
+    setTimeout(function() {
+        var latest = DataHub.get('monopolyCurrentGame', null);
+        if (!latest || latest.finished) return;
+
+        window._monopolyFriendHelpState = latest;
+        window._monopolyFriendHelpQuestion = q;
+        window._monopolyFriendHelpPlayerId = playerId;
+
+        var opts = q.options || [];
+        var optsHtml = '';
+        for (var i = 0; i < opts.length; i++) {
+            optsHtml += '<div onclick="monopolyAnswerForFriend(' + i + ')" style="padding:10px 12px;border:1px solid #d4e4d6;border-radius:10px;margin-bottom:8px;cursor:pointer;font-size:14px;color:#000000;background:#ffffff;">' + String.fromCharCode(65 + i) + '. ' + opts[i] + '</div>';
+        }
+
+        var html = '<div class="modal-title">' + friendName + ' 求助 · 脑筋急转弯</div>' +
+            '<div style="font-size:14px;color:#000000;margin-bottom:12px;line-height:1.6;word-break:break-word;">' + q.question + '</div>' +
+            optsHtml +
+            '<div style="font-size:12px;color:#999999;margin-top:8px;">答对好友 +¥200，答错好友 -¥100</div>' +
+            '<div class="btn-row" style="margin-top:12px;justify-content:space-between;">' +
+                '<button class="cancel" onclick="closeModal();monopolyRefuseFriendHelp()">拒绝</button>' +
+            '</div>';
+        showModal(html);
+    }, 1000 + Math.random() * 1000);
+}
+
+function monopolyAnswerForFriend(idx) {
+    var state = window._monopolyFriendHelpState || DataHub.get('monopolyCurrentGame', null);
+    var q = window._monopolyFriendHelpQuestion;
+    var playerId = window._monopolyFriendHelpPlayerId || 'friend';
+    if (!state || !q) return;
+    closeModal();
+
+    var player = state.players.find(function(x) { return x.id === playerId; });
+    if (!player) return;
+
+    var correct = (idx === q.answer);
+    var friendName = state.friendName || '好友';
+
+    if (correct) {
+        player.money += 200;
+        monopolyAddLog(state, '我 帮 ' + friendName + ' 答对了，' + friendName + ' 获得 ¥200', '#4caf50');
+        monopolyFriendSay(state, '答对了！谢谢帮我，+200');
+    } else {
+        var deduct = Math.min(player.money, 100);
+        player.money -= deduct;
+        monopolyAddLog(state, '我 帮 ' + friendName + ' 答错了，' + friendName + ' 扣 ¥' + deduct, '#c03030');
+        monopolyFriendSay(state, '哎呀答错了，-100');
+    }
+
+    window._monopolyFriendHelpState = null;
+    window._monopolyFriendHelpQuestion = null;
+    window._monopolyFriendHelpPlayerId = null;
+
+    DataHub.set('monopolyCurrentGame', state);
+    monopolyRefreshBoardOnly(state);
+    monopolyRefreshStatusAndButtonOnly(state);
+
+    if (player.money <= 0) {
+        player.money = 0;
+        player.bankrupt = true;
+        monopolyAddLog(state, player.name + ' 破产出局');
+        removeBankruptFromTurnOrder(state, playerId);
+        DataHub.set('monopolyCurrentGame', state);
+        monopolyRefreshBoardOnly(state);
+        monopolyRefreshStatusAndButtonOnly(state);
+        if (checkTeamAllBankrupt(state)) {
+            monopolyEndGame(state);
+        } else {
+            monopolyResumeAfterBankrupt(state);
+        }
+        return;
+    }
+
+    monopolyNextTurn(state);
+}
+
+function monopolyRefuseFriendHelp() {
+    var state = window._monopolyFriendHelpState || DataHub.get('monopolyCurrentGame', null);
+    var playerId = window._monopolyFriendHelpPlayerId || 'friend';
+    var q = window._monopolyFriendHelpQuestion;
+    if (!state) return;
+    closeModal();
+
+    window._monopolyFriendHelpState = null;
+    window._monopolyFriendHelpQuestion = null;
+    window._monopolyFriendHelpPlayerId = null;
+
+    monopolyAddLog(state, '我 拒绝了 ' + (state.friendName || '好友') + ' 的求助', '#c03030');
+    monopolyFriendSay(state, '好吧，我自己答');
+
+    if (q) {
+        monopolyFriendSelfAnswerQuiz(state, playerId, q);
+    } else {
+        DataHub.set('monopolyCurrentGame', state);
+        monopolyNextTurn(state);
+    }
+}
+// ====== 求助相关结束 ======
+
+// 脑筋急转弯 / 机会事件
 function monopolyShowQuestion(state, playerId) {
-    var monopoly = DataHub.get('monopoly', { questions: [] });
+    var monopoly = currentMonopolyData;
     var questions = monopoly.questions || [];
     if (questions.length === 0) {
-        // 没题目，直接给奖励
         var player0 = state.players.find(function(p) { return p.id === playerId; });
         if (player0) player0.money += 100;
-        monopolyAddLog(state, '机会：题库为空，获得 ¥100');
+        monopolyAddLog(state, '机会：题库为空，获得 ¥100', '#4caf50');
         DataHub.set('monopolyCurrentGame', state);
         monopolyNextTurn(state);
         return;
     }
 
     var q = questions[Math.floor(Math.random() * questions.length)];
+    
+    // 如果是加钱/扣钱类
+    if (q.type === 'add' || q.type === 'deduct') {
+        var isAdd = q.type === 'add';
+        var amount = q.amount || 100;
+        var title = isAdd ? '机会 · 加钱' : '机会 · 扣钱';
+        var color = isAdd ? '#4caf50' : '#c03030';
+        var desc = isAdd ? '恭喜获得 ¥' : '遭遇不幸，扣除 ¥';
+        window._monopolyCurrentQuestion = null; // 清空，防止答题逻辑冲突
+
+        var html = '<div class="modal-title">' + title + '</div>' +
+            '<div style="text-align:center;padding:20px 0;">' +
+                '<div style="font-size:16px;color:#000000;margin-bottom:12px;">' + (q.question || '触发机会') + '</div>' +
+                '<div style="font-size:24px;font-weight:600;color:' + color + ';">' + desc + amount + '</div>' +
+            '</div>' +
+            '<div class="btn-row">' +
+                '<button class="confirm" onclick="closeModal();monopolyApplyEvent(' + amount + ',' + isAdd + ')">确定</button>' +
+            '</div>';
+        showModal(html);
+        return;
+    }
+
+    // 脑筋急转弯类
     var opts = q.options || [];
     var optsHtml = '';
     for (var i = 0; i < opts.length; i++) {
@@ -19300,14 +19796,15 @@ function monopolyShowQuestion(state, playerId) {
 
     window._monopolyCurrentQuestion = q;
 
-    var html = '<div class="modal-title">机会 · 脑筋急转弯</div>' +
-        '<div style="font-size:14px;color:#000000;margin-bottom:12px;line-height:1.6;word-break:break-word;">' + q.question + '</div>' +
-        optsHtml +
-        '<div style="font-size:12px;color:#999999;margin-top:8px;">答对 +¥200，答错 -¥100</div>' +
-        '<div class="btn-row" style="margin-top:12px;">' +
-            '<button class="cancel" onclick="closeModal();monopolySkipQuestion()">跳过</button>' +
-        '</div>';
-    showModal(html);
+var html2 = '<div class="modal-title">机会 · 脑筋急转弯</div>' +
+    '<div style="font-size:14px;color:#000000;margin-bottom:12px;line-height:1.6;word-break:break-word;">' + q.question + '</div>' +
+    optsHtml +
+    '<div style="font-size:12px;color:#999999;margin-top:8px;">答对 +¥200，答错 -¥100</div>' +
+    '<div class="btn-row" style="margin-top:12px;justify-content:space-between;">' +
+        '<button class="cancel" onclick="closeModal();monopolySkipQuestion()">跳过</button>' +
+        '<button class="confirm" onclick="closeModal();monopolyAskFriendForHelp()">求助好友</button>' +
+    '</div>';
+showModal(html2);
 }
 
 function monopolyAnswerQuestion(idx) {
@@ -19349,6 +19846,42 @@ if (player.money <= 0) {
 }
 monopolyNextTurn(state);
 }
+
+function monopolyApplyEvent(amount, isAdd) {
+    var state = DataHub.get('monopolyCurrentGame', null);
+    if (!state) return;
+    var player = state.players.find(function(p) { return p.id === 'me'; });
+    if (!player) return;
+
+    if (isAdd) {
+        player.money += amount;
+        monopolyAddLog(state, '我 获得 ¥' + amount, '#4caf50');
+    } else {
+        var deduct = Math.min(player.money, amount);
+        if (deduct < 0) deduct = 0;
+        player.money -= deduct;
+        monopolyAddLog(state, '我 扣除 ¥' + deduct, '#c03030');
+    }
+    DataHub.set('monopolyCurrentGame', state);
+
+    if (player.money <= 0) {
+        player.money = 0;
+        player.bankrupt = true;
+        monopolyAddLog(state, '我 破产出局');
+        removeBankruptFromTurnOrder(state, 'me');
+        DataHub.set('monopolyCurrentGame', state);
+        monopolyRefreshBoardOnly(state);
+        monopolyRefreshStatusAndButtonOnly(state);
+        if (checkTeamAllBankrupt(state)) {
+            monopolyEndGame(state);
+        } else {
+            monopolyResumeAfterBankrupt(state);
+        }
+        return;
+    }
+    monopolyNextTurn(state);
+}
+window.monopolyApplyEvent = monopolyApplyEvent;
 
 function monopolySkipQuestion() {
     var state = DataHub.get('monopolyCurrentGame', null);
@@ -19517,7 +20050,7 @@ if (state.mode === 'single') {
 }
 
     // 写入战绩
-    var monopoly = DataHub.get('monopoly', { records: { single: [], double: [] } });
+    var monopoly = currentMonopolyData;
     if (!monopoly.records) monopoly.records = { single: [], double: [] };
     if (!monopoly.records.single) monopoly.records.single = [];
     if (!monopoly.records.double) monopoly.records.double = [];
@@ -19541,7 +20074,7 @@ if (state.mode === 'single') {
     } else {
         monopoly.records.double.unshift(record);
     }
-    DataHub.set('monopoly', monopoly);
+    saveMonopolyData();
 
     // 清对局聊天
     DataHub.delete('monopolyChat');
@@ -19818,10 +20351,10 @@ function renderMonopolyRecordsPage() {
     var container = document.getElementById('subPageContainer');
     if (!container) return;
 
-    var monopoly = DataHub.get('monopoly', { records: { single: [], double: [] } });
-    if (!monopoly.records) monopoly.records = { single: [], double: [] };
-    if (!monopoly.records.single) monopoly.records.single = [];
-    if (!monopoly.records.double) monopoly.records.double = [];
+    var monopoly = currentMonopolyData;
+if (!monopoly.records) monopoly.records = { single: [], double: [] };
+if (!monopoly.records.single) monopoly.records.single = [];
+if (!monopoly.records.double) monopoly.records.double = [];
 
     var list = (monopolyRecordsTab === 'single') ? monopoly.records.single : monopoly.records.double;
 
@@ -19910,14 +20443,14 @@ function renderMonopolyRecordsPage() {
 function deleteMonopolyRecord(recordId) {
     if (!recordId) return;
     if (!confirm('确定删除这条战绩吗？')) return;
-    var monopoly = DataHub.get('monopoly', { records: { single: [], double: [] } });
+    var monopoly = currentMonopolyData;
     if (!monopoly.records) monopoly.records = { single: [], double: [] };
     if (monopolyRecordsTab === 'single') {
         monopoly.records.single = (monopoly.records.single || []).filter(function(r) { return r.id !== recordId; });
     } else {
         monopoly.records.double = (monopoly.records.double || []).filter(function(r) { return r.id !== recordId; });
     }
-    DataHub.set('monopoly', monopoly);
+    saveMonopolyData();
     showToast('已删除');
     renderMonopolyRecordsPage();
 }
@@ -23873,10 +24406,11 @@ function updateBgOpacity(val) {
 function clearAllData() {
     if (!confirm('清除所有数据？包括好友、群聊、设置、聊天记录，全部回到初始状态。')) return;
     getDB().then(function(database) {
-        var tx = database.transaction(['appData', 'audioStore', 'questionnaireStore'], 'readwrite');
+        var tx = database.transaction(['appData', 'audioStore', 'questionnaireStore', 'gameStore'], 'readwrite');
         tx.objectStore('appData').clear();
         tx.objectStore('audioStore').clear();
         tx.objectStore('questionnaireStore').clear();
+        tx.objectStore('gameStore').clear();
         tx.oncomplete = function() {
             var fresh = JSON.parse(JSON.stringify(defaultData));
             if (!fresh.groups.includes('未分组')) {
@@ -24092,45 +24626,95 @@ window.exportData = function() {
             });
 
             Promise.all(promises).then(function(processedBlobs) {
-                var qtx = database.transaction('questionnaireStore', 'readonly');
-                var qstore = qtx.objectStore('questionnaireStore');
-                var qreq = qstore.getAll();
-                qreq.onsuccess = function() {
-                    var questionnaireStoreData = qreq.result || [];
-                    var exportObj = {
-                        version: 4,
-                        appData: DataHub.getAll(),
-                        blobs: processedBlobs,
-                        questionnaireStore: questionnaireStoreData
-                    };
-                    const json = JSON.stringify(exportObj, null, 2);
-                    const blob = new Blob([json], {type: 'application/json'});
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = '时间数据_备份.json';
-                    a.click();
-                    URL.revokeObjectURL(url);
-                    showToast('导出成功');
-                };
-                qreq.onerror = function() {
-                    var exportObj = {
-                        version: 4,
-                        appData: DataHub.getAll(),
-                        blobs: processedBlobs,
-                        questionnaireStore: []
-                    };
-                    const json = JSON.stringify(exportObj, null, 2);
-                    const blob = new Blob([json], {type: 'application/json'});
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = '时间数据_备份.json';
-                    a.click();
-                    URL.revokeObjectURL(url);
-                    showToast('导出成功');
-                };
-            });
+    var qtx = database.transaction('questionnaireStore', 'readonly');
+    var qstore = qtx.objectStore('questionnaireStore');
+    var qreq = qstore.getAll();
+    qreq.onsuccess = function() {
+        var questionnaireStoreData = qreq.result || [];
+        var gtx = database.transaction('gameStore', 'readonly');
+        var gstore = gtx.objectStore('gameStore');
+        var greq = gstore.getAll();
+        greq.onsuccess = function() {
+            var gameStoreData = greq.result || [];
+            var exportObj = {
+                version: 5,
+                appData: DataHub.getAll(),
+                blobs: processedBlobs,
+                questionnaireStore: questionnaireStoreData,
+                gameStore: gameStoreData
+            };
+            const json = JSON.stringify(exportObj, null, 2);
+            const blob = new Blob([json], {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = '时间数据_备份.json';
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('导出成功');
+        };
+        greq.onerror = function() {
+            var exportObj = {
+                version: 5,
+                appData: DataHub.getAll(),
+                blobs: processedBlobs,
+                questionnaireStore: questionnaireStoreData,
+                gameStore: []
+            };
+            const json = JSON.stringify(exportObj, null, 2);
+            const blob = new Blob([json], {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = '时间数据_备份.json';
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('导出成功');
+        };
+    };
+    qreq.onerror = function() {
+        var gtx2 = database.transaction('gameStore', 'readonly');
+        var gstore2 = gtx2.objectStore('gameStore');
+        var greq2 = gstore2.getAll();
+        greq2.onsuccess = function() {
+            var gameStoreData2 = greq2.result || [];
+            var exportObj = {
+                version: 5,
+                appData: DataHub.getAll(),
+                blobs: processedBlobs,
+                questionnaireStore: [],
+                gameStore: gameStoreData2
+            };
+            const json = JSON.stringify(exportObj, null, 2);
+            const blob = new Blob([json], {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = '时间数据_备份.json';
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('导出成功');
+        };
+        greq2.onerror = function() {
+            var exportObj = {
+                version: 5,
+                appData: DataHub.getAll(),
+                blobs: processedBlobs,
+                questionnaireStore: [],
+                gameStore: []
+            };
+            const json = JSON.stringify(exportObj, null, 2);
+            const blob = new Blob([json], {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = '时间数据_备份.json';
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('导出成功');
+        };
+    };
+});
         };
     });
 };
@@ -24149,7 +24733,7 @@ window.importData = function() {
     reader.onload = function(e) {
         try {
             const data = JSON.parse(e.target.result);
-            if (data && (data.version === 3 || data.version === 4) && data.appData) {
+            if (data && (data.version === 3 || data.version === 4 || data.version === 5) && data.appData) {
                 DataHub.setAll(data.appData);
                 DataHub.delete('votes');
 
@@ -24165,15 +24749,21 @@ window.importData = function() {
                 });
 
                 var questionnaireStoreData = data.questionnaireStore || [];
+                var gameStoreData = data.gameStore || [];
 
                 Promise.all(promises).then(function() {
                     return getDB().then(function(database) {
                         return new Promise(function(resolve) {
-                            var tx = database.transaction('questionnaireStore', 'readwrite');
+                            var tx = database.transaction(['questionnaireStore', 'gameStore'], 'readwrite');
                             var store = tx.objectStore('questionnaireStore');
                             store.clear();
                             for (var qi = 0; qi < questionnaireStoreData.length; qi++) {
                                 store.put(questionnaireStoreData[qi]);
+                            }
+                            var gStore = tx.objectStore('gameStore');
+                            gStore.clear();
+                            for (var gi = 0; gi < gameStoreData.length; gi++) {
+                                gStore.put(gameStoreData[gi]);
                             }
                             tx.oncomplete = function() { resolve(); };
                             tx.onerror = function() { resolve(); };
@@ -24183,8 +24773,8 @@ window.importData = function() {
                     renderAll();
                     updateTopBar();
                     closeSubPage();
-                    if (questionnaireStoreData.length > 0) {
-                        showToast('导入成功，已包含语音和问卷数据');
+                    if (questionnaireStoreData.length > 0 || gameStoreData.length > 0) {
+                        showToast('导入成功，已包含语音、问卷及游戏数据');
                     } else {
                         showToast('导入成功，已包含语音数据');
                     }
@@ -24195,7 +24785,7 @@ window.importData = function() {
                 renderAll();
                 updateTopBar();
                 closeSubPage();
-                showToast('导入成功，但该备份不包含语音数据');
+                showToast('导入成功，但该备份不包含语音及游戏数据');
             }
         } catch(err) {
             alert('导入失败，请检查文件格式');
@@ -29508,6 +30098,73 @@ window.showSendTransferAmount = showSendTransferAmount;
 window.confirmSendTransfer = confirmSendTransfer;
 window.openHongbaoCard = openHongbaoCard;
 
+// 从独立数据库加载大富翁数据
+async function loadMonopolyDataFromDB() {
+    var defaultQuestions = [
+    { id: 'mq1', type: 'quiz', question: '什么东西越洗越脏？', options: ['衣服', '水', '手', '碗'], answer: 1 },
+    { id: 'mq2', type: 'quiz', question: '什么东西天气越热，它爬得越高？', options: ['温度计', '树', '猫', '人'], answer: 0 },
+    { id: 'mq3', type: 'quiz', question: '什么东西有头无脚？', options: ['桌子', '硬币', '鞋', '袜子'], answer: 1 },
+    { id: 'mq4', type: 'quiz', question: '什么东西别人请你吃，但你自己还是要付钱？', options: ['官司', '饭', '水果', '茶'], answer: 0 },
+    { id: 'mq5', type: 'quiz', question: '什么东西明明是你的，别人却用得比你还多？', options: ['名字', '书', '笔', '伞'], answer: 0 },
+    { id: 'mq6', type: 'add', question: '好运降临，获得奖励', amount: 100 },
+    { id: 'mq7', type: 'add', question: '在路上捡到了钱', amount: 200 },
+    { id: 'mq8', type: 'deduct', question: '不小心踩坏了花花草草', amount: 50 },
+    { id: 'mq9', type: 'deduct', question: '买了一杯奶茶', amount: 20 }
+];
+
+    var saved = await loadGameData('monopoly');
+    if (saved) {
+        if (!saved.colors) saved.colors = { me: '#4a90d9', friend: '#9b6bc4' };
+        if (!saved.questions || saved.questions.length === 0) saved.questions = defaultQuestions;
+        if (!saved.records) saved.records = { single: [], double: [] };
+        if (!saved.records.single) saved.records.single = [];
+        if (!saved.records.double) saved.records.double = [];
+        
+        // 兼容旧数据：如果没有 type，补充为 quiz
+        saved.questions.forEach(function(q) {
+            if (!q.type) q.type = 'quiz';
+        });
+        
+        currentMonopolyData = saved;
+        if (!currentMonopolyData.questions || currentMonopolyData.questions.length === 0) {
+            currentMonopolyData.questions = defaultQuestions;
+            saveMonopolyData();
+        }
+    } else {
+        // 如果新表没有数据，尝试从旧的主数据 monopoly 中迁移
+        var oldMono = DataHub.get('monopoly', null);
+        if (oldMono) {
+            currentMonopolyData.colors = oldMono.colors || { me: '#4a90d9', friend: '#9b6bc4' };
+            currentMonopolyData.questions = oldMono.questions || [];
+            currentMonopolyData.questions.forEach(function(q) {
+                if (!q.type) q.type = 'quiz';
+            });
+            currentMonopolyData.records = oldMono.records || { single: [], double: [] };
+            if (!currentMonopolyData.records.single) currentMonopolyData.records.single = [];
+            if (!currentMonopolyData.records.double) currentMonopolyData.records.double = [];
+            
+            if (currentMonopolyData.questions.length === 0) {
+                currentMonopolyData.questions = defaultQuestions;
+            }
+            saveMonopolyData();
+        } else {
+            // 全新初始化，填入默认题目
+            currentMonopolyData = {
+                colors: { me: '#4a90d9', friend: '#9b6bc4' },
+                questions: defaultQuestions,
+                records: { single: [], double: [] }
+            };
+            saveMonopolyData();
+        }
+    }
+
+    // 强制兜底：只要内存里是空的，立刻填充并保存
+    if (!currentMonopolyData.questions || currentMonopolyData.questions.length === 0) {
+        currentMonopolyData.questions = defaultQuestions;
+        await saveMonopolyData();
+    }
+}
+
 // ====== 账户系统数据初始化 ======
 // 给钱包、每个好友补上账户系统需要的字段
 function initAccountSystem() {
@@ -29551,67 +30208,6 @@ if (!mall) {
     if (!payRequests) {
         DataHub.set('payRequests', []);
     }
-    
-    // 大富翁数据初始化
-var monopoly = DataHub.get('monopoly', null);
-if (!monopoly) {
-    monopoly = {
-        colors: {
-            me: '#4a90d9',
-            friend: '#9b6bc4'
-        },
-        questions: [
-            {
-                id: 'mq1',
-                question: '什么东西越洗越脏？',
-                options: ['衣服', '水', '手', '碗'],
-                answer: 1
-            },
-            {
-                id: 'mq2',
-                question: '什么东西天气越热，它爬得越高？',
-                options: ['温度计', '树', '猫', '人'],
-                answer: 0
-            },
-            {
-                id: 'mq3',
-                question: '什么东西有头无脚？',
-                options: ['桌子', '硬币', '鞋', '袜子'],
-                answer: 1
-            },
-            {
-                id: 'mq4',
-                question: '什么东西别人请你吃，但你自己还是要付钱？',
-                options: ['饭', '官司', '水果', '茶'],
-                answer: 1
-            },
-            {
-                id: 'mq5',
-                question: '什么东西明明是你的，别人却用得比你还多？',
-                options: ['名字', '书', '笔', '伞'],
-                answer: 0
-            }
-        ],
-        records: {
-            single: [],
-            double: []
-        }
-    };
-    DataHub.set('monopoly', monopoly);
-} else {
-    if (!monopoly.colors) {
-        monopoly.colors = { me: '#4a90d9', friend: '#9b6bc4' };
-    }
-    if (!monopoly.questions) {
-        monopoly.questions = [];
-    }
-    if (!monopoly.records) {
-        monopoly.records = { single: [], double: [] };
-    }
-    if (!monopoly.records.single) monopoly.records.single = [];
-    if (!monopoly.records.double) monopoly.records.double = [];
-    DataHub.set('monopoly', monopoly);
-}
 
     // 月度统计标记
     var lastMonthlyStatsMonth = DataHub.get('lastMonthlyStatsMonth', null);
@@ -30263,6 +30859,13 @@ window.calcNormalAmount = calcNormalAmount;
 window.renderGroupHongbaoCard = renderGroupHongbaoCard;
 window.acceptHongbao = acceptHongbao;
 window.rejectHongbao = rejectHongbao;
+window.monopolyFriendSelfAnswerQuiz = monopolyFriendSelfAnswerQuiz;
+window.monopolyAskFriendForHelp = monopolyAskFriendForHelp;
+window.monopolyFriendHelpAnswer = monopolyFriendHelpAnswer;
+window.monopolyFriendRefuseHelp = monopolyFriendRefuseHelp;
+window.monopolyFriendAskMeForHelp = monopolyFriendAskMeForHelp;
+window.monopolyAnswerForFriend = monopolyAnswerForFriend;
+window.monopolyRefuseFriendHelp = monopolyRefuseFriendHelp;
 // ====== 大富翁 window 挂载 ======
 window.openMonopolyHome = openMonopolyHome;
 window.openMonopolyMain = openMonopolyMain;
