@@ -2488,7 +2488,7 @@ function applyChatStyle(chatId) {
 if (messagesContainer) messagesContainer.style.background = 'transparent';
 var layer = document.createElement('div');
 layer.id = 'chatBgLayer';
-layer.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:0;background-image:url(' + img + ');background-size:cover;background-position:center;opacity:' + ((style.bgOpacity !== undefined ? style.bgOpacity : 100) / 100) + ';z-index:0;pointer-events:none;';
+layer.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:0;background-image:url(' + img + ');background-size:cover;background-position:center;opacity:' + ((style.bgOpacity !== undefined ? style.bgOpacity : 100) / 100) + ';z-index:-1;pointer-events:none;';
 if (chatPage) {
     chatPage.style.position = 'absolute';
     chatPage.insertBefore(layer, chatPage.firstChild);
@@ -2497,6 +2497,14 @@ var chatTops = document.querySelectorAll('#chatPage .chat-top, #chatPage .chat-m
 for (var ci = 0; ci < chatTops.length; ci++) {
     chatTops[ci].style.position = 'relative';
     chatTops[ci].style.zIndex = '2';
+    if (chatTops[ci].className.indexOf('chat-messages') === -1) {
+        chatTops[ci].style.background = '#ffffff';
+    }
+}
+var inputDivs = document.querySelectorAll('#chatPage .chat-input-area > div');
+for (var di = 0; di < inputDivs.length; di++) {
+    inputDivs[di].style.position = 'relative';
+    inputDivs[di].style.zIndex = '3';
 }
         }
 }
@@ -4167,7 +4175,7 @@ quoteHtml = '<div class="quote-bubble" data-quote-jump="' + qJumpId + '" style="
 
         if (m.isPat) {
     html += '<div style="display:flex;justify-content:center;margin-bottom:14px;">' +
-        '<div style="max-width:75%;padding:6px 14px;border-radius:12px;background:#f7f7f7;border:1px solid #e0e0e0;color:#666666;font-size:10px;line-height:1.5;text-align:center;white-space:pre-wrap;word-wrap:break-word;">' +
+        '<div style="max-width:75%;padding:6px 14px;border-radius:12px;background:#f0f0f0;border:1px solid var(--theme-border, #d4e9d6);color:#000000;font-size:10px;line-height:1.5;text-align:center;white-space:pre-wrap;word-wrap:break-word;">' +
             m.text +
         '</div>' +
     '</div>';
@@ -18128,18 +18136,6 @@ function confirmInviteMonopoly(mode) {
     }, 2000 + Math.random() * 3000);
 }
 
-// ====== 大富翁：自定义（颜色 + 题库） ======
-var MONOPOLY_COLOR_OPTIONS = [
-    '#4a90d9',
-    '#9b6bc4',
-    '#e8732a',
-    '#4caf50',
-    '#e05a5a',
-    '#e0a800',
-    '#3aa6a6',
-    '#d96ba0'
-];
-
 function openMonopolyCustom() {
     var container = document.getElementById('subPageContainer');
 var monopoly = currentMonopolyData;
@@ -18215,28 +18211,43 @@ function renderMonopolyCustomContent() {
     var html = '';
 
     if (currentTab === 'color') {
-        var myColorsHtml = '';
-        for (var i = 0; i < MONOPOLY_COLOR_OPTIONS.length; i++) {
-            var c = MONOPOLY_COLOR_OPTIONS[i];
-            var active = (c === myColor);
-            myColorsHtml += '<div onclick="setMonopolyColor(\'me\',\'' + c + '\')" style="width:36px;height:36px;border-radius:50%;cursor:pointer;background:' + c + ';border:3px solid ' + (active ? '#333333' : 'transparent') + ';box-sizing:border-box;"></div>';
-        }
+    var myH = myColor.h;
+    var myS = myColor.s;
+    var myL = myColor.l;
+    var friendH = friendColor.h;
+    var friendS = friendColor.s;
+    var friendL = friendColor.l;
 
-        var friendColorsHtml = '';
-        for (var j = 0; j < MONOPOLY_COLOR_OPTIONS.length; j++) {
-            var c2 = MONOPOLY_COLOR_OPTIONS[j];
-            var active2 = (c2 === friendColor);
-            friendColorsHtml += '<div onclick="setMonopolyColor(\'friend\',\'' + c2 + '\')" style="width:36px;height:36px;border-radius:50%;cursor:pointer;background:' + c2 + ';border:3px solid ' + (active2 ? '#333333' : 'transparent') + ';box-sizing:border-box;"></div>';
-        }
+    html += '<div class="setting-block no-click" style="margin:0 0 12px 0;">' +
+        '<div style="font-size:13px;color:#000000;margin-bottom:8px;">我的棋子</div>' +
+        '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">' +
+            '<div id="monopolyMePreview" style="width:32px;height:32px;border-radius:50%;flex-shrink:0;background:hsl(' + myH + ',' + myS + '%,' + myL + '%);border:2px solid #cccccc;"></div>' +
+            '<div style="font-size:12px;color:#999999;">预览</div>' +
+        '</div>' +
+        '<div style="font-size:12px;color:#000000;margin-bottom:4px;">色相</div>' +
+        '<input type="range" class="range-slider" min="0" max="360" value="' + myH + '" oninput="updateMonopolyColorField(\'me\',\'h\',this.value)">' +
+        '<div style="font-size:12px;color:#000000;margin:6px 0 4px 0;">饱和度</div>' +
+        '<input type="range" class="range-slider" min="0" max="100" value="' + myS + '" oninput="updateMonopolyColorField(\'me\',\'s\',this.value)">' +
+        '<div style="font-size:12px;color:#000000;margin:6px 0 4px 0;">明度</div>' +
+        '<input type="range" class="range-slider" min="0" max="100" value="' + myL + '" oninput="updateMonopolyColorField(\'me\',\'l\',this.value)">' +
+    '</div>' +
 
-        html += '<div class="setting-block no-click" style="margin:0;">' +
-            '<div style="font-size:13px;color:#000000;margin-bottom:8px;">我的棋子</div>' +
-            '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">' + myColorsHtml + '</div>' +
-            '<div style="font-size:13px;color:#000000;margin-bottom:8px;">好友的棋子</div>' +
-            '<div style="display:flex;gap:10px;flex-wrap:wrap;">' + friendColorsHtml + '</div>' +
-            '<div style="font-size:12px;color:#999999;margin-top:12px;">NPC 固定灰色，不可修改</div>' +
-        '</div>';
-    } else if (currentTab === 'question') {
+    '<div class="setting-block no-click" style="margin:0;">' +
+        '<div style="font-size:13px;color:#000000;margin-bottom:8px;">好友的棋子</div>' +
+        '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">' +
+            '<div id="monopolyFriendPreview" style="width:32px;height:32px;border-radius:50%;flex-shrink:0;background:hsl(' + friendH + ',' + friendS + '%,' + friendL + '%);border:2px solid #cccccc;"></div>' +
+            '<div style="font-size:12px;color:#999999;">预览</div>' +
+        '</div>' +
+        '<div style="font-size:12px;color:#000000;margin-bottom:4px;">色相</div>' +
+        '<input type="range" class="range-slider" min="0" max="360" value="' + friendH + '" oninput="updateMonopolyColorField(\'friend\',\'h\',this.value)">' +
+        '<div style="font-size:12px;color:#000000;margin:6px 0 4px 0;">饱和度</div>' +
+        '<input type="range" class="range-slider" min="0" max="100" value="' + friendS + '" oninput="updateMonopolyColorField(\'friend\',\'s\',this.value)">' +
+        '<div style="font-size:12px;color:#000000;margin:6px 0 4px 0;">明度</div>' +
+        '<input type="range" class="range-slider" min="0" max="100" value="' + friendL + '" oninput="updateMonopolyColorField(\'friend\',\'l\',this.value)">' +
+    '</div>' +
+
+    '<div style="font-size:12px;color:#999999;margin-top:8px;">NPC 固定灰色，不可修改</div>';
+} else if (currentTab === 'question') {
     var questions = monopoly.questions || [];
     
     var quizList = questions.filter(function(q) { return q.type === 'quiz' || !q.type; });
@@ -18311,13 +18322,36 @@ function renderMonopolyCustomContent() {
 
 function setMonopolyColor(who, color) {
     var monopoly = currentMonopolyData;
-    if (!monopoly.colors) monopoly.colors = { me: '#4a90d9', friend: '#9b6bc4' };
+    if (!monopoly.colors) monopoly.colors = { me: { h: 210, s: 60, l: 60 }, friend: { h: 270, s: 40, l: 60 } };
     if (who === 'me') monopoly.colors.me = color;
     else if (who === 'friend') monopoly.colors.friend = color;
     saveMonopolyData();
     showToast('已保存');
     openMonopolyCustom();
 }
+
+function updateMonopolyColorField(who, field, value) {
+    var monopoly = currentMonopolyData;
+    if (!monopoly.colors) monopoly.colors = { me: { h: 210, s: 60, l: 60 }, friend: { h: 270, s: 40, l: 60 } };
+    if (!monopoly.colors[who]) monopoly.colors[who] = { h: 210, s: 60, l: 60 };
+
+    var numVal = parseInt(value) || 0;
+    if (field === 'h') numVal = Math.max(0, Math.min(360, numVal));
+    else numVal = Math.max(0, Math.min(100, numVal));
+
+    monopoly.colors[who][field] = numVal;
+    saveMonopolyData();
+
+    var target = monopoly.colors[who];
+    var previewId = (who === 'me') ? 'monopolyMePreview' : 'monopolyFriendPreview';
+    var previewEl = document.getElementById(previewId);
+    if (previewEl) {
+        previewEl.style.background = 'hsl(' + target.h + ',' + target.s + '%,' + target.l + '%)';
+    }
+}
+
+window.updateMonopolyColorField = updateMonopolyColorField;
+window.setMonopolyColor = setMonopolyColor;
 
 function showAddMonopolyQuestion(type) {
     if (!type) type = 'quiz';
@@ -18700,11 +18734,11 @@ function darkenColor(hex, percent) {
 // 渲染棋盘
 // state: 对局状态对象
 function renderMonopolyBoard(state) {
-    var monopoly = currentMonopolyData;
-var colors = monopoly.colors || { me: '#4a90d9', friend: '#9b6bc4' };
-    var myColor = colors.me || '#4a90d9';
-    var friendColor = colors.friend || '#9b6bc4';
-    var npcColor = '#9e9e9e';
+var monopoly = currentMonopolyData;
+var colors = monopoly.colors || { me: { h: 210, s: 60, l: 60 }, friend: { h: 270, s: 40, l: 60 } };
+var myColor = colors.me || { h: 210, s: 60, l: 60 };
+var friendColor = colors.friend || { h: 270, s: 40, l: 60 };
+var npcColor = { h: 0, s: 0, l: 62 };
 
     var myProfile = DataHub.get('myProfile', { nickname: '我', avatar: '' });
     var friends = DataHub.get('friends', []);
@@ -18721,25 +18755,45 @@ for (var i = 0; i < MONOPOLY_SPIRAL_POS.length; i++) {
     var level = state.cellLevels ? (state.cellLevels[i] || 0) : 0;
 
     var bg = '#ffffff';
-    var borderColor = '#cccccc';
-    var borderWidth = '1px';
+var borderColor = '#cccccc';
+var borderWidth = '1px';
+var textColor = '#000000';
 
-    if (owner === 'me') {
-        bg = lightenColor(myColor, 65);
-        if (level >= 2) { borderColor = myColor; borderWidth = '2px'; }
-    } else if (owner === 'friend') {
-        bg = lightenColor(friendColor, 65);
-        if (level >= 2) { borderColor = friendColor; borderWidth = '2px'; }
-    } else if (owner === 'npc1' || owner === 'npc2') {
-        bg = lightenColor(npcColor, 65);
-        if (level >= 2) { borderColor = npcColor; borderWidth = '2px'; }
+var ownerColor = null;
+if (owner === 'me') ownerColor = myColor;
+else if (owner === 'friend') ownerColor = friendColor;
+else if (owner === 'npc1' || owner === 'npc2') ownerColor = npcColor;
+
+if (ownerColor && level >= 1) {
+    var baseH = ownerColor.h;
+    var baseS = ownerColor.s;
+    var baseL = ownerColor.l;
+    var lightL = Math.min(95, baseL + 30);
+    var darkL = Math.max(10, baseL - 15);
+
+    if (level === 1) {
+        bg = 'hsl(' + baseH + ',' + baseS + '%,' + lightL + '%)';
+        borderColor = '#cccccc';
+        borderWidth = '1px';
+        textColor = '#000000';
+    } else if (level === 2) {
+        bg = 'hsl(' + baseH + ',' + baseS + '%,' + lightL + '%)';
+        borderColor = 'hsl(' + baseH + ',' + baseS + '%,' + baseL + '%)';
+        borderWidth = '3px';
+        textColor = '#000000';
+    } else if (level >= 3) {
+        bg = 'hsl(' + baseH + ',' + baseS + '%,' + darkL + '%)';
+        borderColor = 'hsl(' + baseH + ',' + baseS + '%,' + darkL + '%)';
+        borderWidth = '3px';
+        textColor = '#000000';
     }
+}
 
     var label = getMonopolyCellLabel(i);
     var fontSize = '10px';
     if (label.length > 2) fontSize = '9px';
 
-    html += '<div style="position:absolute;left:' + p.x + '%;top:' + p.y + '%;width:' + p.w + '%;height:' + p.h + '%;background:' + bg + ';border:' + borderWidth + ' solid ' + borderColor + ';box-sizing:border-box;display:flex;align-items:center;justify-content:center;font-size:' + fontSize + ';color:#000000;overflow:hidden;line-height:1;">' + label + '</div>';
+    html += '<div style="position:absolute;left:' + p.x + '%;top:' + p.y + '%;width:' + p.w + '%;height:' + p.h + '%;background:' + bg + ';border:' + borderWidth + ' solid ' + borderColor + ';box-sizing:border-box;display:flex;align-items:center;justify-content:center;font-size:' + fontSize + ';color:' + textColor + ';overflow:hidden;line-height:1;">' + label + '</div>';
 }
 
 // 画中心骰子格（E5-F6 合并）
@@ -18994,9 +19048,9 @@ for (var ci = 0; ci < (state.chat || []).length; ci++) {
         chatTimeStr = '';
     }
     chatHtml += '<div style="margin-bottom:5px;">' +
-        '<div style="font-size:8px;color:#999999;margin-bottom:1px;text-align:' + (isMe ? 'right' : 'left') + ';">' + chatSenderName + ' ' + chatTimeStr + '</div>' +
+        '<div style="font-size:10px;color:#999999;margin-bottom:1px;text-align:' + (isMe ? 'right' : 'left') + ';">' + chatSenderName + ' ' + chatTimeStr + '</div>' +
         '<div style="display:flex;justify-content:' + (isMe ? 'flex-end' : 'flex-start') + ';">' +
-            '<div style="max-width:75%;padding:2px 7px;border-radius:9px;font-size:8px;line-height:1.4;word-break:break-word;color:#000000;background:' + (isMe ? 'var(--theme-main, #d4e9d6)' : 'var(--theme-light, #eef5ef)') + ';">' + cm.text + '</div>' +
+            '<div style="max-width:75%;padding:2px 7px;border-radius:9px;font-size:10px;line-height:1.4;word-break:break-word;color:#000000;background:' + (isMe ? 'var(--theme-main, #d4e9d6)' : 'var(--theme-light, #eef5ef)') + ';">' + cm.text + '</div>' +
         '</div>' +
     '</div>';
 }
@@ -19378,11 +19432,32 @@ function monopolyHandleCell(state, playerId) {
         return;
     }
 
-    // 别人的房产，交过路费
+    // 自己的地：钱够且未满级，询问是否升级
 if (owner === playerId) {
-    monopolyAddLog(state, player.name + ' 停在自己的房产上');
-    DataHub.set('monopolyCurrentGame', state);
-    monopolyNextTurn(state);
+    var upgradeCost = 100;
+    var canUpgrade = (level < 3) && (player.money >= upgradeCost);
+
+    if (canUpgrade) {
+        DataHub.set('monopolyCurrentGame', state);
+        if (playerId === 'me') {
+            monopolyAskUpgrade(state, playerId, pos, level, upgradeCost);
+        } else {
+            // 好友/NPC：50% 升级，50% 不升级
+            if (Math.random() < 0.5) {
+                player.money -= upgradeCost;
+                state.cellLevels[pos] = level + 1;
+                monopolyAddLog(state, player.name + ' 将第 ' + (pos + 1) + ' 格升级到 ' + (level + 1) + ' 级，花费 ¥' + upgradeCost, '#4caf50');
+            } else {
+                monopolyAddLog(state, player.name + ' 停在自己的房产上，未升级');
+            }
+            DataHub.set('monopolyCurrentGame', state);
+            monopolyNextTurn(state);
+        }
+    } else {
+        monopolyAddLog(state, player.name + ' 停在自己的房产上' + (level >= 3 ? '（已满级）' : '（钱不够升级）'));
+        DataHub.set('monopolyCurrentGame', state);
+        monopolyNextTurn(state);
+    }
     return;
 }
 
@@ -19427,7 +19502,8 @@ if (!ownerPlayerForBuy || ownerPlayerForBuy.bankrupt) {
     }
 
     // 交过路费
-var toll = 100 * level;
+var tollTable = { 1: 200, 2: 350, 3: 500 };
+var toll = tollTable[level] || 200;
 var actualPay = Math.min(player.money, toll);
 if (actualPay < 0) actualPay = 0;
 player.money -= actualPay;
@@ -19462,6 +19538,46 @@ if (player.money <= 0) {
 DataHub.set('monopolyCurrentGame', state);
 monopolyNextTurn(state);
 }
+
+// 询问升级
+function monopolyAskUpgrade(state, playerId, pos, currentLevel, cost) {
+    var player = state.players.find(function(p) { return p.id === playerId; });
+    if (!player) return;
+
+    var html = '<div class="modal-title">升级地产</div>' +
+        '<div style="text-align:center;padding:8px 0 16px;font-size:14px;color:#000000;">第 ' + (pos + 1) + ' 格</div>' +
+        '<div style="text-align:center;font-size:13px;color:#666666;margin-bottom:4px;">当前 ' + currentLevel + ' 级，升级到 ' + (currentLevel + 1) + ' 级</div>' +
+        '<div style="text-align:center;font-size:13px;color:#666666;margin-bottom:12px;">需要 ¥' + cost + '，当前资金 ¥' + player.money.toFixed(0) + '</div>' +
+        '<div class="btn-row">' +
+            '<button class="cancel" onclick="closeModal();monopolyUpgradeDecision(false)">不升级</button>' +
+            '<button class="confirm" onclick="closeModal();monopolyUpgradeDecision(true)">升级</button>' +
+        '</div>';
+    showModal(html);
+}
+
+// 升级决策
+function monopolyUpgradeDecision(upgrade) {
+    var state = DataHub.get('monopolyCurrentGame', null);
+    if (!state) return;
+    var player = state.players.find(function(p) { return p.id === 'me'; });
+    if (!player) return;
+    var pos = player.pos || 0;
+    var level = state.cellLevels[pos] || 0;
+    var cost = 100;
+
+    if (upgrade && level < 3 && player.money >= cost) {
+        player.money -= cost;
+        state.cellLevels[pos] = level + 1;
+        monopolyAddLog(state, '我 将第 ' + (pos + 1) + ' 格升级到 ' + (level + 1) + ' 级，花费 ¥' + cost, '#4caf50');
+    } else {
+        monopolyAddLog(state, '我 停在自己的房产上，未升级');
+    }
+    DataHub.set('monopolyCurrentGame', state);
+    monopolyNextTurn(state);
+}
+
+window.monopolyAskUpgrade = monopolyAskUpgrade;
+window.monopolyUpgradeDecision = monopolyUpgradeDecision;
 
 // 询问购买
 function monopolyAskBuy(state, playerId, pos) {
@@ -20184,9 +20300,9 @@ function monopolyFriendSay(state, text) {
             chatTimeStr = '[' + String(ct.getHours()).padStart(2,'0') + ':' + String(ct.getMinutes()).padStart(2,'0') + ']';
         }
         chatHtml += '<div style="margin-bottom:5px;">' +
-            '<div style="font-size:8px;color:#999999;margin-bottom:1px;text-align:' + (isMe ? 'right' : 'left') + ';">' + chatSenderName + ' ' + chatTimeStr + '</div>' +
+            '<div style="font-size:10px;color:#999999;margin-bottom:1px;text-align:' + (isMe ? 'right' : 'left') + ';">' + chatSenderName + ' ' + chatTimeStr + '</div>' +
             '<div style="display:flex;justify-content:' + (isMe ? 'flex-end' : 'flex-start') + ';">' +
-                '<div style="max-width:75%;padding:2px 7px;border-radius:9px;font-size:8px;line-height:1.4;word-break:break-word;color:#000000;background:' + (isMe ? 'var(--theme-main, #d4e9d6)' : 'var(--theme-light, #eef5ef)') + ';">' + cm.text + '</div>' +
+                '<div style="max-width:75%;padding:2px 7px;border-radius:9px;font-size:10px;line-height:1.4;word-break:break-word;color:#000000;background:' + (isMe ? 'var(--theme-main, #d4e9d6)' : 'var(--theme-light, #eef5ef)') + ';">' + cm.text + '</div>' +
             '</div>' +
         '</div>';
     }
@@ -20210,9 +20326,9 @@ function renderMonopolyChatAreaOnly(state) {
             chatTimeStr = '';
         }
         chatHtml += '<div style="margin-bottom:5px;">' +
-            '<div style="font-size:8px;color:#999999;margin-bottom:1px;text-align:' + (isMe ? 'right' : 'left') + ';">' + chatSenderName + ' ' + chatTimeStr + '</div>' +
+            '<div style="font-size:10px;color:#999999;margin-bottom:1px;text-align:' + (isMe ? 'right' : 'left') + ';">' + chatSenderName + ' ' + chatTimeStr + '</div>' +
             '<div style="display:flex;justify-content:' + (isMe ? 'flex-end' : 'flex-start') + ';">' +
-                '<div style="max-width:75%;padding:2px 7px;border-radius:9px;font-size:8px;line-height:1.4;word-break:break-word;color:#000000;background:' + (isMe ? 'var(--theme-main, #d4e9d6)' : 'var(--theme-light, #eef5ef)') + ';">' + cm.text + '</div>' +
+                '<div style="max-width:75%;padding:2px 7px;border-radius:9px;font-size:10px;line-height:1.4;word-break:break-word;color:#000000;background:' + (isMe ? 'var(--theme-main, #d4e9d6)' : 'var(--theme-light, #eef5ef)') + ';">' + cm.text + '</div>' +
             '</div>' +
         '</div>';
     }
@@ -30098,6 +30214,35 @@ window.showSendTransferAmount = showSendTransferAmount;
 window.confirmSendTransfer = confirmSendTransfer;
 window.openHongbaoCard = openHongbaoCard;
 
+function hexToHslObj(hex) {
+    if (!hex) return { h: 210, s: 60, l: 60 };
+    var h = hex.replace('#', '');
+    if (h.length === 3) {
+        h = h.charAt(0) + h.charAt(0) + h.charAt(1) + h.charAt(1) + h.charAt(2) + h.charAt(2);
+    }
+    var r = parseInt(h.substring(0, 2), 16) / 255;
+    var g = parseInt(h.substring(2, 4), 16) / 255;
+    var b = parseInt(h.substring(4, 6), 16) / 255;
+    var max = Math.max(r, g, b);
+    var min = Math.min(r, g, b);
+    var l = (max + min) / 2;
+    var s = 0;
+    var hue = 0;
+    if (max !== min) {
+        var d = max - min;
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        if (max === r) hue = (g - b) / d + (g < b ? 6 : 0);
+        else if (max === g) hue = (b - r) / d + 2;
+        else hue = (r - g) / d + 4;
+        hue = hue / 6;
+    }
+    return {
+        h: Math.round(hue * 360),
+        s: Math.round(s * 100),
+        l: Math.round(l * 100)
+    };
+}
+
 // 从独立数据库加载大富翁数据
 async function loadMonopolyDataFromDB() {
     var defaultQuestions = [
@@ -30114,7 +30259,12 @@ async function loadMonopolyDataFromDB() {
 
     var saved = await loadGameData('monopoly');
     if (saved) {
-        if (!saved.colors) saved.colors = { me: '#4a90d9', friend: '#9b6bc4' };
+        if (!saved.colors) {
+    saved.colors = { me: { h: 210, s: 60, l: 60 }, friend: { h: 270, s: 40, l: 60 } };
+} else {
+    if (typeof saved.colors.me === 'string') saved.colors.me = hexToHslObj(saved.colors.me);
+    if (typeof saved.colors.friend === 'string') saved.colors.friend = hexToHslObj(saved.colors.friend);
+}
         if (!saved.questions || saved.questions.length === 0) saved.questions = defaultQuestions;
         if (!saved.records) saved.records = { single: [], double: [] };
         if (!saved.records.single) saved.records.single = [];
