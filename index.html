@@ -18136,6 +18136,20 @@ function confirmInviteMonopoly(mode) {
     }, 2000 + Math.random() * 3000);
 }
 
+function getDefaultMonopolyQuestions() {
+    return [
+        { id: 'mq1', type: 'quiz', question: '什么东西越洗越脏？', options: ['衣服', '水', '手', '碗'], answer: 1 },
+        { id: 'mq2', type: 'quiz', question: '什么东西天气越热，它爬得越高？', options: ['温度计', '树', '猫', '人'], answer: 0 },
+        { id: 'mq3', type: 'quiz', question: '什么东西有头无脚？', options: ['桌子', '硬币', '鞋', '袜子'], answer: 1 },
+        { id: 'mq4', type: 'quiz', question: '什么东西别人请你吃，但你自己还是要付钱？', options: ['官司', '饭', '水果', '茶'], answer: 0 },
+        { id: 'mq5', type: 'quiz', question: '什么东西明明是你的，别人却用得比你还多？', options: ['名字', '书', '笔', '伞'], answer: 0 },
+        { id: 'mq6', type: 'add', question: '好运降临，获得奖励', amount: 100 },
+        { id: 'mq7', type: 'add', question: '在路上捡到了钱', amount: 200 },
+        { id: 'mq8', type: 'deduct', question: '不小心踩坏了花花草草', amount: 50 },
+        { id: 'mq9', type: 'deduct', question: '买了一杯奶茶', amount: 20 }
+    ];
+}
+
 function openMonopolyCustom() {
     var container = document.getElementById('subPageContainer');
     var html = '<div class="sub-page active" id="monopolyCustomPage" style="z-index:60;background:#ffffff;pointer-events:auto;display:flex;flex-direction:column;">' +
@@ -18231,6 +18245,10 @@ var friendL = friendColor.l || 60;
 
     '<div style="font-size:12px;color:#999999;margin-top:8px;">NPC 固定灰色，不可修改</div>';
 } else if (currentTab === 'question') {
+    if (!monopoly.questions || monopoly.questions.length === 0) {
+        monopoly.questions = getDefaultMonopolyQuestions();
+        saveMonopolyData();
+    }
     var questions = monopoly.questions || [];
     
     var quizList = questions.filter(function(q) { return q.type === 'quiz' || !q.type; });
@@ -18813,10 +18831,10 @@ html += '<div style="position:absolute;left:' + dicePos.x + '%;top:' + dicePos.y
             var sameCellIndex = group.indexOf(player);
 
             var baseSize = cellPos.h * 0.55;
-            var dotSize = baseSize;
-            if (sameCellCount === 2) dotSize = baseSize * 0.85;
-            else if (sameCellCount === 3) dotSize = baseSize * 0.75;
-            else if (sameCellCount >= 4) dotSize = baseSize * 0.65;
+var dotSize = baseSize;
+if (sameCellCount === 2) dotSize = baseSize * 0.85;
+else if (sameCellCount === 3) dotSize = baseSize * 0.75;
+else if (sameCellCount >= 4) dotSize = baseSize * 0.65;
 
             var dotLeft = cellPos.x + cellPos.w / 2 - dotSize / 2;
             var dotTop = cellPos.y + cellPos.h * 0.45 - dotSize / 2;
@@ -18848,7 +18866,7 @@ if (player.id === 'me') {
         avatarContent = '<div style="width:100%;height:100%;border-radius:50%;background:var(--theme-main, #d4e9d6);color:#000000;display:flex;align-items:center;justify-content:center;font-size:' + (dotSize * 0.5) + 'px;font-weight:600;">' + (fName.charAt(0).toUpperCase()) + '</div>';
     }
 } else if (player.id === 'npc1' || player.id === 'npc2') {
-    avatarContent = '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:' + (dotSize * 0.7) + 'px;">🤖</div>';
+    avatarContent = '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:' + (dotSize * 1.5) + 'px;line-height:1;transform:scale(1.6);">🤖</div>';
 }
 
 var bankruptOverlay = '';
@@ -30231,17 +30249,7 @@ function hexToHslObj(hex) {
 
 // 从独立数据库加载大富翁数据
 async function loadMonopolyDataFromDB() {
-    var defaultQuestions = [
-    { id: 'mq1', type: 'quiz', question: '什么东西越洗越脏？', options: ['衣服', '水', '手', '碗'], answer: 1 },
-    { id: 'mq2', type: 'quiz', question: '什么东西天气越热，它爬得越高？', options: ['温度计', '树', '猫', '人'], answer: 0 },
-    { id: 'mq3', type: 'quiz', question: '什么东西有头无脚？', options: ['桌子', '硬币', '鞋', '袜子'], answer: 1 },
-    { id: 'mq4', type: 'quiz', question: '什么东西别人请你吃，但你自己还是要付钱？', options: ['官司', '饭', '水果', '茶'], answer: 0 },
-    { id: 'mq5', type: 'quiz', question: '什么东西明明是你的，别人却用得比你还多？', options: ['名字', '书', '笔', '伞'], answer: 0 },
-    { id: 'mq6', type: 'add', question: '好运降临，获得奖励', amount: 100 },
-    { id: 'mq7', type: 'add', question: '在路上捡到了钱', amount: 200 },
-    { id: 'mq8', type: 'deduct', question: '不小心踩坏了花花草草', amount: 50 },
-    { id: 'mq9', type: 'deduct', question: '买了一杯奶茶', amount: 20 }
-];
+var defaultQuestions = getDefaultMonopolyQuestions();
 
     var saved = await loadGameData('monopoly');
     if (saved) {
