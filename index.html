@@ -18138,25 +18138,6 @@ function confirmInviteMonopoly(mode) {
 
 function openMonopolyCustom() {
     var container = document.getElementById('subPageContainer');
-var monopoly = currentMonopolyData;
-var colors = monopoly.colors || { me: '#4a90d9', friend: '#9b6bc4' };
-var myColor = colors.me;
-var friendColor = colors.friend;
-
-    var myColorsHtml = '';
-    for (var i = 0; i < MONOPOLY_COLOR_OPTIONS.length; i++) {
-        var c = MONOPOLY_COLOR_OPTIONS[i];
-        var active = (c === myColor);
-        myColorsHtml += '<div onclick="setMonopolyColor(\'me\',\'' + c + '\')" style="width:36px;height:36px;border-radius:50%;cursor:pointer;background:' + c + ';border:3px solid ' + (active ? '#333333' : 'transparent') + ';box-sizing:border-box;"></div>';
-    }
-
-    var friendColorsHtml = '';
-    for (var j = 0; j < MONOPOLY_COLOR_OPTIONS.length; j++) {
-        var c2 = MONOPOLY_COLOR_OPTIONS[j];
-        var active2 = (c2 === friendColor);
-        friendColorsHtml += '<div onclick="setMonopolyColor(\'friend\',\'' + c2 + '\')" style="width:36px;height:36px;border-radius:50%;cursor:pointer;background:' + c2 + ';border:3px solid ' + (active2 ? '#333333' : 'transparent') + ';box-sizing:border-box;"></div>';
-    }
-
     var html = '<div class="sub-page active" id="monopolyCustomPage" style="z-index:60;background:#ffffff;pointer-events:auto;display:flex;flex-direction:column;">' +
     '<div class="sub-top">' +
         '<div class="back-btn" onclick="openMonopolyMain()">' +
@@ -18195,28 +18176,30 @@ function switchMonopolyQuestionTab(tab) {
 
 function switchMonopolyCustomTab(tab) {
     window._monopolyCustomTab = tab;
-    loadMonopolyDataFromDB().then(function() {
-        openMonopolyCustom();
-    });
+    openMonopolyCustom();
 }
 window.switchMonopolyCustomTab = switchMonopolyCustomTab;
 window.switchMonopolyQuestionTab = switchMonopolyQuestionTab;
 
 function renderMonopolyCustomContent() {
     var monopoly = getMonopolyData();
-    var colors = monopoly.colors || { me: '#4a90d9', friend: '#9b6bc4' };
-    var myColor = colors.me;
-    var friendColor = colors.friend;
+    var colors = monopoly.colors || { me: { h: 210, s: 60, l: 60 }, friend: { h: 270, s: 40, l: 60 } };
+var myColor = colors.me;
+var friendColor = colors.friend;
+
+// 容错处理：如果读到的是老版本的纯文本，就转成 HSL 对象
+if (typeof myColor === 'string') myColor = hexToHslObj(myColor);
+if (typeof friendColor === 'string') friendColor = hexToHslObj(friendColor);
     var currentTab = window._monopolyCustomTab || 'color';
     var html = '';
 
     if (currentTab === 'color') {
-    var myH = myColor.h;
-    var myS = myColor.s;
-    var myL = myColor.l;
-    var friendH = friendColor.h;
-    var friendS = friendColor.s;
-    var friendL = friendColor.l;
+    var myH = myColor.h || 210;
+var myS = myColor.s || 60;
+var myL = myColor.l || 60;
+var friendH = friendColor.h || 270;
+var friendS = friendColor.s || 40;
+var friendL = friendColor.l || 60;
 
     html += '<div class="setting-block no-click" style="margin:0 0 12px 0;">' +
         '<div style="font-size:13px;color:#000000;margin-bottom:8px;">我的棋子</div>' +
@@ -18333,7 +18316,9 @@ function setMonopolyColor(who, color) {
 function updateMonopolyColorField(who, field, value) {
     var monopoly = currentMonopolyData;
     if (!monopoly.colors) monopoly.colors = { me: { h: 210, s: 60, l: 60 }, friend: { h: 270, s: 40, l: 60 } };
-    if (!monopoly.colors[who]) monopoly.colors[who] = { h: 210, s: 60, l: 60 };
+    if (!monopoly.colors[who] || typeof monopoly.colors[who] === 'string') {
+        monopoly.colors[who] = { h: 210, s: 60, l: 60 };
+    }
 
     var numVal = parseInt(value) || 0;
     if (field === 'h') numVal = Math.max(0, Math.min(360, numVal));
@@ -18342,11 +18327,12 @@ function updateMonopolyColorField(who, field, value) {
     monopoly.colors[who][field] = numVal;
     saveMonopolyData();
 
+    // 重新计算并刷新预览颜色
     var target = monopoly.colors[who];
     var previewId = (who === 'me') ? 'monopolyMePreview' : 'monopolyFriendPreview';
     var previewEl = document.getElementById(previewId);
     if (previewEl) {
-        previewEl.style.background = 'hsl(' + target.h + ',' + target.s + '%,' + target.l + '%)';
+        previewEl.style.background = 'hsl(' + target.h + ', ' + target.s + '%, ' + target.l + '%)';
     }
 }
 
