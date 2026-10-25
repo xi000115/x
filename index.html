@@ -18210,10 +18210,11 @@ window.switchMonopolyCustomTab = switchMonopolyCustomTab;
 window.switchMonopolyQuestionTab = switchMonopolyQuestionTab;
 
 function renderMonopolyCustomContent() {
-    var monopoly = getMonopolyData();
-    var colors = monopoly.colors || { me: { h: 210, s: 60, l: 60 }, friend: { h: 270, s: 40, l: 60 } };
-var myColor = colors.me;
-var friendColor = colors.friend;
+var monopoly = getMonopolyData();
+if (!monopoly.colors) monopoly.colors = {};
+var currentColors = monopoly.colors[currentChatId] || { me: { h: 210, s: 60, l: 60 }, friend: { h: 270, s: 40, l: 60 } };
+var myColor = currentColors.me;
+var friendColor = currentColors.friend;
 
 // 容错处理：如果读到的是老版本的纯文本，就转成 HSL 对象
 if (typeof myColor === 'string') myColor = hexToHslObj(myColor);
@@ -18347,20 +18348,26 @@ function setMonopolyColor(who, color) {
 
 function updateMonopolyColorField(who, field, value) {
     var monopoly = currentMonopolyData;
-    if (!monopoly.colors) monopoly.colors = { me: { h: 210, s: 60, l: 60 }, friend: { h: 270, s: 40, l: 60 } };
-    if (!monopoly.colors[who] || typeof monopoly.colors[who] === 'string') {
-        monopoly.colors[who] = { h: 210, s: 60, l: 60 };
-    }
+if (!monopoly.colors) monopoly.colors = {};
+if (!monopoly.colors[currentChatId]) {
+    monopoly.colors[currentChatId] = { 
+        me: { h: 210, s: 60, l: 60 }, 
+        friend: { h: 270, s: 40, l: 60 } 
+    };
+}
+if (!monopoly.colors[currentChatId][who] || typeof monopoly.colors[currentChatId][who] === 'string') {
+    monopoly.colors[currentChatId][who] = { h: 210, s: 60, l: 60 };
+}
 
-    var numVal = parseInt(value) || 0;
-    if (field === 'h') numVal = Math.max(0, Math.min(360, numVal));
-    else numVal = Math.max(0, Math.min(100, numVal));
+var numVal = parseInt(value) || 0;
+if (field === 'h') numVal = Math.max(0, Math.min(360, numVal));
+else numVal = Math.max(0, Math.min(100, numVal));
 
-    monopoly.colors[who][field] = numVal;
-    saveMonopolyData();
+monopoly.colors[currentChatId][who][field] = numVal;
+saveMonopolyData();
 
-    // 重新计算并刷新预览颜色
-    var target = monopoly.colors[who];
+// 重新计算并刷新预览颜色
+var target = monopoly.colors[currentChatId][who];
     var previewId = (who === 'me') ? 'monopolyMePreview' : 'monopolyFriendPreview';
     var previewEl = document.getElementById(previewId);
     if (previewEl) {
@@ -19315,7 +19322,29 @@ function openMonopolyGame(mode) {
     if (!friend) return;
 
     var monopoly = currentMonopolyData;
-var colors = monopoly.colors || { me: '#4a90d9', friend: '#9b6bc4' };
+if (!monopoly.colors) monopoly.colors = {};
+
+// 兼容老数据：把全局颜色迁移给当前好友
+if (monopoly.colors.me && !monopoly.colors[currentChatId]) {
+    monopoly.colors[currentChatId] = {
+        me: monopoly.colors.me,
+        friend: monopoly.colors.friend || { h: 270, s: 40, l: 60 }
+    };
+    delete monopoly.colors.me;
+    delete monopoly.colors.friend;
+    saveMonopolyData();
+}
+
+// 获取当前好友专属颜色
+var currentColors = monopoly.colors[currentChatId] || { 
+    me: { h: 210, s: 60, l: 60 }, 
+    friend: { h: 270, s: 40, l: 60 } 
+};
+
+var colors = {
+    me: currentColors.me,
+    friend: currentColors.friend
+};
 
     var state = {
         mode: mode,
@@ -19595,7 +19624,7 @@ if (state.players.length >= 4) {
 function exitMonopolyGame() {
     if (!confirm('确定退出对局吗？当前进度不会保存。')) return;
     clearMonopolyCurrentGame();
-    DataHub.delete('monopolyChat');
+    // 聊天记录现在跟随当前对局存档( state.chat )，退出时清空当前对局数据即可，不再使用全局的 monopolyChat
     openMonopolyMain();
 }
 
@@ -20659,32 +20688,35 @@ if (state.mode === 'single') {
     }
 }
 
-    // 写入战绩
-    var monopoly = currentMonopolyData;
-    if (!monopoly.records) monopoly.records = { single: [], double: [] };
-    if (!monopoly.records.single) monopoly.records.single = [];
-    if (!monopoly.records.double) monopoly.records.double = [];
+    // 写入战绩（按好友隔离）
+var monopoly = currentMonopolyData;
+if (!monopoly.recordsByFriend) monopoly.recordsByFriend = {};
 
-    var now = new Date();
-    var time = now.getFullYear() + '.' + String(now.getMonth()+1).padStart(2,'0') + '.' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
+var currentFriendId = state.chatId || currentChatId;
+if (!monopoly.recordsByFriend[currentFriendId]) {
+    monopoly.recordsByFriend[currentFriendId] = { single: [], double: [] };
+}
 
-    var record = {
-        id: 'mr' + Date.now() + Math.random().toString(36).substr(2, 4),
-        time: time,
-        result: result,
-        rounds: Math.min(state.round, state.maxRound),
-        myMoney: Math.round(myMoney),
-        oppMoney: Math.round(oppMoney),
-        mode: state.mode,
-        friendName: state.friendName
-    };
+var now = new Date();
+var time = now.getFullYear() + '.' + String(now.getMonth()+1).padStart(2,'0') + '.' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
 
-    if (state.mode === 'single') {
-        monopoly.records.single.unshift(record);
-    } else {
-        monopoly.records.double.unshift(record);
-    }
-    saveMonopolyData();
+var record = {
+    id: 'mr' + Date.now() + Math.random().toString(36).substr(2, 4),
+    time: time,
+    result: result,
+    rounds: Math.min(state.round, state.maxRound),
+    myMoney: Math.round(myMoney),
+    oppMoney: Math.round(oppMoney),
+    mode: state.mode,
+    friendName: state.friendName
+};
+
+if (state.mode === 'single') {
+    monopoly.recordsByFriend[currentFriendId].single.unshift(record);
+} else {
+    monopoly.recordsByFriend[currentFriendId].double.unshift(record);
+}
+saveMonopolyData();
 
     // 清对局
     DataHub.delete('monopolyChat');
@@ -20946,11 +20978,15 @@ function renderMonopolyRecordsPage() {
     if (!container) return;
 
     var monopoly = currentMonopolyData;
-if (!monopoly.records) monopoly.records = { single: [], double: [] };
-if (!monopoly.records.single) monopoly.records.single = [];
-if (!monopoly.records.double) monopoly.records.double = [];
+if (!monopoly.recordsByFriend) monopoly.recordsByFriend = {};
 
-    var list = (monopolyRecordsTab === 'single') ? monopoly.records.single : monopoly.records.double;
+var currentFriendId = currentChatId;
+if (!monopoly.recordsByFriend[currentFriendId]) {
+    monopoly.recordsByFriend[currentFriendId] = { single: [], double: [] };
+}
+
+var friendRecords = monopoly.recordsByFriend[currentFriendId];
+var list = (monopolyRecordsTab === 'single') ? friendRecords.single : friendRecords.double;
 
     var totalCount = list.length;
     var winCount = 0;
@@ -21038,13 +21074,20 @@ function deleteMonopolyRecord(recordId) {
     if (!recordId) return;
     if (!confirm('确定删除这条战绩吗？')) return;
     var monopoly = currentMonopolyData;
-    if (!monopoly.records) monopoly.records = { single: [], double: [] };
-    if (monopolyRecordsTab === 'single') {
-        monopoly.records.single = (monopoly.records.single || []).filter(function(r) { return r.id !== recordId; });
-    } else {
-        monopoly.records.double = (monopoly.records.double || []).filter(function(r) { return r.id !== recordId; });
-    }
-    saveMonopolyData();
+if (!monopoly.recordsByFriend) monopoly.recordsByFriend = {};
+
+var currentFriendId = currentChatId;
+if (!monopoly.recordsByFriend[currentFriendId]) {
+    monopoly.recordsByFriend[currentFriendId] = { single: [], double: [] };
+}
+
+var friendRecords = monopoly.recordsByFriend[currentFriendId];
+if (monopolyRecordsTab === 'single') {
+    friendRecords.single = (friendRecords.single || []).filter(function(r) { return r.id !== recordId; });
+} else {
+    friendRecords.double = (friendRecords.double || []).filter(function(r) { return r.id !== recordId; });
+}
+saveMonopolyData();
     showToast('已删除');
     renderMonopolyRecordsPage();
 }
