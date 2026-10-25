@@ -18293,8 +18293,8 @@ var friendL = friendColor.l || 60;
     }
 
     html += '<div style="margin-bottom:12px;text-align:right;">' +
-        '<button class="btn-icon" onclick="showAddMonopolyQuestion(\'' + currentSubTab + '\')" style="padding:6px 16px;font-size:13px;background:var(--theme-main, #d4e9d6);color:#000000;">+ 新增' + typeName + '</button>' +
-    '</div>';
+    '<button class="btn-icon" onclick="showMonopolyAddMenu(\'' + currentSubTab + '\')" style="padding:6px 16px;font-size:13px;background:var(--theme-main, #d4e9d6);color:#000000;">+ 新增</button>' +
+'</div>';
 
     var questionsHtml = '';
     if (displayList.length === 0) {
@@ -18370,6 +18370,322 @@ function updateMonopolyColorField(who, field, value) {
 
 window.updateMonopolyColorField = updateMonopolyColorField;
 window.setMonopolyColor = setMonopolyColor;
+
+function showMonopolyAddMenu(type) {
+    if (!type) type = 'quiz';
+    var typeName = type === 'add' ? '加钱' : (type === 'deduct' ? '扣钱' : '脑筋急转弯');
+    var html = '<div class="modal-title">新增' + typeName + '题目</div>' +
+        '<button class="btn-primary" style="width:100%;margin-bottom:8px;" onclick="closeModal();showAddMonopolyQuestion(\'' + type + '\')">单个添加</button>' +
+        '<button class="btn-primary" style="width:100%;margin-bottom:8px;" onclick="closeModal();showMonopolyBatchAdd(\'' + type + '\')">批量添加</button>' +
+        '<button class="btn-primary" style="width:100%;margin-bottom:8px;" onclick="closeModal();showMonopolyImportFile(\'' + type + '\')">文件导入</button>' +
+        '<div class="btn-row" style="margin-top:8px;"><button class="cancel" onclick="closeModal()">取消</button></div>';
+    showModal(html);
+}
+window.showMonopolyAddMenu = showMonopolyAddMenu;
+
+function showMonopolyBatchAdd(type) {
+    if (!type) type = 'quiz';
+    var typeName = type === 'add' ? '加钱' : (type === 'deduct' ? '扣钱' : '脑筋急转弯');
+    var tip;
+    if (type === 'quiz') {
+        tip = '一行一题，用竖线分隔：题目|选项A|选项B|选项C|选项D|答案字母<br>' +
+              '答案字母填 A、B、C、D 其中一个。<br>' +
+              '示例：什么东西越洗越脏？|衣服|水|手|碗|B';
+    } else {
+        tip = '一行一题，用竖线分隔：题目|金额<br>' +
+              '示例：在路上捡到了钱|200';
+    }
+    var html = '<div class="modal-title">批量添加' + typeName + '题目</div>' +
+        '<div style="font-size:12px;color:#888888;margin-bottom:8px;line-height:1.6;">' + tip + '</div>' +
+        '<textarea id="monopolyBatchInput" placeholder="每行一题" style="width:100%;height:160px;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;resize:vertical;"></textarea>' +
+        '<div class="btn-row">' +
+            '<button class="cancel" onclick="closeModal()">取消</button>' +
+            '<button class="confirm" onclick="saveMonopolyBatchAdd(\'' + type + '\')">导入</button>' +
+        '</div>';
+    showModal(html);
+    setTimeout(function() { document.getElementById('monopolyBatchInput')?.focus(); }, 100);
+}
+window.showMonopolyBatchAdd = showMonopolyBatchAdd;
+
+function saveMonopolyBatchAdd(type) {
+    var input = document.getElementById('monopolyBatchInput');
+    if (!input || !input.value.trim()) {
+        showToast('请输入内容');
+        return;
+    }
+    var lines = input.value.split('\n');
+    var parsed = [];
+    for (var i = 0; i < lines.length; i++) {
+        var line = lines[i].trim();
+        if (!line) continue;
+        var parts = line.split('|');
+        if (type === 'quiz') {
+            if (parts.length < 6) {
+                showToast('第 ' + (i + 1) + ' 行格式不对，需要：题目|选项A|选项B|选项C|选项D|答案字母');
+                return;
+            }
+            var question = parts[0].trim();
+            var options = [parts[1].trim(), parts[2].trim(), parts[3].trim(), parts[4].trim()];
+            var ansRaw = parts[5].trim().toUpperCase();
+            var ansMap = { 'A': 0, 'B': 1, 'C': 2, 'D': 3 };
+            var answer = ansMap[ansRaw];
+            if (!question) {
+                showToast('第 ' + (i + 1) + ' 行题目为空');
+                return;
+            }
+            for (var oi = 0; oi < 4; oi++) {
+                if (!options[oi]) {
+                    showToast('第 ' + (i + 1) + ' 行选项不全');
+                    return;
+                }
+            }
+            if (answer === undefined) {
+                showToast('第 ' + (i + 1) + ' 行答案只能是 A、B、C、D');
+                return;
+            }
+            parsed.push({ type: 'quiz', question: question, options: options, answer: answer });
+        } else {
+            if (parts.length < 2) {
+                showToast('第 ' + (i + 1) + ' 行格式不对，需要：题目|金额');
+                return;
+            }
+            var q = parts[0].trim();
+            var amt = parseFloat(parts[1].trim());
+            if (!q) {
+                showToast('第 ' + (i + 1) + ' 行题目为空');
+                return;
+            }
+            if (isNaN(amt) || amt <= 0) {
+                showToast('第 ' + (i + 1) + ' 行金额无效');
+                return;
+            }
+            parsed.push({ type: type, question: q, amount: amt });
+        }
+    }
+    if (parsed.length === 0) {
+        showToast('没有有效内容');
+        return;
+    }
+    
+    var monopoly = getMonopolyData();
+    if (!monopoly.questions) monopoly.questions = [];
+    var added = 0;
+    var skipped = 0;
+    
+    for (var j = 0; j < parsed.length; j++) {
+        var item = parsed[j];
+        // 去重判断：如果题库里已经有一模一样的题目，就跳过
+        var exists = monopoly.questions.some(function(existingQ) {
+            return existingQ.type === item.type && existingQ.question === item.question;
+        });
+        
+        if (exists) {
+            skipped++;
+            continue;
+        }
+
+        var nq = {
+            id: 'mq' + Date.now() + Math.random().toString(36).substr(2, 6),
+            type: item.type,
+            question: item.question
+        };
+        if (item.type === 'quiz') {
+            nq.options = item.options;
+            nq.answer = item.answer;
+        } else {
+            nq.amount = item.amount;
+        }
+        monopoly.questions.push(nq);
+        added++;
+    }
+    
+    saveMonopolyData();
+    closeModal();
+    var msg = '已导入 ' + added + ' 题';
+    if (skipped > 0) {
+        msg += '，跳过 ' + skipped + ' 条重复题目';
+    }
+    showToast(msg);
+    openMonopolyCustom();
+}
+window.saveMonopolyBatchAdd = saveMonopolyBatchAdd;
+
+function showMonopolyImportFile(type) {
+    if (!type) type = 'quiz';
+    var typeName = type === 'add' ? '加钱' : (type === 'deduct' ? '扣钱' : '脑筋急转弯');
+    var tip;
+    if (type === 'quiz') {
+        tip = 'TXT：一行一题，格式 题目|选项A|选项B|选项C|选项D|答案字母<br>' +
+              'JSON：数组，每项含 question、options（4个）、answer（0 到 3 的数字）<br>' +
+              '示例 TXT：什么东西越洗越脏？|衣服|水|手|碗|B';
+    } else {
+        tip = 'TXT：一行一题，格式 题目|金额<br>' +
+              'JSON：数组，每项含 question、amount（数字）<br>' +
+              '示例 TXT：在路上捡到了钱|200';
+    }
+    var html = '<div class="modal-title">导入' + typeName + '题目</div>' +
+        '<div style="font-size:12px;color:#888888;margin-bottom:8px;line-height:1.6;">' + tip + '</div>' +
+        '<input type="file" id="monopolyImportFileInput" accept=".txt,.json" style="margin-bottom:12px;padding:8px;border:1px solid #d4e4d6;border-radius:12px;width:100%;box-sizing:border-box;">' +
+        '<div class="btn-row">' +
+            '<button class="cancel" onclick="closeModal()">取消</button>' +
+            '<button class="confirm" onclick="importMonopolyFile(\'' + type + '\')">导入</button>' +
+        '</div>';
+    showModal(html);
+}
+window.showMonopolyImportFile = showMonopolyImportFile;
+
+function importMonopolyFile(type) {
+    var fileInput = document.getElementById('monopolyImportFileInput');
+    if (!fileInput || !fileInput.files || !fileInput.files[0]) {
+        showToast('请选择文件');
+        return;
+    }
+    var file = fileInput.files[0];
+    var fileName = file.name.toLowerCase();
+    var reader = new FileReader();
+    reader.onload = function(e) {
+        var text = e.target.result;
+        var parsed = [];
+        if (fileName.endsWith('.json')) {
+            var arr;
+            try {
+                arr = JSON.parse(text);
+            } catch (err) {
+                showToast('JSON 解析失败');
+                return;
+            }
+            if (!Array.isArray(arr)) {
+                showToast('JSON 需要是数组');
+                return;
+            }
+            for (var i = 0; i < arr.length; i++) {
+                var item = arr[i] || {};
+                var question = String(item.question || '').trim();
+                if (!question) {
+                    showToast('第 ' + (i + 1) + ' 项缺少 question');
+                    return;
+                }
+                if (type === 'quiz') {
+                    var options = item.options || [];
+                    if (!Array.isArray(options) || options.length < 4) {
+                        showToast('第 ' + (i + 1) + ' 项 options 需要4个');
+                        return;
+                    }
+                    options = options.slice(0, 4).map(function(o) { return String(o).trim(); });
+                    var answer = parseInt(item.answer);
+                    if (isNaN(answer) || answer < 0 || answer > 3) {
+                        showToast('第 ' + (i + 1) + ' 项 answer 需要 0 到 3');
+                        return;
+                    }
+                    parsed.push({ type: 'quiz', question: question, options: options, answer: answer });
+                } else {
+                    var amount = parseFloat(item.amount);
+                    if (isNaN(amount) || amount <= 0) {
+                        showToast('第 ' + (i + 1) + ' 项 amount 无效');
+                        return;
+                    }
+                    parsed.push({ type: type, question: question, amount: amount });
+                }
+            }
+        } else {
+            var lines = text.split('\n');
+            for (var j = 0; j < lines.length; j++) {
+                var line = lines[j].trim();
+                if (!line) continue;
+                var parts = line.split('|');
+                if (type === 'quiz') {
+                    if (parts.length < 6) {
+                        showToast('第 ' + (j + 1) + ' 行格式不对，需要：题目|选项A|选项B|选项C|选项D|答案字母');
+                        return;
+                    }
+                    var q = parts[0].trim();
+                    var opts = [parts[1].trim(), parts[2].trim(), parts[3].trim(), parts[4].trim()];
+                    var ansRaw = parts[5].trim().toUpperCase();
+                    var ansMap = { 'A': 0, 'B': 1, 'C': 2, 'D': 3 };
+                    var ans = ansMap[ansRaw];
+                    if (!q) {
+                        showToast('第 ' + (j + 1) + ' 行题目为空');
+                        return;
+                    }
+                    for (var oi = 0; oi < 4; oi++) {
+                        if (!opts[oi]) {
+                            showToast('第 ' + (j + 1) + ' 行选项不全');
+                            return;
+                        }
+                    }
+                    if (ans === undefined) {
+                        showToast('第 ' + (j + 1) + ' 行答案只能是 A、B、C、D');
+                        return;
+                    }
+                    parsed.push({ type: 'quiz', question: q, options: opts, answer: ans });
+                } else {
+                    if (parts.length < 2) {
+                        showToast('第 ' + (j + 1) + ' 行格式不对，需要：题目|金额');
+                        return;
+                    }
+                    var q2 = parts[0].trim();
+                    var amt = parseFloat(parts[1].trim());
+                    if (!q2) {
+                        showToast('第 ' + (j + 1) + ' 行题目为空');
+                        return;
+                    }
+                    if (isNaN(amt) || amt <= 0) {
+                        showToast('第 ' + (j + 1) + ' 行金额无效');
+                        return;
+                    }
+                    parsed.push({ type: type, question: q2, amount: amt });
+                }
+            }
+        }
+        if (parsed.length === 0) {
+            showToast('没有有效内容');
+            return;
+        }
+        
+        var monopoly = getMonopolyData();
+        if (!monopoly.questions) monopoly.questions = [];
+        var added = 0;
+        var skipped = 0;
+        
+        for (var k = 0; k < parsed.length; k++) {
+            var it = parsed[k];
+            // 去重判断：如果题库里已经有一模一样的题目，就跳过
+            var exists = monopoly.questions.some(function(existingQ) {
+                return existingQ.type === it.type && existingQ.question === it.question;
+            });
+            
+            if (exists) {
+                skipped++;
+                continue;
+            }
+
+            var nq = {
+                id: 'mq' + Date.now() + Math.random().toString(36).substr(2, 6),
+                type: it.type,
+                question: it.question
+            };
+            if (it.type === 'quiz') {
+                nq.options = it.options;
+                nq.answer = it.answer;
+            } else {
+                nq.amount = it.amount;
+            }
+            monopoly.questions.push(nq);
+            added++;
+        }
+        
+        saveMonopolyData();
+        closeModal();
+        var msg = '已导入 ' + added + ' 题';
+        if (skipped > 0) {
+            msg += '，跳过 ' + skipped + ' 条重复题目';
+        }
+        showToast(msg);
+        openMonopolyCustom();
+    };
+    reader.readAsText(file);
+}
+window.importMonopolyFile = importMonopolyFile;
 
 function showAddMonopolyQuestion(type) {
     if (!type) type = 'quiz';
@@ -18471,8 +18787,24 @@ function editMonopolyQuestion(qid) {
     var monopoly = currentMonopolyData;
     var q = (monopoly.questions || []).find(function(x) { return x.id === qid; });
     if (!q) return;
+    
+    if (q.type === 'add' || q.type === 'deduct') {
+        var typeName = q.type === 'add' ? '加钱' : '扣钱';
+        var html = '<div class="modal-title">编辑' + typeName + '题目</div>' +
+            '<div style="font-size:12px;color:#888888;margin-bottom:4px;">题目描述</div>' +
+            '<input type="text" id="mqEditAddQ" value="' + (q.question || '').replace(/"/g, '&quot;') + '" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
+            '<div style="font-size:12px;color:#888888;margin-bottom:4px;">金额</div>' +
+            '<input type="number" id="mqEditAddAmt" value="' + (q.amount || 0) + '" step="1" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
+            '<div class="btn-row">' +
+                '<button class="cancel" onclick="closeModal()">取消</button>' +
+                '<button class="confirm" onclick="saveMonopolyAddEdit(\'' + qid + '\')">保存</button>' +
+            '</div>';
+        showModal(html);
+        return;
+    }
+
     var opts = q.options || ['', '', '', ''];
-    var html = '<div class="modal-title">编辑题目</div>' +
+    var html2 = '<div class="modal-title">编辑题目</div>' +
         '<input type="text" id="mqQuestionInput" value="' + (q.question || '').replace(/"/g, '&quot;') + '" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
         '<input type="text" id="mqOptionA" value="' + (opts[0] || '').replace(/"/g, '&quot;') + '" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
         '<input type="text" id="mqOptionB" value="' + (opts[1] || '').replace(/"/g, '&quot;') + '" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:8px;">' +
@@ -18489,8 +18821,39 @@ function editMonopolyQuestion(qid) {
             '<button class="cancel" onclick="closeModal()">取消</button>' +
             '<button class="confirm" onclick="updateMonopolyQuestion(\'' + qid + '\')">保存</button>' +
         '</div>';
-    showModal(html);
+    showModal(html2);
 }
+
+function saveMonopolyAddEdit(qid) {
+    var qInput = document.getElementById('mqEditAddQ');
+    var amtInput = document.getElementById('mqEditAddAmt');
+    if (!qInput || !amtInput) return;
+    
+    var question = qInput.value.trim();
+    var amount = parseFloat(amtInput.value);
+    
+    if (!question) {
+        showToast('请输入题目');
+        return;
+    }
+    if (isNaN(amount) || amount <= 0) {
+        showToast('请输入有效金额');
+        return;
+    }
+
+    var monopoly = currentMonopolyData;
+    var q = (monopoly.questions || []).find(function(x) { return x.id === qid; });
+    if (!q) return;
+    
+    q.question = question;
+    q.amount = amount;
+    
+    saveMonopolyData();
+    closeModal();
+    showToast('已保存');
+    openMonopolyCustom();
+}
+window.saveMonopolyAddEdit = saveMonopolyAddEdit;
 
 function updateMonopolyQuestion(qid) {
     var qInput = document.getElementById('mqQuestionInput');
@@ -19462,28 +19825,36 @@ monopolyNextTurn(state);
 return;
     }
 
-    // 空地/房产
-    if (!owner) {
-        // 空地，询问购买
-saveMonopolyCurrentGame(state);
-if (playerId === 'me') {
-            monopolyAskBuy(state, playerId, pos);
-        } else {
-            // 好友/NPC 自动决定：钱够 50% 买
-            var price = 200;
-            if (player.money >= price && Math.random() < 0.5) {
-                player.money -= price;
-                state.cellOwners[pos] = playerId;
-                state.cellLevels[pos] = 1;
-                monopolyAddLog(state, player.name + ' 买下第 ' + (pos + 1) + ' 格，花费 ¥' + price);
-            } else {
-                monopolyAddLog(state, player.name + ' 放弃购买第 ' + (pos + 1) + ' 格');
-            }
-            saveMonopolyCurrentGame(state);
-            monopolyNextTurn(state);
-        }
+// 空地/房产
+if (!owner) {
+    // 修复起点被当空地买的问题
+    if (pos === 0) {
+        monopolyAddLog(state, player.name + ' 停在起点');
+        saveMonopolyCurrentGame(state);
+        monopolyNextTurn(state);
         return;
     }
+
+    // 空地，询问购买
+    saveMonopolyCurrentGame(state);
+    if (playerId === 'me') {
+        monopolyAskBuy(state, playerId, pos);
+    } else {
+        // 好友/NPC 自动决定：钱够 50% 买
+        var price = 200;
+        if (player.money >= price && Math.random() < 0.5) {
+            player.money -= price;
+            state.cellOwners[pos] = playerId;
+            state.cellLevels[pos] = 1;
+            monopolyAddLog(state, player.name + ' 买下第 ' + (pos + 1) + ' 格，花费 ¥' + price);
+        } else {
+            monopolyAddLog(state, player.name + ' 放弃购买第 ' + (pos + 1) + ' 格');
+        }
+        saveMonopolyCurrentGame(state);
+        monopolyNextTurn(state);
+    }
+    return;
+}
 
     // 自己的地：钱够且未满级，询问是否升级
 if (owner === playerId) {
@@ -19499,7 +19870,7 @@ if (playerId === 'me') {
             if (Math.random() < 0.5) {
                 player.money -= upgradeCost;
                 state.cellLevels[pos] = level + 1;
-                monopolyAddLog(state, player.name + ' 将第 ' + (pos + 1) + ' 格升级到 ' + (level + 1) + ' 级，花费 ¥' + upgradeCost, '#4caf50');
+                monopolyAddLog(state, player.name + ' 将第 ' + pos + ' 格升级到 ' + (level + 1) + ' 级，花费 ¥' + upgradeCost, '#4caf50');
             } else {
                 monopolyAddLog(state, player.name + ' 停在自己的房产上，未升级');
             }
@@ -19528,9 +19899,9 @@ if (!ownerPlayerForBuy || ownerPlayerForBuy.bankrupt) {
         player.money -= priceFree;
         state.cellOwners[pos] = playerId;
         state.cellLevels[pos] = 1;
-        monopolyAddLog(state, player.name + ' 买下第 ' + (pos + 1) + ' 格，花费 ¥' + priceFree, '#c03030');
+        monopolyAddLog(state, player.name + ' 买下第 ' + pos + ' 格，花费 ¥' + priceFree, '#c03030');
     } else {
-        monopolyAddLog(state, player.name + ' 放弃购买第 ' + (pos + 1) + ' 格');
+        monopolyAddLog(state, player.name + ' 放弃购买第 ' + pos + ' 格');
     }
     saveMonopolyCurrentGame(state);
     monopolyNextTurn(state);
@@ -19608,7 +19979,7 @@ function monopolyAskUpgrade(state, playerId, pos, currentLevel, cost) {
     if (!player) return;
 
     var html = '<div class="modal-title">升级地产</div>' +
-        '<div style="text-align:center;padding:8px 0 16px;font-size:14px;color:#000000;">第 ' + (pos + 1) + ' 格</div>' +
+        '<div style="text-align:center;padding:8px 0 16px;font-size:14px;color:#000000;">第 ' + pos + ' 格</div>' +
         '<div style="text-align:center;font-size:13px;color:#666666;margin-bottom:4px;">当前 ' + currentLevel + ' 级，升级到 ' + (currentLevel + 1) + ' 级</div>' +
         '<div style="text-align:center;font-size:13px;color:#666666;margin-bottom:12px;">需要 ¥' + cost + '，当前资金 ¥' + player.money.toFixed(0) + '</div>' +
         '<div class="btn-row">' +
@@ -19650,15 +20021,18 @@ function monopolyAskBuy(state, playerId, pos) {
     if (!player) return;
 
     if (player.money < price) {
+        // 修复：资金不足时，清空状态再进入下一回合
+        state.pendingCell = null;
         monopolyAddLog(state, player.name + ' 资金不足，无法购买');
         saveMonopolyCurrentGame(state);
-        renderMonopolyGamePage(state);
+        monopolyRefreshBoardOnly(state);
+        monopolyRefreshStatusAndButtonOnly(state);
         setTimeout(function() { monopolyNextTurn(state); }, 500);
         return;
     }
 
     var html = '<div class="modal-title">购买地块</div>' +
-        '<div style="text-align:center;padding:8px 0 16px;font-size:14px;color:#000000;">第 ' + (pos + 1) + ' 格，价格 ¥' + price + '</div>' +
+        '<div style="text-align:center;padding:8px 0 16px;font-size:14px;color:#000000;">第 ' + pos + ' 格，价格 ¥' + price + '</div>' +
         '<div style="text-align:center;font-size:12px;color:#999999;margin-bottom:12px;">当前资金 ¥' + player.money.toFixed(0) + '</div>' +
         '<div class="btn-row">' +
             '<button class="cancel" onclick="closeModal();monopolyBuyDecision(false)">不买</button>' +
@@ -19679,9 +20053,9 @@ function monopolyBuyDecision(buy) {
             player.money -= price;
             state.cellOwners[pos] = 'me';
             state.cellLevels[pos] = 1;
-            monopolyAddLog(state, '我 买下第 ' + (pos + 1) + ' 格，花费 ¥' + price);
+            monopolyAddLog(state, '我 买下第 ' + pos + ' 格，花费 ¥' + price);
         } else {
-            monopolyAddLog(state, '我 放弃购买第 ' + (pos + 1) + ' 格');
+            monopolyAddLog(state, '我 放弃购买第 ' + pos + ' 格');
         }
         saveMonopolyCurrentGame(state);
         monopolyNextTurn(state);
@@ -19821,6 +20195,7 @@ function monopolyFriendRefuseHelp(state, requesterId) {
     setTimeout(function() {
         loadMonopolyCurrentGame().then(function(latest) {
             if (!latest || latest.finished) return;
+            // 保留 pendingCell 让状态一致，继续弹窗让我自己答
             monopolyShowQuestion(latest, requesterId);
         });
     }, 800);
@@ -19928,6 +20303,8 @@ function monopolyRefuseFriendHelp() {
         if (q) {
             monopolyFriendSelfAnswerQuiz(state, playerId, q);
         } else {
+            // 修复卡死：如果没有题目信息，也要手动清空 pendingCell
+            state.pendingCell = null;
             saveMonopolyCurrentGame(state);
             monopolyNextTurn(state);
         }
@@ -20064,6 +20441,9 @@ function monopolyApplyEventWithState(state, amount, isAdd) {
     var player = state.players.find(function(p) { return p.id === 'me'; });
     if (!player) return;
 
+    // 修复卡死：点确定结算时，立刻清空事件状态
+    state.pendingCell = null;
+
     if (isAdd) {
         player.money += amount;
         monopolyAddLog(state, '我 获得 ¥' + amount, '#4caf50');
@@ -20101,6 +20481,9 @@ function monopolySkipQuestion() {
         monopolyAddLog(state, '我 跳过了机会题');
         saveMonopolyCurrentGame(state);
         window._monopolyCurrentQuestion = null;
+        
+        monopolyRefreshBoardOnly(state);
+        monopolyRefreshStatusAndButtonOnly(state);
         monopolyNextTurn(state);
     });
 }
@@ -20176,6 +20559,15 @@ function monopolyResumeAfterBankrupt(state) {
 // 下一个回合
 function monopolyNextTurn(state) {
     if (state.finished) return;
+
+    // 【彻底防卡死兜底】无论前面谁做了什么，切换回合时，强制清空所有未决状态
+    state.pendingCell = null;
+    state.pendingFriendHelp = null;
+    window._monopolyCurrentQuestion = null;
+    // 关闭可能还开着的答题弹窗
+    if (typeof closeModal === 'function') {
+        closeModal();
+    }
 
     // 下一位玩家
     state.turnIndex++;
