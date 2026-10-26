@@ -18996,66 +18996,89 @@ function generateMonopolyCellTypes() {
         candidateIndexes[r] = tmp;
     }
 
-    // 机会 10 个，监狱 6 个
-var chanceCount = 10;
-var jailCount = 6;
+    // 机会 10 个，监狱 3 个，表彰 3 个
+    var chanceCount = 10;
+    var jailCount = 3;
+    var honorCount = 3;
     var used = {};
 
     function isTooCloseToSameType(idx, type) {
-    // 检查相邻 1 格内是否有同类型，避免连续出现
-    for (var d = -1; d <= 1; d++) {
-        if (d === 0) continue;
-        var ni = idx + d;
-        if (ni < 0 || ni >= total) continue;
-        if (types[ni] === type) return true;
+        // 检查相邻 1 格内是否有同类型，避免连续出现
+        for (var d = -1; d <= 1; d++) {
+            if (d === 0) continue;
+            var ni = idx + d;
+            if (ni < 0 || ni >= total) continue;
+            if (types[ni] === type) return true;
+        }
+        return false;
     }
-    return false;
-}
 
     var pointer = 0;
-// 放机会
-var placedChance = 0;
-while (placedChance < chanceCount && pointer < candidateIndexes.length) {
-    var ci = candidateIndexes[pointer];
-    pointer++;
-    if (types[ci] !== 1) continue;
-    if (isTooCloseToSameType(ci, 2)) continue;
-    types[ci] = 2;
-    used[ci] = true;
-    placedChance++;
-}
-// 兜底：还没放满就放宽限制补满
-if (placedChance < chanceCount) {
-    for (var ci2 = 0; ci2 < candidateIndexes.length && placedChance < chanceCount; ci2++) {
-        var cj = candidateIndexes[ci2];
-        if (types[cj] !== 1) continue;
-        types[cj] = 2;
-        used[cj] = true;
+    // 放机会
+    var placedChance = 0;
+    while (placedChance < chanceCount && pointer < candidateIndexes.length) {
+        var ci = candidateIndexes[pointer];
+        pointer++;
+        if (types[ci] !== 1) continue;
+        if (isTooCloseToSameType(ci, 2)) continue;
+        types[ci] = 2;
+        used[ci] = true;
         placedChance++;
     }
-}
+    // 兜底：还没放满就放宽限制补满
+    if (placedChance < chanceCount) {
+        for (var ci2 = 0; ci2 < candidateIndexes.length && placedChance < chanceCount; ci2++) {
+            var cj = candidateIndexes[ci2];
+            if (types[cj] !== 1) continue;
+            types[cj] = 2;
+            used[cj] = true;
+            placedChance++;
+        }
+    }
 
-// 放监狱
-var placedJail = 0;
-while (placedJail < jailCount && pointer < candidateIndexes.length) {
-    var ji = candidateIndexes[pointer];
-    pointer++;
-    if (types[ji] !== 1) continue;
-    if (isTooCloseToSameType(ji, 3)) continue;
-    types[ji] = 3;
-    used[ji] = true;
-    placedJail++;
-}
-// 兜底：还没放满就放宽限制补满
-if (placedJail < jailCount) {
-    for (var ji2 = 0; ji2 < candidateIndexes.length && placedJail < jailCount; ji2++) {
-        var jj = candidateIndexes[ji2];
-        if (types[jj] !== 1) continue;
-        types[jj] = 3;
-        used[jj] = true;
+    // 放监狱
+    var placedJail = 0;
+    while (placedJail < jailCount && pointer < candidateIndexes.length) {
+        var ji = candidateIndexes[pointer];
+        pointer++;
+        if (types[ji] !== 1) continue;
+        if (isTooCloseToSameType(ji, 3)) continue;
+        types[ji] = 3;
+        used[ji] = true;
         placedJail++;
     }
-}
+    // 兜底：还没放满就放宽限制补满
+    if (placedJail < jailCount) {
+        for (var ji2 = 0; ji2 < candidateIndexes.length && placedJail < jailCount; ji2++) {
+            var jj = candidateIndexes[ji2];
+            if (types[jj] !== 1) continue;
+            types[jj] = 3;
+            used[jj] = true;
+            placedJail++;
+        }
+    }
+
+    // 放表彰
+    var placedHonor = 0;
+    while (placedHonor < honorCount && pointer < candidateIndexes.length) {
+        var hi = candidateIndexes[pointer];
+        pointer++;
+        if (types[hi] !== 1) continue;
+        if (isTooCloseToSameType(hi, 4)) continue;
+        types[hi] = 4;
+        used[hi] = true;
+        placedHonor++;
+    }
+    // 兜底：还没放满就放宽限制补满
+    if (placedHonor < honorCount) {
+        for (var hi2 = 0; hi2 < candidateIndexes.length && placedHonor < honorCount; hi2++) {
+            var hj = candidateIndexes[hi2];
+            if (types[hj] !== 1) continue;
+            types[hj] = 4;
+            used[hj] = true;
+            placedHonor++;
+        }
+    }
 
     MONOPOLY_CELL_TYPES = types;
 }
@@ -19077,6 +19100,7 @@ function getMonopolyCellLabel(idx) {
     if (t === 0) return '开始';
     if (t === 2) return '❓';
     if (t === 3) return '🔒';
+    if (t === 4) return '🎉';
     return String(idx);
 }
 
@@ -19636,6 +19660,29 @@ function monopolyRollDice() {
     });
 }
 
+function monopolyExtraRoll(playerId) {
+    loadMonopolyCurrentGame().then(function(state) {
+        if (!state || state.finished) return;
+        if (state.pendingCell && state.pendingCell.questionId) return;
+        if (state.turn !== playerId) return;
+        if (playerId === 'me') {
+            var btn = document.querySelector('#monopolyLogBar button');
+            if (btn) {
+                btn.disabled = false;
+                btn.style.background = 'var(--theme-main, #d4e9d6)';
+                btn.style.cursor = 'pointer';
+                btn.textContent = '投骰子';
+            }
+            showToast('获得表彰，请再掷一次');
+        } else {
+            var dice = Math.floor(Math.random() * 6) + 1;
+            monopolyMovePlayer(state, playerId, dice);
+        }
+    });
+}
+
+window.monopolyExtraRoll = monopolyExtraRoll;
+
 function monopolyRollDiceWithState(state) {
     if (state.finished) return;
     if (state.pendingCell) {
@@ -19845,14 +19892,36 @@ if (player.money <= 0) {
     return;
 }
 
-    if (type === 3) {
-        // 监狱
-        player.jailSkip = 1;
-monopolyAddLog(state, player.name + ' 进入监狱，下回合跳过');
-saveMonopolyCurrentGame(state);
-monopolyNextTurn(state);
-return;
-    }
+if (type === 3) {
+    // 监狱
+    player.jailSkip = 1;
+    monopolyAddLog(state, player.name + ' 进入监狱，下回合跳过');
+    saveMonopolyCurrentGame(state);
+    monopolyNextTurn(state);
+    return;
+}
+
+if (type === 4) {
+    // 表彰：加钱并额外掷一次
+    player.money += 200;
+    monopolyAddLog(state, player.name + ' 获得表彰，奖励 ¥200，再掷一次', '#4caf50');
+    saveMonopolyCurrentGame(state);
+    monopolyRefreshBoardOnly(state);
+    monopolyRefreshStatusAndButtonOnly(state);
+    setTimeout(function() {
+        loadMonopolyCurrentGame().then(function(latest) {
+            if (!latest || latest.finished) return;
+            if (latest.turn !== playerId) return;
+            if (playerId === 'me') {
+                showToast('获得表彰，奖励 ¥200，再掷一次');
+            } else {
+                var dice = Math.floor(Math.random() * 6) + 1;
+                monopolyMovePlayer(latest, playerId, dice);
+            }
+        });
+    }, 600);
+    return;
+}
 
 // 空地/房产
 if (!owner) {
@@ -20132,6 +20201,14 @@ function monopolyAskFriendForHelp() {
         var friendName = state.friendName || '好友';
         var myName = '我';
 
+        if (state.pendingCell && state.pendingCell.questionId) {
+            state.pendingFriendHelp = {
+                questionId: state.pendingCell.questionId,
+                playerId: 'me',
+                forMe: true
+            };
+        }
+
         monopolyAddLog(state, myName + ' 向 ' + friendName + ' 求助', '#4a7a4e');
         saveMonopolyCurrentGame(state);
         monopolyRefreshBoardOnly(state);
@@ -20217,6 +20294,20 @@ function monopolyFriendRefuseHelp(state, requesterId) {
     monopolyAddLog(state, friendName + ' 拒绝了你的求助', '#c03030');
     monopolyFriendSay(state, '抱歉，这题我也不会，你自己答吧');
 
+    var keptQuestionId = '';
+    if (state.pendingFriendHelp && state.pendingFriendHelp.questionId) {
+        keptQuestionId = state.pendingFriendHelp.questionId;
+    } else if (state.pendingCell && state.pendingCell.questionId) {
+        keptQuestionId = state.pendingCell.questionId;
+    }
+
+    state.pendingFriendHelp = null;
+    if (!state.pendingCell) state.pendingCell = {};
+    if (keptQuestionId) {
+        state.pendingCell.questionId = keptQuestionId;
+        if (!state.pendingCell.playerId) state.pendingCell.playerId = requesterId;
+    }
+
     saveMonopolyCurrentGame(state);
     monopolyRefreshBoardOnly(state);
     monopolyRefreshStatusAndButtonOnly(state);
@@ -20224,7 +20315,12 @@ function monopolyFriendRefuseHelp(state, requesterId) {
     setTimeout(function() {
         loadMonopolyCurrentGame().then(function(latest) {
             if (!latest || latest.finished) return;
-            // 保留 pendingCell 让状态一致，继续弹窗让我自己答
+            if (!latest.pendingCell) latest.pendingCell = {};
+            if (keptQuestionId) {
+                latest.pendingCell.questionId = keptQuestionId;
+                if (!latest.pendingCell.playerId) latest.pendingCell.playerId = requesterId;
+            }
+            saveMonopolyCurrentGame(latest);
             monopolyShowQuestion(latest, requesterId);
         });
     }, 800);
@@ -20339,7 +20435,17 @@ function monopolyRefuseFriendHelp() {
         }
     });
 }
-// ====== 求助相关结束 ======
+
+function getMonopolyQuestionById(questionId) {
+    if (!questionId) return null;
+    var questions = currentMonopolyData.questions || [];
+    for (var i = 0; i < questions.length; i++) {
+        if (questions[i].id === questionId) return questions[i];
+    }
+    return null;
+}
+
+window.getMonopolyQuestionById = getMonopolyQuestionById;
 
 // 脑筋急转弯 / 机会事件
 function monopolyShowQuestion(state, playerId) {
@@ -20354,7 +20460,13 @@ function monopolyShowQuestion(state, playerId) {
         return;
     }
 
-    var q = questions[Math.floor(Math.random() * questions.length)];
+    var q = null;
+    if (state.pendingCell && state.pendingCell.questionId) {
+        q = getMonopolyQuestionById(state.pendingCell.questionId);
+    }
+    if (!q) {
+        q = questions[Math.floor(Math.random() * questions.length)];
+    }
     
     // 如果是加钱/扣钱类
     if (q.type === 'add' || q.type === 'deduct') {
