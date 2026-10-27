@@ -1813,7 +1813,7 @@ let appData = JSON.parse(JSON.stringify(defaultData));
 function getDB() {
     if (dbOpenPromise) return dbOpenPromise;
     dbOpenPromise = new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, 4);
+        const request = indexedDB.open(DB_NAME, 5);
 request.onupgradeneeded = (e) => {
     const db = e.target.result;
     if (!db.objectStoreNames.contains(STORE_NAME)) {
@@ -1827,6 +1827,9 @@ request.onupgradeneeded = (e) => {
     }
     if (!db.objectStoreNames.contains('gameStore')) {
         db.createObjectStore('gameStore', { keyPath: 'id' });
+    }
+    if (!db.objectStoreNames.contains('featureRequestStore')) {
+        db.createObjectStore('featureRequestStore', { keyPath: 'id' });
     }
 };
         request.onsuccess = (e) => {
@@ -1965,6 +1968,67 @@ function getAllGameData() {
             var req = store.getAll();
             req.onsuccess = function() { resolve(req.result || []); };
             req.onerror = function() { resolve([]); };
+        });
+    });
+}
+
+// ====== 功能申请存储层（独立 store，不进主系统） ======
+function saveFeatureRequest(id, data) {
+    return getDB().then(function(database) {
+        return new Promise(function(resolve, reject) {
+            var tx = database.transaction('featureRequestStore', 'readwrite');
+            var store = tx.objectStore('featureRequestStore');
+            store.put({ id: id, data: data });
+            tx.oncomplete = function() { resolve(); };
+            tx.onerror = function(e) { reject(e.target.error); };
+        });
+    });
+}
+
+function loadFeatureRequest(id) {
+    return getDB().then(function(database) {
+        return new Promise(function(resolve) {
+            var tx = database.transaction('featureRequestStore', 'readonly');
+            var store = tx.objectStore('featureRequestStore');
+            var req = store.get(id);
+            req.onsuccess = function() { resolve(req.result ? req.result.data : null); };
+            req.onerror = function() { resolve(null); };
+        });
+    });
+}
+
+function deleteFeatureRequest(id) {
+    return getDB().then(function(database) {
+        return new Promise(function(resolve) {
+            var tx = database.transaction('featureRequestStore', 'readwrite');
+            var store = tx.objectStore('featureRequestStore');
+            store.delete(id);
+            tx.oncomplete = function() { resolve(); };
+            tx.onerror = function() { resolve(); };
+        });
+    });
+}
+
+function getAllFeatureRequests() {
+    return getDB().then(function(database) {
+        return new Promise(function(resolve) {
+            var tx = database.transaction('featureRequestStore', 'readonly');
+            var store = tx.objectStore('featureRequestStore');
+            var req = store.getAll();
+            req.onsuccess = function() { resolve(req.result || []); };
+            req.onerror = function() { resolve([]); };
+        });
+    });
+}
+
+function clearFeatureRequests() {
+    return getDB().then(function(database) {
+        return new Promise(function(resolve) {
+            var tx = database.transaction('featureRequestStore', 'readwrite');
+            var store = tx.objectStore('featureRequestStore');
+            store.clear();
+            tx.oncomplete = function() { resolve(); };
+            tx.onerror = function() { resolve(); };
         });
     });
 }
@@ -4223,6 +4287,8 @@ if (m.isPayRequest && m.payRequestId) {
 
         if (m.isQuestionnaireCard && m.questionnaireId) {
     msgContent = renderQuestionnaireCard(m);
+} else if (m.isFeatureRequest && m.featureRequestId) {
+    msgContent = renderFeatureRequestCardInChat(m);
 } else if (m.isHongbaoCard && m.hongbaoId) {
     var _hbCardInfo = getGroupHongbaoCardInfo(m.hongbaoId);
     if (_hbCardInfo) {
@@ -15095,6 +15161,7 @@ function closeInnerSubPage() {
 
 // ====== 好友朋友圈：内容生成 ======
 function generateMomentForFriendById(chatId) {
+    if (isFeatureBlockedForFriend(chatId, 'social_friend_moments') || !getFeatureGlobalEnabled('social_friend_moments')) return;
     var allFriends = DataHub.get('friends', []);
     var friend = allFriends.find(function(f) { return f.id === chatId; });
     if (!friend) return;
@@ -15887,9 +15954,10 @@ function generateFriendDiaryDaily() {
     var today = getTodayDateStr();
     var changed = false;
     for (var i = 0; i < allFriends.length; i++) {
-        var friend = allFriends[i];
-        if (!friend.diary) friend.diary = [];
-        var existing = getFriendDiaryByDate(friend, today);
+    var friend = allFriends[i];
+    if (isFeatureBlockedForFriend(friend.id, 'social_friend_diary') || !getFeatureGlobalEnabled('social_friend_diary')) continue;
+    if (!friend.diary) friend.diary = [];
+    var existing = getFriendDiaryByDate(friend, today);
         if (existing) {
             // 已有日记（可能是购物日记），不覆盖
             continue;
@@ -16891,8 +16959,9 @@ function generateLetterFromHimOnAppUse() {
     if (allFriends.length === 0) return;
     var changed = false;
     for (var i = 0; i < allFriends.length; i++) {
-        var friend = allFriends[i];
-        if (Math.random() * 100 <= 30) {
+    var friend = allFriends[i];
+    if (isFeatureBlockedForFriend(friend.id, 'social_letter') || !getFeatureGlobalEnabled('social_letter')) continue;
+    if (Math.random() * 100 <= 30) {
             if (!friend.letters) friend.letters = { toHim: [], hisReply: [], fromHim: [], myReply: [] };
             if (!friend.letters.fromHim) friend.letters.fromHim = [];
             var content = generateLetterContent(friend);
@@ -17370,6 +17439,628 @@ function handleLetterPendingReply(p) {
     showToast(friend.name + ' 回信了');
     return true;
 }
+
+// ====== 功能总结：83 个功能的 key 映射表 + 状态判定 ======
+
+var FEATURE_LIST = [
+    { key: 'chat_text', name: '文字聊天', group: '聊天与消息' },
+    { key: 'chat_image', name: '图片消息', group: '聊天与消息' },
+    { key: 'chat_voice', name: '语音消息', group: '聊天与消息' },
+    { key: 'chat_pat', name: '拍一拍', group: '聊天与消息' },
+    { key: 'chat_quote', name: '引用回复', group: '聊天与消息' },
+    { key: 'chat_recall', name: '撤回消息', group: '聊天与消息' },
+    { key: 'chat_special_quote', name: '特殊引用字卡', group: '聊天与消息' },
+    { key: 'chat_video_call', name: '视频通话', group: '聊天与消息' },
+    { key: 'chat_hongbao_card', name: '红包卡片', group: '聊天与消息' },
+    { key: 'chat_transfer_card', name: '转账卡片', group: '聊天与消息' },
+    { key: 'chat_group_hongbao_card', name: '群红包卡片', group: '聊天与消息' },
+    { key: 'chat_hongbao_result', name: '红包结果卡片', group: '聊天与消息' },
+    { key: 'chat_questionnaire_card', name: '问卷卡片', group: '聊天与消息' },
+    { key: 'chat_vote_card', name: '投票卡片', group: '聊天与消息' },
+    { key: 'chat_help_request', name: '求助卡片', group: '聊天与消息' },
+    { key: 'chat_pay_request', name: '支付请求消息', group: '聊天与消息' },
+    { key: 'chat_collection_card', name: '收藏卡片', group: '聊天与消息' },
+    { key: 'chat_chatroom', name: '群聊', group: '聊天与消息' },
+
+    { key: 'social_moments', name: '朋友圈', group: '社交记录' },
+    { key: 'social_moments_reply', name: '朋友圈评论', group: '社交记录' },
+    { key: 'social_diary', name: '日记', group: '社交记录' },
+    { key: 'social_diary_reply', name: '日记留言', group: '社交记录' },
+    { key: 'social_friend_moments', name: '好友朋友圈', group: '社交记录' },
+    { key: 'social_friend_moments_reply', name: '好友朋友圈评论', group: '社交记录' },
+    { key: 'social_friend_diary', name: '好友日记', group: '社交记录' },
+    { key: 'social_friend_diary_reply', name: '好友日记留言', group: '社交记录' },
+    { key: 'social_shopping_diary', name: '购物日记', group: '社交记录' },
+    { key: 'social_shopping_diary_reply', name: '购物日记留言', group: '社交记录' },
+    { key: 'social_letter', name: '信封', group: '社交记录' },
+    { key: 'social_letter_reply', name: '信封回信', group: '社交记录' },
+    { key: 'social_friend_profile', name: '好友主页', group: '社交记录' },
+    { key: 'social_private_album', name: '私人相册', group: '社交记录' },
+    { key: 'social_album_message', name: '相册留言', group: '社交记录' },
+    { key: 'social_album_delete_request', name: '相册删除申请', group: '社交记录' },
+    { key: 'social_status_calendar', name: '状态日历', group: '社交记录' },
+    { key: 'social_status_calendar_reply', name: '状态日历回复', group: '社交记录' },
+    { key: 'social_friend_voice_library', name: '好友语音素材库', group: '社交记录' },
+
+    { key: 'money_my_account', name: '我的账户', group: '金钱与交易' },
+    { key: 'money_my_flow', name: '账户流水', group: '金钱与交易' },
+    { key: 'money_friend_flow', name: '好友账户', group: '金钱与交易' },
+    { key: 'money_redpacket', name: '红包', group: '金钱与交易' },
+    { key: 'money_transfer', name: '转账', group: '金钱与交易' },
+    { key: 'money_group_redpacket', name: '群红包', group: '金钱与交易' },
+    { key: 'money_redpacket_expired', name: '红包过期', group: '金钱与交易' },
+    { key: 'money_mall', name: '商场', group: '金钱与交易' },
+    { key: 'money_mall_category', name: '商场分类', group: '金钱与交易' },
+    { key: 'money_friend_collection', name: '收藏', group: '金钱与交易' },
+    { key: 'money_my_collection', name: '我的收藏', group: '金钱与交易' },
+    { key: 'money_purchased', name: '商品展示', group: '金钱与交易' },
+    { key: 'money_piggy', name: '零钱罐', group: '金钱与交易' },
+    { key: 'money_piggy_flow', name: '零钱罐流水', group: '金钱与交易' },
+    { key: 'money_piggy_stats', name: '零钱罐统计', group: '金钱与交易' },
+    { key: 'money_pay_request', name: '支付礼物', group: '金钱与交易' },
+    { key: 'money_help_request', name: '求助', group: '金钱与交易' },
+    { key: 'money_monthly_stats', name: '月度统计', group: '金钱与交易' },
+
+    { key: 'fun_monopoly', name: '大富翁', group: '娱乐与互动' },
+    { key: 'fun_monopoly_single', name: '大富翁单人', group: '娱乐与互动' },
+    { key: 'fun_monopoly_double', name: '大富翁双人', group: '娱乐与互动' },
+    { key: 'fun_monopoly_custom', name: '大富翁自定义', group: '娱乐与互动' },
+    { key: 'fun_monopoly_chat', name: '大富翁对话', group: '娱乐与互动' },
+    { key: 'fun_questionnaire', name: '问卷', group: '娱乐与互动' },
+    { key: 'fun_questionnaire_bank', name: '问卷题库', group: '娱乐与互动' },
+    { key: 'fun_questionnaire_interaction', name: '问卷交互', group: '娱乐与互动' },
+    { key: 'fun_vote', name: '投票', group: '娱乐与互动' },
+    { key: 'fun_vote_bank', name: '投票题库', group: '娱乐与互动' },
+    { key: 'fun_vote_special', name: '特殊投票', group: '娱乐与互动' },
+
+    { key: 'lexicon_public', name: '公共词条库', group: '词条与词典' },
+    { key: 'lexicon_public_word', name: '公共字卡', group: '词条与词典' },
+    { key: 'lexicon_public_emoji', name: '公共 emoji', group: '词条与词典' },
+    { key: 'lexicon_public_yanwenzi', name: '公共颜文字', group: '词条与词典' },
+    { key: 'lexicon_public_emoji_pack', name: '公共表情包', group: '词条与词典' },
+    { key: 'lexicon_public_pat', name: '公共拍一拍', group: '词条与词典' },
+    { key: 'lexicon_public_status', name: '公共状态', group: '词条与词典' },
+    { key: 'lexicon_public_weather', name: '公共天气', group: '词条与词典' },
+    { key: 'lexicon_my', name: '我的词条库', group: '词条与词典' },
+    { key: 'lexicon_private', name: '私人词条库', group: '词条与词典' },
+    { key: 'lexicon_private_pat_locked', name: '私人拍一拍上锁', group: '词条与词典' },
+    { key: 'lexicon_dictionary', name: '词典', group: '词条与词典' },
+    { key: 'lexicon_dictionary_pos', name: '词典词性', group: '词条与词典' },
+    { key: 'lexicon_dictionary_sentence', name: '词典拼句', group: '词条与词典' },
+    { key: 'lexicon_emoji_panel', name: '表情面板', group: '词条与词典' },
+
+    { key: 'couple_space', name: '情侣空间', group: '情侣空间' },
+    { key: 'couple_info', name: '我们', group: '情侣空间' }
+];
+
+function getFeatureByKey(key) {
+    for (var i = 0; i < FEATURE_LIST.length; i++) {
+        if (FEATURE_LIST[i].key === key) return FEATURE_LIST[i];
+    }
+    return null;
+}
+
+function getFeatureGroups() {
+    var groups = [];
+    for (var i = 0; i < FEATURE_LIST.length; i++) {
+        var g = FEATURE_LIST[i].group;
+        if (groups.indexOf(g) === -1) groups.push(g);
+    }
+    return groups;
+}
+
+// 计算某功能的使用统计文案，返回 { status, text, count }
+// status: '使用中' | '开启' | '未使用' | '已关闭'
+function calcFeatureStatus(featureKey) {
+    var friends = DataHub.get('friends', []);
+    var chatrooms = DataHub.get('chatrooms', []);
+    var messages = DataHub.get('messages', []);
+    var count = 0;
+
+    if (featureKey === 'chat_text') {
+        for (var i = 0; i < messages.length; i++) {
+            var m = messages[i];
+            if (!m.isImage && !m.isVoice && !m.isPat && !m.isVoteCard && !m.isHongbaoCard && !m.isQuestionnaireCard && !m.isHelpRequest && !m.isPayRequest && !m.isCollectionCard && !m.isMonopolyInvite && !m.isHongbaoResult && !m.isRecall) count++;
+        }
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 条', count: count };
+    }
+    if (featureKey === 'chat_image') {
+        for (var i2 = 0; i2 < messages.length; i2++) {
+            var m2 = messages[i2];
+            if (m2.isImage || (m2.text && m2.text.indexOf('<img') !== -1)) count++;
+        }
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 张', count: count };
+    }
+    if (featureKey === 'chat_voice') {
+        for (var i3 = 0; i3 < messages.length; i3++) if (messages[i3].isVoice) count++;
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 条', count: count };
+    }
+    if (featureKey === 'chat_pat') {
+        for (var i4 = 0; i4 < messages.length; i4++) if (messages[i4].isPat) count++;
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 次', count: count };
+    }
+    if (featureKey === 'chat_quote') {
+        for (var i5 = 0; i5 < messages.length; i5++) if (messages[i5].quote) count++;
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 条', count: count };
+    }
+    if (featureKey === 'chat_recall') {
+        for (var i6 = 0; i6 < messages.length; i6++) if (messages[i6].isRecall) count++;
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 条', count: count };
+    }
+    if (featureKey === 'chat_special_quote') {
+        for (var i7 = 0; i7 < messages.length; i7++) if (messages[i7].quote && messages[i7].quote.isSpecialQuote) count++;
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 次', count: count };
+    }
+    if (featureKey === 'chat_video_call') {
+        for (var i8 = 0; i8 < messages.length; i8++) if (messages[i8].text && messages[i8].text.indexOf('通话') !== -1) count++;
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 次', count: count };
+    }
+    if (featureKey === 'chat_hongbao_card') {
+        for (var i9 = 0; i9 < messages.length; i9++) if (messages[i9].isHongbaoCard && !messages[i9].isGroupHongbao) count++;
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 个', count: count };
+    }
+    if (featureKey === 'chat_transfer_card') {
+        var hbList = DataHub.get('hongbaoTransfers', []);
+        for (var h = 0; h < hbList.length; h++) if (hbList[h].type === 'transfer') count++;
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 笔', count: count };
+    }
+    if (featureKey === 'chat_group_hongbao_card') {
+        for (var i10 = 0; i10 < messages.length; i10++) if (messages[i10].isHongbaoCard && messages[i10].isGroupHongbao) count++;
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 个', count: count };
+    }
+    if (featureKey === 'chat_hongbao_result') {
+        for (var i11 = 0; i11 < messages.length; i11++) if (messages[i11].isHongbaoResult) count++;
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 张', count: count };
+    }
+    if (featureKey === 'chat_questionnaire_card') {
+        for (var i12 = 0; i12 < messages.length; i12++) if (messages[i12].isQuestionnaireCard) count++;
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 份', count: count };
+    }
+    if (featureKey === 'chat_vote_card') {
+        for (var i13 = 0; i13 < messages.length; i13++) if (messages[i13].isVoteCard) count++;
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 次', count: count };
+    }
+    if (featureKey === 'chat_help_request') {
+        for (var i14 = 0; i14 < messages.length; i14++) if (messages[i14].isHelpRequest) count++;
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 次', count: count };
+    }
+    if (featureKey === 'chat_pay_request') {
+        for (var i15 = 0; i15 < messages.length; i15++) if (messages[i15].isPayRequest) count++;
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 次', count: count };
+    }
+    if (featureKey === 'chat_collection_card') {
+        for (var i16 = 0; i16 < messages.length; i16++) if (messages[i16].isCollectionCard) count++;
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 张', count: count };
+    }
+    if (featureKey === 'chat_chatroom') {
+        return { status: chatrooms.length > 0 ? '使用中' : '未使用', text: '共 ' + chatrooms.length + ' 个群', count: chatrooms.length };
+    }
+
+    if (featureKey === 'social_moments') {
+        var moments = DataHub.get('moments', []);
+        return { status: moments.length > 0 ? '使用中' : '未使用', text: '共 ' + moments.length + ' 条动态', count: moments.length };
+    }
+    if (featureKey === 'social_moments_reply') {
+        var moments2 = DataHub.get('moments', []);
+        for (var m2i = 0; m2i < moments2.length; m2i++) count += (moments2[m2i].replies || []).length;
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 条评论', count: count };
+    }
+    if (featureKey === 'social_diary') {
+        var diary = DataHub.get('diary', []);
+        return { status: diary.length > 0 ? '使用中' : '未使用', text: '共 ' + diary.length + ' 篇', count: diary.length };
+    }
+    if (featureKey === 'social_diary_reply') {
+        var diary2 = DataHub.get('diary', []);
+        for (var d2i = 0; d2i < diary2.length; d2i++) count += (diary2[d2i].replies || []).length;
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 条留言', count: count };
+    }
+    if (featureKey === 'social_friend_moments') {
+        for (var fm = 0; fm < friends.length; fm++) count += (friends[fm].moments || []).length;
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 条', count: count };
+    }
+    if (featureKey === 'social_friend_moments_reply') {
+        for (var fm2 = 0; fm2 < friends.length; fm2++) {
+            var fms = friends[fm2].moments || [];
+            for (var fmr = 0; fmr < fms.length; fmr++) count += (fms[fmr].replies || []).length;
+        }
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 条', count: count };
+    }
+    if (featureKey === 'social_friend_diary') {
+        for (var fd = 0; fd < friends.length; fd++) count += (friends[fd].diary || []).length;
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 篇', count: count };
+    }
+    if (featureKey === 'social_friend_diary_reply') {
+        for (var fd2 = 0; fd2 < friends.length; fd2++) {
+            var fds = friends[fd2].diary || [];
+            for (var fdr = 0; fdr < fds.length; fdr++) count += (fds[fdr].replies || []).length;
+        }
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 条', count: count };
+    }
+    if (featureKey === 'social_shopping_diary') {
+        for (var sd = 0; sd < friends.length; sd++) count += (friends[sd].shoppingDiary || []).length;
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 篇', count: count };
+    }
+    if (featureKey === 'social_shopping_diary_reply') {
+        for (var sd2 = 0; sd2 < friends.length; sd2++) {
+            var sds = friends[sd2].shoppingDiary || [];
+            for (var sdr = 0; sdr < sds.length; sdr++) count += (sds[sdr].replies || []).length;
+        }
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 条', count: count };
+    }
+    if (featureKey === 'social_letter') {
+        for (var lt = 0; lt < friends.length; lt++) {
+            var L = friends[lt].letters || {};
+            count += (L.toHim || []).length + (L.hisReply || []).length + (L.fromHim || []).length + (L.myReply || []).length;
+        }
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 封', count: count };
+    }
+    if (featureKey === 'social_letter_reply') {
+        for (var lr = 0; lr < friends.length; lr++) {
+            var L2 = friends[lr].letters || {};
+            count += (L2.hisReply || []).length + (L2.myReply || []).length;
+        }
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 封', count: count };
+    }
+    if (featureKey === 'social_friend_profile') {
+        return { status: '开启', text: friends.length + ' 位好友', count: friends.length };
+    }
+    if (featureKey === 'social_private_album') {
+        for (var pa = 0; pa < friends.length; pa++) count += (friends[pa].privateAlbum || []).length;
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 张', count: count };
+    }
+    if (featureKey === 'social_album_message') {
+        for (var am = 0; am < friends.length; am++) {
+            var albums = friends[am].privateAlbum || [];
+            for (var ami = 0; ami < albums.length; ami++) count += (albums[ami].messages || []).length;
+        }
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 条', count: count };
+    }
+    if (featureKey === 'social_album_delete_request') {
+        for (var adr = 0; adr < friends.length; adr++) {
+            var albums2 = friends[adr].privateAlbum || [];
+            for (var adri = 0; adri < albums2.length; adri++) {
+                if (albums2[adri].status === 'requesting') count++;
+            }
+        }
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 次', count: count };
+    }
+    if (featureKey === 'social_status_calendar') {
+        for (var sc = 0; sc < friends.length; sc++) {
+            if (friends[sc].couple && friends[sc].couple.statusCalendar) {
+                count += Object.keys(friends[sc].couple.statusCalendar).length;
+            }
+        }
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 天', count: count };
+    }
+    if (featureKey === 'social_status_calendar_reply') {
+        for (var scr = 0; scr < friends.length; scr++) {
+            if (friends[scr].couple && friends[scr].couple.statusCalendar) {
+                var cal = friends[scr].couple.statusCalendar;
+                for (var ck in cal) {
+                    if (cal[ck] && cal[ck].myReply) count++;
+                }
+            }
+        }
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 条', count: count };
+    }
+    if (featureKey === 'social_friend_voice_library') {
+        for (var vl = 0; vl < friends.length; vl++) count += (friends[vl].voiceLibrary || []).length;
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 条', count: count };
+    }
+
+    if (featureKey === 'money_my_account') {
+        var wallet = DataHub.get('wallet', { balance: 0, flows: [] });
+        return { status: '开启', text: '余额 ¥' + (wallet.balance || 0).toFixed(2), count: 1 };
+    }
+    if (featureKey === 'money_my_flow') {
+        var wallet2 = DataHub.get('wallet', { balance: 0, flows: [] });
+        var mf = (wallet2.flows || []).length;
+        return { status: mf > 0 ? '使用中' : '未使用', text: '共 ' + mf + ' 条', count: mf };
+    }
+    if (featureKey === 'money_friend_flow') {
+        for (var ff = 0; ff < friends.length; ff++) count += (friends[ff].flows || []).length;
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 条', count: count };
+    }
+    if (featureKey === 'money_redpacket') {
+        var hbList2 = DataHub.get('hongbaoTransfers', []);
+        for (var hr = 0; hr < hbList2.length; hr++) {
+            if (hbList2[hr].type === 'redpacket' && !hbList2[hr].isGroup) count++;
+        }
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 个', count: count };
+    }
+    if (featureKey === 'money_transfer') {
+        var hbList3 = DataHub.get('hongbaoTransfers', []);
+        for (var ht = 0; ht < hbList3.length; ht++) {
+            if (hbList3[ht].type === 'transfer') count++;
+        }
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 笔', count: count };
+    }
+    if (featureKey === 'money_group_redpacket') {
+        var hbList4 = DataHub.get('hongbaoTransfers', []);
+        for (var hg = 0; hg < hbList4.length; hg++) if (hbList4[hg].isGroup) count++;
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 个', count: count };
+    }
+    if (featureKey === 'money_redpacket_expired') {
+        var hbList5 = DataHub.get('hongbaoTransfers', []);
+        for (var he = 0; he < hbList5.length; he++) if (hbList5[he].status === 'expired') count++;
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 个', count: count };
+    }
+    if (featureKey === 'money_mall') {
+        var mall = DataHub.get('mall', { products: [], categories: [] });
+        return { status: (mall.products || []).length > 0 ? '使用中' : '未使用', text: (mall.products || []).length + ' 件商品', count: (mall.products || []).length };
+    }
+    if (featureKey === 'money_mall_category') {
+        var mall2 = DataHub.get('mall', { products: [], categories: [] });
+        return { status: (mall2.categories || []).length > 0 ? '使用中' : '未使用', text: (mall2.categories || []).length + ' 个分类', count: (mall2.categories || []).length };
+    }
+    if (featureKey === 'money_friend_collection') {
+        for (var fc = 0; fc < friends.length; fc++) count += (friends[fc].collections || []).length;
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 件', count: count };
+    }
+    if (featureKey === 'money_my_collection') {
+        var mc = DataHub.get('myCollections', []);
+        return { status: mc.length > 0 ? '使用中' : '未使用', text: '共 ' + mc.length + ' 件', count: mc.length };
+    }
+    if (featureKey === 'money_purchased') {
+        var w = DataHub.get('wallet', { purchasedItems: [] });
+        var myItems = (w.purchasedItems || []).length;
+        for (var pi = 0; pi < friends.length; pi++) myItems += (friends[pi].purchasedItems || []).length;
+        return { status: myItems > 0 ? '使用中' : '未使用', text: '共 ' + myItems + ' 件', count: myItems };
+    }
+    if (featureKey === 'money_piggy') {
+        var piggyTotal = 0;
+        for (var pg = 0; pg < friends.length; pg++) {
+            if (friends[pg].couple && friends[pg].couple.piggy) piggyTotal += (friends[pg].couple.piggy.balance || 0);
+        }
+        return { status: piggyTotal > 0 ? '使用中' : '未使用', text: '共 ¥' + piggyTotal.toFixed(2), count: piggyTotal };
+    }
+    if (featureKey === 'money_piggy_flow') {
+        for (var pf = 0; pf < friends.length; pf++) {
+            if (friends[pf].couple && friends[pf].couple.piggy) count += (friends[pf].couple.piggy.flows || []).length;
+        }
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 条', count: count };
+    }
+    if (featureKey === 'money_piggy_stats') {
+        return { status: '开启', text: '—', count: 1 };
+    }
+    if (featureKey === 'money_pay_request') {
+        var pr = DataHub.get('payRequests', []);
+        return { status: pr.length > 0 ? '使用中' : '未使用', text: '共 ' + pr.length + ' 次', count: pr.length };
+    }
+    if (featureKey === 'money_help_request') {
+        var hr2 = DataHub.get('helpRequests', []);
+        return { status: hr2.length > 0 ? '使用中' : '未使用', text: '共 ' + hr2.length + ' 次', count: hr2.length };
+    }
+    if (featureKey === 'money_monthly_stats') {
+        var w2 = DataHub.get('wallet', { monthlyStats: {} });
+        var ms = w2.monthlyStats || {};
+        return { status: ms.month ? '使用中' : '未使用', text: ms.month ? ('统计月份 ' + ms.month) : '暂无', count: ms.month ? 1 : 0 };
+    }
+
+    if (featureKey === 'fun_monopoly') {
+        var monopoly = currentMonopolyData;
+        var recs = monopoly.recordsByFriend || {};
+        for (var rf in recs) {
+            count += (recs[rf].single || []).length + (recs[rf].double || []).length;
+        }
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 局', count: count };
+    }
+    if (featureKey === 'fun_monopoly_single') {
+        var monopoly2 = currentMonopolyData;
+        var recs2 = monopoly2.recordsByFriend || {};
+        for (var rf2 in recs2) count += (recs2[rf2].single || []).length;
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 局', count: count };
+    }
+    if (featureKey === 'fun_monopoly_double') {
+        var monopoly3 = currentMonopolyData;
+        var recs3 = monopoly3.recordsByFriend || {};
+        for (var rf3 in recs3) count += (recs3[rf3].double || []).length;
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 局', count: count };
+    }
+    if (featureKey === 'fun_monopoly_custom') {
+        var monopoly4 = currentMonopolyData;
+        var qs = (monopoly4.questions || []).length;
+        return { status: qs > 0 ? '使用中' : '未使用', text: '共 ' + qs + ' 题', count: qs };
+    }
+    if (featureKey === 'fun_monopoly_chat') {
+        return { status: '开启', text: '—', count: 1 };
+    }
+    if (featureKey === 'fun_questionnaire') {
+        return { status: '开启', text: '独立记录', count: 1 };
+    }
+    if (featureKey === 'fun_questionnaire_bank') {
+        return { status: '开启', text: '独立记录', count: 1 };
+    }
+    if (featureKey === 'fun_questionnaire_interaction') {
+        return { status: '开启', text: '独立记录', count: 1 };
+    }
+    if (featureKey === 'fun_vote') {
+        for (var vv = 0; vv < messages.length; vv++) if (messages[vv].isVoteCard) count++;
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 次', count: count };
+    }
+    if (featureKey === 'fun_vote_bank') {
+        var vb = DataHub.get('voteBank', { questions: [] });
+        var vbq = (vb.questions || []).length;
+        return { status: vbq > 0 ? '使用中' : '未使用', text: '共 ' + vbq + ' 题', count: vbq };
+    }
+    if (featureKey === 'fun_vote_special') {
+        for (var vs = 0; vs < messages.length; vs++) {
+            if (messages[vs].isVoteCard && messages[vs].voteCard && messages[vs].voteCard.source === 'bank') count++;
+        }
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 次', count: count };
+    }
+
+    if (featureKey === 'lexicon_public') {
+        var ld = DataHub.get('lexiconData', null);
+        var li = (ld && ld.items) ? ld.items.length : 0;
+        return { status: li > 0 ? '使用中' : '未使用', text: '共 ' + li + ' 条', count: li };
+    }
+    if (featureKey === 'lexicon_public_word') {
+        var ld2 = DataHub.get('lexiconData', null);
+        var lw = 0;
+        if (ld2 && ld2.items) for (var lwi = 0; lwi < ld2.items.length; lwi++) if (ld2.items[lwi].type === 'word') lw++;
+        return { status: lw > 0 ? '使用中' : '未使用', text: '共 ' + lw + ' 条', count: lw };
+    }
+    if (featureKey === 'lexicon_public_emoji') {
+        var ld3 = DataHub.get('lexiconData', null);
+        var le = 0;
+        if (ld3 && ld3.items) for (var lei = 0; lei < ld3.items.length; lei++) if (ld3.items[lei].type === 'emoji') le++;
+        return { status: le > 0 ? '使用中' : '未使用', text: '共 ' + le + ' 条', count: le };
+    }
+    if (featureKey === 'lexicon_public_yanwenzi') {
+        var ld4 = DataHub.get('lexiconData', null);
+        var ly = 0;
+        if (ld4 && ld4.items) for (var lyi = 0; lyi < ld4.items.length; lyi++) if (ld4.items[lyi].type === 'yanwenzi') ly++;
+        return { status: ly > 0 ? '使用中' : '未使用', text: '共 ' + ly + ' 条', count: ly };
+    }
+    if (featureKey === 'lexicon_public_emoji_pack') {
+        var ld5 = DataHub.get('lexiconData', null);
+        var lp = 0;
+        if (ld5 && ld5.items) for (var lpi = 0; lpi < ld5.items.length; lpi++) if (ld5.items[lpi].type === 'emoji_pack') lp++;
+        return { status: lp > 0 ? '使用中' : '未使用', text: '共 ' + lp + ' 条', count: lp };
+    }
+    if (featureKey === 'lexicon_public_pat') {
+        var ld6 = DataHub.get('lexiconData', null);
+        var lpt = 0;
+        if (ld6 && ld6.items) for (var lpti = 0; lpti < ld6.items.length; lpti++) if (ld6.items[lpti].type === 'pat') lpt++;
+        return { status: lpt > 0 ? '使用中' : '未使用', text: '共 ' + lpt + ' 条', count: lpt };
+    }
+    if (featureKey === 'lexicon_public_status') {
+        var ld7 = DataHub.get('lexiconData', null);
+        var ls = 0;
+        if (ld7 && ld7.items) for (var lsi = 0; lsi < ld7.items.length; lsi++) if (ld7.items[lsi].type === 'status') ls++;
+        return { status: ls > 0 ? '使用中' : '未使用', text: '共 ' + ls + ' 条', count: ls };
+    }
+    if (featureKey === 'lexicon_public_weather') {
+        var ld8 = DataHub.get('lexiconData', null);
+        var lwt = 0;
+        if (ld8 && ld8.items) for (var lwti = 0; lwti < ld8.items.length; lwti++) if (ld8.items[lwti].type === 'weather') lwt++;
+        return { status: lwt > 0 ? '使用中' : '未使用', text: '共 ' + lwt + ' 条', count: lwt };
+    }
+    if (featureKey === 'lexicon_my') {
+        var ml = DataHub.get('myLexicon', null);
+        var mli = (ml && ml.items) ? ml.items.length : 0;
+        return { status: mli > 0 ? '使用中' : '未使用', text: '共 ' + mli + ' 条', count: mli };
+    }
+    if (featureKey === 'lexicon_private') {
+        for (var pv = 0; pv < friends.length; pv++) {
+            if (friends[pv].privateLexicon && friends[pv].privateLexicon.items) count += friends[pv].privateLexicon.items.length;
+        }
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 条', count: count };
+    }
+    if (featureKey === 'lexicon_private_pat_locked') {
+        for (var pl = 0; pl < friends.length; pl++) {
+            if (friends[pl].privateLexicon && friends[pl].privateLexicon.items) {
+                for (var pli = 0; pli < friends[pl].privateLexicon.items.length; pli++) {
+                    var it = friends[pl].privateLexicon.items[pli];
+                    if (it.type === 'pat' && it.locked === true) count++;
+                }
+            }
+        }
+        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 条', count: count };
+    }
+    if (featureKey === 'lexicon_dictionary') {
+        var dict = DataHub.get('dictionary', { items: [] });
+        var di = (dict.items || []).length;
+        return { status: di > 0 ? '使用中' : '未使用', text: '共 ' + di + ' 条', count: di };
+    }
+    if (featureKey === 'lexicon_dictionary_pos') {
+        var dict2 = DataHub.get('dictionary', { items: [] });
+        var posSet = {};
+        var dictItems = dict2.items || [];
+        for (var dpi = 0; dpi < dictItems.length; dpi++) {
+            var posArr = getPosArray(dictItems[dpi]);
+            for (var pj = 0; pj < posArr.length; pj++) posSet[posArr[pj]] = true;
+        }
+        var posCount = Object.keys(posSet).length;
+        return { status: posCount > 0 ? '使用中' : '未使用', text: '共 ' + posCount + ' 个词性', count: posCount };
+    }
+    if (featureKey === 'lexicon_dictionary_sentence') {
+        var s = DataHub.get('settings', {});
+        var prob = (s.dictionaryProbability !== undefined) ? s.dictionaryProbability : 50;
+        return { status: '开启', text: '概率 ' + prob + '%', count: 1 };
+    }
+    if (featureKey === 'lexicon_emoji_panel') {
+        var ml2 = DataHub.get('myLexicon', { items: [] });
+        var emp = (ml2.items || []).length;
+        return { status: emp > 0 ? '使用中' : '未使用', text: '共 ' + emp + ' 条', count: emp };
+    }
+
+    if (featureKey === 'couple_space') {
+        var coupleCount = 0;
+        for (var cs = 0; cs < friends.length; cs++) {
+            if (friends[cs].couple && friends[cs].couple.enabled === true) coupleCount++;
+        }
+        return { status: coupleCount > 0 ? '使用中' : '未使用', text: coupleCount + ' 位好友开启', count: coupleCount };
+    }
+    if (featureKey === 'couple_info') {
+        var infoCount = 0;
+        for (var ci = 0; ci < friends.length; ci++) {
+            if (friends[ci].couple && friends[ci].couple.info) {
+                var info = friends[ci].couple.info;
+                if (info.name || info.birthday || info.height || info.nickname || info.startDate) infoCount++;
+            }
+        }
+        return { status: infoCount > 0 ? '使用中' : '未使用', text: infoCount + ' 位好友填写', count: infoCount };
+    }
+
+    return { status: '未使用', text: '暂无数据', count: 0 };
+}
+
+// 全局开关：读取/写入
+function getFeatureGlobalEnabled(featureKey) {
+    var settings = DataHub.get('settings', {});
+    var disabled = settings.disabledFeatures || {};
+    return disabled[featureKey] !== true;
+}
+
+function setFeatureGlobalEnabled(featureKey, enabled) {
+    var settings = DataHub.get('settings', {});
+    if (!settings.disabledFeatures) settings.disabledFeatures = {};
+    if (enabled) {
+        delete settings.disabledFeatures[featureKey];
+    } else {
+        settings.disabledFeatures[featureKey] = true;
+    }
+    DataHub.set('settings', settings);
+}
+
+// 好友屏蔽：读取/写入
+function isFeatureBlockedForFriend(friendId, featureKey) {
+    var friends = DataHub.get('friends', []);
+    var f = friends.find(function(x) { return x.id === friendId; });
+    if (!f) return false;
+    if (!f.featureBlocks) return false;
+    return !!f.featureBlocks[featureKey];
+}
+
+function setFeatureBlockedForFriend(friendId, featureKey, blocked, hideEntry, requestId) {
+    var friends = DataHub.get('friends', []);
+    var f = friends.find(function(x) { return x.id === friendId; });
+    if (!f) return;
+    if (!f.featureBlocks) f.featureBlocks = {};
+    if (blocked) {
+        f.featureBlocks[featureKey] = {
+            blockedAt: Date.now(),
+            reason: '好友申请不想要',
+            requestId: requestId || '',
+            hideEntry: hideEntry === true
+        };
+    } else {
+        delete f.featureBlocks[featureKey];
+    }
+    DataHub.set('friends', friends);
+}
+
+function removeFeatureBlockForFriend(friendId, featureKey) {
+    var friends = DataHub.get('friends', []);
+    var f = friends.find(function(x) { return x.id === friendId; });
+    if (!f) return;
+    if (!f.featureBlocks) return;
+    delete f.featureBlocks[featureKey];
+    DataHub.set('friends', friends);
+}
+
 function renderMessages() {
     const container = document.getElementById('messageList');
     if (!container) return;
@@ -17756,6 +18447,554 @@ window.saveRoomName = function(id) {
         }
     }
 };
+
+// ====== 功能总结：页面渲染 ======
+
+var featureSummaryState = {
+    expandedGroups: {},
+    currentFeatureKey: null,
+    currentFilter: 'pending'
+};
+
+function getUnreadFeatureRequestCount() {
+    return new Promise(function(resolve) {
+        getAllFeatureRequests().then(function(records) {
+            var cnt = 0;
+            for (var i = 0; i < records.length; i++) {
+                if (records[i].data && records[i].data.status === 'pending') cnt++;
+            }
+            resolve(cnt);
+        });
+    });
+}
+
+function getFeatureRequestCountByFeature() {
+    return new Promise(function(resolve) {
+        getAllFeatureRequests().then(function(records) {
+            var map = {};
+            for (var i = 0; i < records.length; i++) {
+                var d = records[i].data;
+                if (!d || d.status !== 'pending') continue;
+                if (!map[d.featureKey]) map[d.featureKey] = [];
+                map[d.featureKey].push(d);
+            }
+            resolve(map);
+        });
+    });
+}
+
+function getUnreadCountByGroup() {
+    return new Promise(function(resolve) {
+        getFeatureRequestCountByFeature().then(function(map) {
+            var groupCount = {};
+            for (var key in map) {
+                var feature = getFeatureByKey(key);
+                if (!feature) continue;
+                var g = feature.group;
+                groupCount[g] = (groupCount[g] || 0) + map[key].length;
+            }
+            resolve(groupCount);
+        });
+    });
+}
+
+function openFeatureSummaryPage() {
+    var container = document.getElementById('subPageContainer');
+    container.innerHTML = '<div class="sub-page active" id="featureSummaryPage" style="z-index:60;background:#ffffff;pointer-events:auto;display:flex;flex-direction:column;">' +
+        '<div class="sub-top">' +
+            '<div class="back-btn" onclick="closeSubPage()">' +
+                '<svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>' +
+            '</div>' +
+            '<span>功能总结</span>' +
+        '</div>' +
+        '<div class="sub-content" id="featureSummaryContent" style="padding:0;overflow-y:auto;pointer-events:auto;flex:1;">' +
+            '<div style="text-align:center;color:#999999;padding:20px;font-size:13px;">加载中...</div>' +
+        '</div>' +
+    '</div>';
+    var subPage = container.querySelector('#featureSummaryPage');
+    if (subPage) {
+        subPage.classList.add('active');
+        subPage.style.pointerEvents = 'auto';
+    }
+    renderFeatureSummaryContent();
+}
+
+function renderFeatureSummaryContent() {
+    var container = document.getElementById('featureSummaryContent');
+    if (!container) return;
+
+    Promise.all([
+        getUnreadCountByGroup(),
+        getFeatureRequestCountByFeature()
+    ]).then(function(results) {
+        var groupUnread = results[0];
+        var featureRequests = results[1];
+
+        var totalUnread = 0;
+        var usedCount = 0;
+        for (var i = 0; i < FEATURE_LIST.length; i++) {
+            var st = calcFeatureStatus(FEATURE_LIST[i].key);
+            if (st.count > 0) usedCount++;
+        }
+        for (var g in groupUnread) totalUnread += groupUnread[g];
+
+        var html = '';
+
+        // 说明条
+        html += '<div style="padding:12px 16px;border-bottom:1px solid var(--theme-lighter, #eef5ef);">' +
+            '<div style="font-size:12px;color:#999999;">这里可以看到所有功能的使用情况，以及好友提交的修改申请</div>' +
+            '<div style="font-size:13px;color:#000000;margin-top:6px;font-weight:500;">共 ' + FEATURE_LIST.length + ' 个功能 · ' + usedCount + ' 个使用中 · ' + totalUnread + ' 条未处理申请</div>' +
+        '</div>';
+
+        var groups = getFeatureGroups();
+        groups.forEach(function(groupName) {
+            var unreadForGroup = groupUnread[groupName] || 0;
+            var hasUnread = unreadForGroup > 0;
+            var expanded;
+            if (featureSummaryState.expandedGroups[groupName] !== undefined) {
+                expanded = featureSummaryState.expandedGroups[groupName];
+            } else {
+                expanded = hasUnread;
+            }
+
+            html += '<div style="border-bottom:1px solid var(--theme-lighter, #eef5ef);">';
+            html += '<div onclick="toggleFeatureGroup(\'' + groupName + '\')" style="padding:12px 16px;display:flex;align-items:center;cursor:pointer;background:#ffffff;">' +
+                '<div style="flex:1;font-size:14px;font-weight:600;color:#000000;">' + groupName +
+                    (hasUnread ? '（' + unreadForGroup + '）' : '') +
+                '</div>' +
+                '<span style="font-size:12px;color:#999999;">' + (expanded ? '收起' : '展开') + '</span>' +
+            '</div>';
+
+            if (expanded) {
+                var featuresInGroup = FEATURE_LIST.filter(function(f) { return f.group === groupName; });
+                featuresInGroup.forEach(function(feature) {
+                    html += renderFeatureRow(feature, featureRequests[feature.key] || []);
+                });
+            }
+            html += '</div>';
+        });
+
+        container.innerHTML = html;
+        bindFeatureSummaryEvents();
+    });
+}
+
+function renderFeatureRow(feature, requests) {
+    var st = calcFeatureStatus(feature.key);
+    var globalEnabled = getFeatureGlobalEnabled(feature.key);
+    var displayStatus = st.status;
+    if (!globalEnabled) displayStatus = '已关闭';
+
+    var reqCount = requests.length;
+    var reqHtml = '';
+    if (reqCount > 0) {
+        var names = [];
+        var friends = DataHub.get('friends', []);
+        var seen = {};
+        for (var i = 0; i < requests.length; i++) {
+            if (seen[requests[i].friendId]) continue;
+            seen[requests[i].friendId] = true;
+            var f = friends.find(function(x) { return x.id === requests[i].friendId; });
+            if (f) names.push(f.name);
+        }
+        var label = '';
+        if (names.length === 1) label = names[0] + ' 申请';
+        else label = names[0] + ' 等 ' + names.length + ' 人申请';
+        reqHtml = '<span style="color:#ff4d4d;font-size:12px;margin-right:6px;">' + label + '</span>';
+    }
+
+    return '<div class="feature-row" data-key="' + feature.key + '" style="padding:10px 16px 10px 24px;display:flex;align-items:center;border-bottom:1px solid var(--theme-lighter, #eef5ef);background:#fafcfa;cursor:pointer;">' +
+        '<div style="flex:1;min-width:0;">' +
+            '<div style="font-size:14px;color:#000000;word-break:break-word;">' + feature.name + '</div>' +
+            '<div style="font-size:12px;color:#999999;margin-top:2px;">' + displayStatus + ' · ' + st.text + '</div>' +
+        '</div>' +
+        '<div style="display:flex;align-items:center;flex-shrink:0;">' +
+            reqHtml +
+            '<label class="feature-switch" onclick="event.stopPropagation();" style="position:relative;display:inline-block;width:38px;height:22px;margin-right:8px;">' +
+                '<input type="checkbox" ' + (globalEnabled ? 'checked' : '') + ' onchange="toggleFeatureGlobal(this,\'' + feature.key + '\')" style="opacity:0;width:0;height:0;">' +
+                '<span style="position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background-color:' + (globalEnabled ? 'var(--theme-main, #d4e9d6)' : '#cccccc') + ';border-radius:22px;transition:0.2s;"></span>' +
+                '<span style="position:absolute;content:\'\';height:16px;width:16px;left:' + (globalEnabled ? '19px' : '3px') + ';bottom:3px;background-color:#ffffff;border-radius:50%;transition:0.2s;"></span>' +
+            '</label>' +
+            '<span style="color:#999999;font-size:16px;">›</span>' +
+        '</div>' +
+    '</div>';
+}
+
+function toggleFeatureGroup(groupName) {
+    if (!featureSummaryState.expandedGroups) featureSummaryState.expandedGroups = {};
+    featureSummaryState.expandedGroups[groupName] = !featureSummaryState.expandedGroups[groupName];
+    renderFeatureSummaryContent();
+}
+
+function toggleFeatureGlobal(checkbox, featureKey) {
+    var enabled = checkbox.checked;
+    setFeatureGlobalEnabled(featureKey, enabled);
+    renderFeatureSummaryContent();
+}
+
+function bindFeatureSummaryEvents() {
+    var container = document.getElementById('featureSummaryContent');
+    if (!container) return;
+    var rows = container.querySelectorAll('.feature-row');
+    for (var i = 0; i < rows.length; i++) {
+        (function(row) {
+            var key = row.getAttribute('data-key');
+            row.addEventListener('click', function(e) {
+                if (e.target.tagName === 'INPUT' || e.target.closest('.feature-switch')) return;
+                openFeatureRequestListPage(key);
+            });
+        })(rows[i]);
+    }
+}
+
+// ====== 申请列表页 ======
+function openFeatureRequestListPage(featureKey) {
+    var feature = getFeatureByKey(featureKey);
+    if (!feature) return;
+    featureSummaryState.currentFeatureKey = featureKey;
+    featureSummaryState.currentFilter = 'pending';
+
+    var container = document.getElementById('subPageContainer');
+    container.innerHTML = '<div class="sub-page active" id="featureRequestPage" style="z-index:65;background:#ffffff;pointer-events:auto;display:flex;flex-direction:column;">' +
+        '<div class="sub-top">' +
+            '<div class="back-btn" onclick="closeFeatureRequestPage()">' +
+                '<svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>' +
+            '</div>' +
+            '<span>' + feature.name + ' · 好友申请</span>' +
+        '</div>' +
+        '<div class="sub-content" id="featureRequestContent" style="padding:16px;overflow-y:auto;pointer-events:auto;flex:1;">' +
+            '<div style="text-align:center;color:#999999;padding:20px;font-size:13px;">加载中...</div>' +
+        '</div>' +
+    '</div>';
+    var subPage = container.querySelector('#featureRequestPage');
+    if (subPage) {
+        subPage.classList.add('active');
+        subPage.style.pointerEvents = 'auto';
+    }
+    renderFeatureRequestPage();
+}
+
+function closeFeatureRequestPage() {
+    featureSummaryState.currentFeatureKey = null;
+    var page = document.getElementById('featureRequestPage');
+    if (page) page.remove();
+    openFeatureSummaryPage();
+}
+
+function renderFeatureRequestPage() {
+    var container = document.getElementById('featureRequestContent');
+    if (!container) return;
+    var featureKey = featureSummaryState.currentFeatureKey;
+    if (!featureKey) return;
+
+    getAllFeatureRequests().then(function(records) {
+        var all = [];
+        for (var i = 0; i < records.length; i++) {
+            var d = records[i].data;
+            if (d && d.featureKey === featureKey) all.push(d);
+        }
+        all.sort(function(a, b) { return (b.createdAt || 0) - (a.createdAt || 0); });
+
+        var pendingCount = 0;
+        var handledCount = 0;
+        for (var j = 0; j < all.length; j++) {
+            if (all[j].status === 'pending') pendingCount++;
+            else handledCount++;
+        }
+
+        var html = '';
+        html += '<div style="font-size:13px;color:#999999;margin-bottom:10px;">共 ' + all.length + ' 条申请 · ' + pendingCount + ' 条未处理</div>';
+
+        var filters = [
+            { key: 'pending', label: '待处理' },
+            { key: 'handled', label: '已处理' },
+            { key: 'all', label: '全部' }
+        ];
+        html += '<div style="display:flex;gap:6px;margin-bottom:12px;">';
+        for (var fi = 0; fi < filters.length; fi++) {
+            var f = filters[fi];
+            var active = (featureSummaryState.currentFilter === f.key);
+            html += '<button class="btn-icon" onclick="switchFeatureRequestFilter(\'' + f.key + '\')" style="flex:1;padding:6px 0;border-radius:20px;border:none;font-size:13px;cursor:pointer;background:' + (active ? 'var(--theme-main, #d4e9d6)' : 'var(--theme-lighter, #eef5ef)') + ';color:' + (active ? '#000000' : '#888888') + ';">' + f.label + '</button>';
+        }
+        html += '</div>';
+
+        var showList = [];
+        var filterKey = featureSummaryState.currentFilter;
+        for (var k = 0; k < all.length; k++) {
+            if (filterKey === 'pending' && all[k].status !== 'pending') continue;
+            if (filterKey === 'handled' && all[k].status === 'pending') continue;
+            showList.push(all[k]);
+        }
+
+        if (showList.length === 0) {
+            html += '<div style="text-align:center;color:#999999;padding:30px 0;font-size:13px;">暂无申请</div>';
+        } else {
+            for (var m = 0; m < showList.length; m++) {
+                html += renderFeatureRequestCard(showList[m]);
+            }
+        }
+
+        container.innerHTML = html;
+        bindFeatureRequestCardEvents();
+    });
+}
+
+function switchFeatureRequestFilter(filterKey) {
+    featureSummaryState.currentFilter = filterKey;
+    renderFeatureRequestPage();
+}
+
+function renderFeatureRequestCard(request) {
+    var friends = DataHub.get('friends', []);
+    var friend = friends.find(function(f) { return f.id === request.friendId; });
+    var friendName = friend ? friend.name : '好友';
+    var avatarContent = friend && friend.avatar && friend.avatar.startsWith('data:image')
+        ? '<img src="' + friend.avatar + '" style="width:100%;height:100%;object-fit:cover;">'
+        : (friendName.charAt(0).toUpperCase() || '?');
+
+    var statusLabel = '';
+    var statusColor = '#999999';
+    if (request.status === 'pending') { statusLabel = '待处理'; statusColor = '#ff4d4d'; }
+    else if (request.status === 'accepted') { statusLabel = '已同意'; statusColor = 'var(--theme-dark, #4a7a4e)'; }
+    else if (request.status === 'rejected') { statusLabel = '已拒绝'; statusColor = '#999999'; }
+    else if (request.status === 'ignored') { statusLabel = '已忽略'; statusColor = '#999999'; }
+    else if (request.status === 'withdrawn') { statusLabel = '已撤回'; statusColor = '#999999'; }
+    else if (request.status === 'revoked') { statusLabel = '已撤销屏蔽'; statusColor = '#999999'; }
+
+    return '<div class="feature-request-card" data-id="' + request.id + '" style="background:#ffffff;border:1px solid #eef5ef;border-radius:12px;padding:12px 14px;margin-bottom:8px;cursor:pointer;">' +
+        '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">' +
+            '<div style="width:32px;height:32px;border-radius:50%;background:var(--theme-main, #d4e9d6);color:#000000;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;flex-shrink:0;overflow:hidden;">' + avatarContent + '</div>' +
+            '<div style="flex:1;min-width:0;">' +
+                '<div style="font-size:14px;color:#000000;font-weight:500;">' + friendName + '</div>' +
+                '<div style="font-size:11px;color:#999999;">' + (request.createdAtStr || '') + '</div>' +
+            '</div>' +
+            '<span style="font-size:12px;color:' + statusColor + ';flex-shrink:0;">' + statusLabel + '</span>' +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">' +
+            '<span style="font-size:11px;background:var(--theme-lighter, #eef5ef);border-radius:10px;padding:2px 8px;color:#000000;">' + request.typeLabel + '</span>' +
+        '</div>' +
+        '<div style="font-size:13px;color:#333333;line-height:1.6;word-break:break-word;">' + (request.reason || '') + '</div>' +
+    '</div>';
+}
+
+function bindFeatureRequestCardEvents() {
+    var container = document.getElementById('featureRequestContent');
+    if (!container) return;
+    var cards = container.querySelectorAll('.feature-request-card');
+    for (var i = 0; i < cards.length; i++) {
+        (function(card) {
+            var id = card.getAttribute('data-id');
+            card.addEventListener('click', function() {
+                openFeatureRequestDetail(id);
+            });
+        })(cards[i]);
+    }
+}
+
+// ====== 申请详情弹窗 ======
+function openFeatureRequestDetail(requestId) {
+    loadFeatureRequest(requestId).then(function(request) {
+        if (!request) {
+            showToast('申请不存在');
+            return;
+        }
+        var friends = DataHub.get('friends', []);
+        var friend = friends.find(function(f) { return f.id === request.friendId; });
+        var friendName = friend ? friend.name : '好友';
+        var avatarContent = friend && friend.avatar && friend.avatar.startsWith('data:image')
+            ? '<img src="' + friend.avatar + '" style="width:100%;height:100%;object-fit:cover;">'
+            : (friendName.charAt(0).toUpperCase() || '?');
+
+        var html = '<div class="modal-title">' + friendName + ' 的申请</div>';
+        html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">' +
+            '<div style="width:40px;height:40px;border-radius:50%;background:var(--theme-main, #d4e9d6);color:#000000;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;flex-shrink:0;overflow:hidden;">' + avatarContent + '</div>' +
+            '<div style="flex:1;min-width:0;">' +
+                '<div style="font-size:14px;font-weight:500;color:#000000;">' + friendName + '</div>' +
+                '<div style="font-size:11px;color:#999999;">' + (request.createdAtStr || '') + '</div>' +
+            '</div>' +
+        '</div>';
+
+        html += '<div class="setting-block no-click" style="margin:0 0 8px 0;padding:10px 12px;">' +
+            '<div style="font-size:12px;color:#999999;">针对功能</div>' +
+            '<div style="font-size:14px;color:#000000;margin-top:2px;">' + request.featureName + '</div>' +
+        '</div>';
+
+        html += '<div class="setting-block no-click" style="margin:0 0 8px 0;padding:10px 12px;">' +
+            '<div style="font-size:12px;color:#999999;">申请类型</div>' +
+            '<div style="font-size:14px;color:#000000;margin-top:2px;">' + request.typeLabel + '</div>' +
+        '</div>';
+
+        html += '<div class="setting-block no-click" style="margin:0 0 8px 0;padding:10px 12px;">' +
+            '<div style="font-size:12px;color:#999999;">好友说明</div>' +
+            '<div style="font-size:14px;color:#000000;margin-top:2px;white-space:pre-wrap;word-break:break-word;">' + (request.reason || '') + '</div>' +
+        '</div>';
+
+        if (request.status === 'pending') {
+            if (request.requestType === 'dislike') {
+                html += '<div style="font-size:12px;color:#999999;margin-bottom:4px;">同意后，' + friendName + ' 将不再收到该功能的推送</div>';
+                html += '<label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#000000;margin-bottom:12px;">' +
+                    '<input type="checkbox" id="featureHideEntryCheckbox"> 同时隐藏该好友的功能入口' +
+                '</label>';
+            }
+            html += '<div class="btn-row" style="justify-content:space-between;">' +
+                '<button class="cancel" onclick="closeModal();handleFeatureRequestAction(\'' + requestId + '\',\'ignored\')">忽略</button>' +
+                '<button class="cancel" onclick="closeModal();showRejectFeatureRequestInput(\'' + requestId + '\')">拒绝</button>' +
+                '<button class="confirm" onclick="closeModal();handleFeatureRequestAction(\'' + requestId + '\',\'accepted\')">同意</button>' +
+            '</div>';
+        } else if (request.status === 'accepted' && request.requestType === 'dislike') {
+            html += '<div style="font-size:13px;color:var(--theme-dark, #4a7a4e);margin-bottom:8px;">已同意</div>';
+            html += '<div class="btn-row" style="justify-content:center;">' +
+                '<button class="cancel" onclick="closeModal();revokeFeatureBlock(\'' + requestId + '\')">撤销屏蔽</button>' +
+                '<button class="confirm" onclick="closeModal()">关闭</button>' +
+            '</div>';
+        } else {
+            var statusLabel = '';
+            if (request.status === 'accepted') statusLabel = '已同意';
+            else if (request.status === 'rejected') statusLabel = '已拒绝';
+            else if (request.status === 'ignored') statusLabel = '已忽略';
+            else if (request.status === 'withdrawn') statusLabel = '已撤回';
+            html += '<div style="text-align:center;font-size:13px;color:#999999;margin-bottom:12px;">' + statusLabel + '</div>';
+            html += '<div class="btn-row" style="justify-content:center;">' +
+                '<button class="confirm" onclick="closeModal()">关闭</button>' +
+            '</div>';
+        }
+
+        showModal(html);
+    });
+}
+
+function showRejectFeatureRequestInput(requestId) {
+    var html = '<div class="modal-title">拒绝申请</div>' +
+        '<input type="text" id="rejectFeatureRequestInput" placeholder="回复好友一句话" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:12px;">' +
+        '<div class="btn-row">' +
+            '<button class="cancel" onclick="closeModal()">取消</button>' +
+            '<button class="confirm" onclick="closeModal();handleFeatureRequestAction(\'' + requestId + '\',\'rejected\',true)">确定拒绝</button>' +
+        '</div>';
+    showModal(html);
+}
+
+function handleFeatureRequestAction(requestId, action, needReply) {
+    var myReply = '';
+    if (action === 'rejected' && needReply) {
+        var input = document.getElementById('rejectFeatureRequestInput');
+        if (input) myReply = input.value.trim();
+        if (!myReply) myReply = '这个功能暂时不改';
+    }
+
+    loadFeatureRequest(requestId).then(function(request) {
+        if (!request) return;
+        if (request.status !== 'pending') {
+            showToast('该申请已处理');
+            return;
+        }
+        request.status = action;
+        request.handledAt = Date.now();
+        request.handledAtStr = getNowTimeStringFull();
+        request.myReply = myReply;
+
+        if (action === 'accepted' && request.requestType === 'dislike') {
+            var hideEntry = false;
+            var cb = document.getElementById('featureHideEntryCheckbox');
+            if (cb) hideEntry = cb.checked;
+            setFeatureBlockedForFriend(request.friendId, request.featureKey, true, hideEntry, requestId);
+        }
+
+        saveFeatureRequest(requestId, request).then(function() {
+            // 插系统消息
+            if (action !== 'ignored') {
+                var friends = DataHub.get('friends', []);
+                var friend = friends.find(function(f) { return f.id === request.friendId; });
+                var friendName = friend ? friend.name : '好友';
+                var sysText = '';
+                if (action === 'accepted') sysText = '你关于【' + request.featureName + '】的申请已同意';
+                else if (action === 'rejected') sysText = '你关于【' + request.featureName + '】的申请被拒绝了' + (myReply ? '：' + myReply : '');
+                var msgs = DataHub.get('messages', []);
+                msgs.push({
+                    id: 'm' + genId(),
+                    chatId: request.friendId,
+                    from: request.friendId,
+                    text: sysText,
+                    time: getNowTimeStringFull(),
+                    timestamp: Date.now(),
+                    unread: (currentChatId === request.friendId) ? 0 : 1
+                });
+                DataHub.set('messages', msgs);
+                if (currentChatId === request.friendId) renderChatMessages();
+                renderMessages();
+            }
+
+            renderFeatureRequestPage();
+            showToast('已处理');
+
+            // 好友可选回一句（30% 概率）
+            if (action !== 'ignored' && Math.random() < 0.3) {
+                setTimeout(function() {
+                    var replyText = generateFeatureRequestReason(request.friendId);
+                    if (!replyText) return;
+                    var now2 = new Date();
+                    var time2 = now2.getFullYear() + '.' + String(now2.getMonth()+1).padStart(2,'0') + '.' + String(now2.getDate()).padStart(2,'0') + ' ' + String(now2.getHours()).padStart(2,'0') + ':' + String(now2.getMinutes()).padStart(2,'0') + ':' + String(now2.getSeconds()).padStart(2,'0');
+                    var msgs2 = DataHub.get('messages', []);
+                    msgs2.push({
+                        id: 'm' + genId(),
+                        chatId: request.friendId,
+                        from: request.friendId,
+                        text: replyText,
+                        time: time2,
+                        timestamp: Date.now(),
+                        unread: (currentChatId === request.friendId) ? 0 : 1
+                    });
+                    DataHub.set('messages', msgs2);
+                    if (currentChatId === request.friendId) renderChatMessages();
+                    renderMessages();
+                }, 3000 + Math.random() * 5000);
+            }
+        });
+    });
+}
+
+function revokeFeatureBlock(requestId) {
+    loadFeatureRequest(requestId).then(function(request) {
+        if (!request) return;
+        removeFeatureBlockForFriend(request.friendId, request.featureKey);
+        request.status = 'revoked';
+        request.handledAt = Date.now();
+        request.handledAtStr = getNowTimeStringFull();
+        saveFeatureRequest(requestId, request).then(function() {
+            renderFeatureRequestPage();
+            showToast('已撤销屏蔽');
+        });
+    });
+}
+
+// ====== 聊天里的申请卡片渲染 ======
+function renderFeatureRequestCardInChat(msg) {
+    var wrapId = 'frCardWrap_' + msg.featureRequestId;
+    var html = '<div id="' + wrapId + '" style="background:#ffffff;border:1px solid var(--theme-main, #d4e9d6);border-radius:12px;padding:14px;width:220px;box-sizing:border-box;">' +
+        '<div style="text-align:center;font-size:13px;color:#999999;padding:8px 0;">加载中...</div>' +
+    '</div>';
+    loadFeatureRequest(msg.featureRequestId).then(function(request) {
+        var el = document.getElementById(wrapId);
+        if (!el) return;
+        if (!request) {
+            el.innerHTML = '<div style="text-align:center;font-size:12px;color:#999999;padding:8px 0;">申请已失效</div>';
+            return;
+        }
+        var statusLabel = '';
+        if (request.status === 'pending') statusLabel = '待处理';
+        else if (request.status === 'accepted') statusLabel = '已同意';
+        else if (request.status === 'rejected') statusLabel = '已拒绝';
+        else if (request.status === 'ignored') statusLabel = '已忽略';
+        else if (request.status === 'withdrawn') statusLabel = '已撤回';
+
+        el.innerHTML = '<div style="font-size:11px;color:#999999;margin-bottom:6px;">功能申请</div>' +
+            '<div style="font-size:14px;font-weight:600;color:#000000;margin-bottom:6px;word-break:break-word;">' + request.featureName + '</div>' +
+            '<div style="font-size:11px;background:var(--theme-lighter, #eef5ef);border-radius:10px;padding:2px 8px;display:inline-block;margin-bottom:8px;color:#000000;">' + request.typeLabel + '</div>' +
+            '<div style="font-size:13px;color:#333333;line-height:1.6;word-break:break-word;margin-bottom:6px;">' + (request.reason || '') + '</div>' +
+            '<div style="font-size:11px;color:#999999;">' + statusLabel + '</div>';
+    });
+    return html;
+}
+
 function renderSettings() {
     const container = document.getElementById('settingsContent');
     if (!container) return;
@@ -17766,6 +19005,10 @@ function renderSettings() {
     <div class="setting-block clickable" onclick="openSubPage('dictionary')">
         <div class="title">词典</div>
     </div>
+        <div class="setting-block clickable" onclick="openFeatureSummaryPage()" style="display:flex;justify-content:space-between;align-items:center;">
+            <div class="title">功能总结</div>
+            <span id="featureSummaryBadge" style="font-size:13px;"></span>
+        </div>
         <div class="setting-block clickable" onclick="openSubPage('settings_detail')">
             <div class="title">聊天设置</div>
         </div>
@@ -17779,6 +19022,16 @@ function renderSettings() {
             <div class="title">导出导入</div>
         </div>
     `;
+    getUnreadFeatureRequestCount().then(function(cnt) {
+        var badge = document.getElementById('featureSummaryBadge');
+        if (badge) {
+            if (cnt > 0) {
+                badge.innerHTML = '<span style="background:#ff4d4d;color:#ffffff;border-radius:30px;padding:0 7px;font-size:11px;line-height:18px;min-width:18px;text-align:center;display:inline-block;">' + cnt + '</span>';
+            } else {
+                badge.innerHTML = '';
+            }
+        }
+    });
 }
 
 function renderMine() {
@@ -18077,6 +19330,10 @@ function invitePlayMonopoly(mode) {
 
 function confirmInviteMonopoly(mode) {
     if (!currentChatId) return;
+    if (isFeatureBlockedForFriend(currentChatId, 'fun_monopoly') || !getFeatureGlobalEnabled('fun_monopoly')) {
+        showToast('该功能已被屏蔽');
+        return;
+    }
     var friends = DataHub.get('friends', []);
     var friend = friends.find(function(f) { return f.id === currentChatId; });
     if (!friend) return;
@@ -21707,10 +22964,11 @@ if (available.length === 0) return;
             var pendingList = [];
 
             for (var i = 0; i < friends.length; i++) {
-    var friend = friends[i];
-    if (Math.random() >= 0.01) continue;
+var friend = friends[i];
+if (isFeatureBlockedForFriend(friend.id, 'fun_questionnaire') || !getFeatureGlobalEnabled('fun_questionnaire')) continue;
+if (Math.random() >= 0.01) continue;
 
-    var count = Math.floor(Math.random() * 15) + 1;
+var count = Math.floor(Math.random() * 15) + 1;
 if (count > available.length) count = available.length;
     var shuffled = available.slice().sort(function() { return Math.random() - 0.5; });
     var picked = shuffled.slice(0, count);
@@ -25385,40 +26643,92 @@ window.exportData = function() {
         var greq = gstore.getAll();
         greq.onsuccess = function() {
             var gameStoreData = greq.result || [];
-            var exportObj = {
-                version: 5,
-                appData: DataHub.getAll(),
-                blobs: processedBlobs,
-                questionnaireStore: questionnaireStoreData,
-                gameStore: gameStoreData
+            var ftx = database.transaction('featureRequestStore', 'readonly');
+            var fstore = ftx.objectStore('featureRequestStore');
+            var freq = fstore.getAll();
+            freq.onsuccess = function() {
+                var featureRequestStoreData = freq.result || [];
+                var exportObj = {
+                    version: 6,
+                    appData: DataHub.getAll(),
+                    blobs: processedBlobs,
+                    questionnaireStore: questionnaireStoreData,
+                    gameStore: gameStoreData,
+                    featureRequestStore: featureRequestStoreData
+                };
+                const json = JSON.stringify(exportObj, null, 2);
+                const blob = new Blob([json], {type: 'application/json'});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = '时间数据_备份.json';
+                a.click();
+                URL.revokeObjectURL(url);
+                showToast('导出成功');
             };
-            const json = JSON.stringify(exportObj, null, 2);
-            const blob = new Blob([json], {type: 'application/json'});
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = '时间数据_备份.json';
-            a.click();
-            URL.revokeObjectURL(url);
-            showToast('导出成功');
+            freq.onerror = function() {
+                var exportObj = {
+                    version: 6,
+                    appData: DataHub.getAll(),
+                    blobs: processedBlobs,
+                    questionnaireStore: questionnaireStoreData,
+                    gameStore: gameStoreData,
+                    featureRequestStore: []
+                };
+                const json = JSON.stringify(exportObj, null, 2);
+                const blob = new Blob([json], {type: 'application/json'});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = '时间数据_备份.json';
+                a.click();
+                URL.revokeObjectURL(url);
+                showToast('导出成功');
+            };
         };
         greq.onerror = function() {
-            var exportObj = {
-                version: 5,
-                appData: DataHub.getAll(),
-                blobs: processedBlobs,
-                questionnaireStore: questionnaireStoreData,
-                gameStore: []
+            var ftx2 = database.transaction('featureRequestStore', 'readonly');
+            var fstore2 = ftx2.objectStore('featureRequestStore');
+            var freq2 = fstore2.getAll();
+            freq2.onsuccess = function() {
+                var featureRequestStoreData2 = freq2.result || [];
+                var exportObj = {
+                    version: 6,
+                    appData: DataHub.getAll(),
+                    blobs: processedBlobs,
+                    questionnaireStore: questionnaireStoreData,
+                    gameStore: [],
+                    featureRequestStore: featureRequestStoreData2
+                };
+                const json = JSON.stringify(exportObj, null, 2);
+                const blob = new Blob([json], {type: 'application/json'});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = '时间数据_备份.json';
+                a.click();
+                URL.revokeObjectURL(url);
+                showToast('导出成功');
             };
-            const json = JSON.stringify(exportObj, null, 2);
-            const blob = new Blob([json], {type: 'application/json'});
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = '时间数据_备份.json';
-            a.click();
-            URL.revokeObjectURL(url);
-            showToast('导出成功');
+            freq2.onerror = function() {
+                var exportObj = {
+                    version: 6,
+                    appData: DataHub.getAll(),
+                    blobs: processedBlobs,
+                    questionnaireStore: questionnaireStoreData,
+                    gameStore: [],
+                    featureRequestStore: []
+                };
+                const json = JSON.stringify(exportObj, null, 2);
+                const blob = new Blob([json], {type: 'application/json'});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = '时间数据_备份.json';
+                a.click();
+                URL.revokeObjectURL(url);
+                showToast('导出成功');
+            };
         };
     };
     qreq.onerror = function() {
@@ -25427,30 +26737,57 @@ window.exportData = function() {
         var greq2 = gstore2.getAll();
         greq2.onsuccess = function() {
             var gameStoreData2 = greq2.result || [];
-            var exportObj = {
-                version: 5,
-                appData: DataHub.getAll(),
-                blobs: processedBlobs,
-                questionnaireStore: [],
-                gameStore: gameStoreData2
+            var ftx3 = database.transaction('featureRequestStore', 'readonly');
+            var fstore3 = ftx3.objectStore('featureRequestStore');
+            var freq3 = fstore3.getAll();
+            freq3.onsuccess = function() {
+                var featureRequestStoreData3 = freq3.result || [];
+                var exportObj = {
+                    version: 6,
+                    appData: DataHub.getAll(),
+                    blobs: processedBlobs,
+                    questionnaireStore: [],
+                    gameStore: gameStoreData2,
+                    featureRequestStore: featureRequestStoreData3
+                };
+                const json = JSON.stringify(exportObj, null, 2);
+                const blob = new Blob([json], {type: 'application/json'});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = '时间数据_备份.json';
+                a.click();
+                URL.revokeObjectURL(url);
+                showToast('导出成功');
             };
-            const json = JSON.stringify(exportObj, null, 2);
-            const blob = new Blob([json], {type: 'application/json'});
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = '时间数据_备份.json';
-            a.click();
-            URL.revokeObjectURL(url);
-            showToast('导出成功');
+            freq3.onerror = function() {
+                var exportObj = {
+                    version: 6,
+                    appData: DataHub.getAll(),
+                    blobs: processedBlobs,
+                    questionnaireStore: [],
+                    gameStore: gameStoreData2,
+                    featureRequestStore: []
+                };
+                const json = JSON.stringify(exportObj, null, 2);
+                const blob = new Blob([json], {type: 'application/json'});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = '时间数据_备份.json';
+                a.click();
+                URL.revokeObjectURL(url);
+                showToast('导出成功');
+            };
         };
         greq2.onerror = function() {
             var exportObj = {
-                version: 5,
+                version: 6,
                 appData: DataHub.getAll(),
                 blobs: processedBlobs,
                 questionnaireStore: [],
-                gameStore: []
+                gameStore: [],
+                featureRequestStore: []
             };
             const json = JSON.stringify(exportObj, null, 2);
             const blob = new Blob([json], {type: 'application/json'});
@@ -25482,7 +26819,7 @@ window.importData = function() {
     reader.onload = function(e) {
         try {
             const data = JSON.parse(e.target.result);
-            if (data && (data.version === 3 || data.version === 4 || data.version === 5) && data.appData) {
+            if (data && (data.version === 3 || data.version === 4 || data.version === 5 || data.version === 6) && data.appData) {
                 DataHub.setAll(data.appData);
                 DataHub.delete('votes');
 
@@ -25499,11 +26836,12 @@ window.importData = function() {
 
                 var questionnaireStoreData = data.questionnaireStore || [];
                 var gameStoreData = data.gameStore || [];
+                var featureRequestStoreData = data.featureRequestStore || [];
 
                 Promise.all(promises).then(function() {
                     return getDB().then(function(database) {
                         return new Promise(function(resolve) {
-                            var tx = database.transaction(['questionnaireStore', 'gameStore'], 'readwrite');
+                            var tx = database.transaction(['questionnaireStore', 'gameStore', 'featureRequestStore'], 'readwrite');
                             var store = tx.objectStore('questionnaireStore');
                             store.clear();
                             for (var qi = 0; qi < questionnaireStoreData.length; qi++) {
@@ -25514,6 +26852,11 @@ window.importData = function() {
                             for (var gi = 0; gi < gameStoreData.length; gi++) {
                                 gStore.put(gameStoreData[gi]);
                             }
+                            var fStore = tx.objectStore('featureRequestStore');
+                            fStore.clear();
+                            for (var fi = 0; fi < featureRequestStoreData.length; fi++) {
+                                fStore.put(featureRequestStoreData[fi]);
+                            }
                             tx.oncomplete = function() { resolve(); };
                             tx.onerror = function() { resolve(); };
                         });
@@ -25522,8 +26865,8 @@ window.importData = function() {
                     renderAll();
                     updateTopBar();
                     closeSubPage();
-                    if (questionnaireStoreData.length > 0 || gameStoreData.length > 0) {
-                        showToast('导入成功，已包含语音、问卷及游戏数据');
+                    if (questionnaireStoreData.length > 0 || gameStoreData.length > 0 || featureRequestStoreData.length > 0) {
+                        showToast('导入成功，已包含语音、问卷、游戏及功能申请数据');
                     } else {
                         showToast('导入成功，已包含语音数据');
                     }
@@ -29010,6 +30353,7 @@ window.confirmBuyProduct = confirmBuyProduct;
 function triggerShoppingDiary(payer, friendId, productInfo) {
     if (payer !== 'friend') return;
     if (!friendId || !productInfo) return;
+    if (isFeatureBlockedForFriend(friendId, 'social_shopping_diary') || !getFeatureGlobalEnabled('social_shopping_diary')) return;
     var friends = DataHub.get('friends', []);
     var friend = friends.find(function(f) { return f.id === friendId; });
     if (!friend) return;
@@ -29356,10 +30700,11 @@ function autoFriendPayRequest() {
 
     var changed = false;
     for (var i = 0; i < friends.length; i++) {
-        var f = friends[i];
+    var f = friends[i];
+    if (isFeatureBlockedForFriend(f.id, 'money_pay_request') || !getFeatureGlobalEnabled('money_pay_request')) continue;
 
-        var todayCount = log[today][f.id] || 0;
-        if (todayCount >= 1) continue;
+    var todayCount = log[today][f.id] || 0;
+    if (todayCount >= 1) continue;
 
         var shouldReq = Math.random() < 0.03;
         if (!shouldReq) continue;
@@ -29950,6 +31295,7 @@ function pushHongbaoResultCard(friendId, hongbaoId, resultType) {
 // 好友随机发红包/转账给我（聊天时 1% 概率触发）
 function tryFriendSendHongbao(chatId) {
     if (!chatId) return;
+    if (isFeatureBlockedForFriend(chatId, 'money_redpacket') || !getFeatureGlobalEnabled('money_redpacket')) return;
     if (Math.random() >= 0.01) return;
 
     var friend = getFriendObj(chatId);
@@ -30454,10 +31800,10 @@ function autoFriendSendGroupRedpacket() {
         if (members.length === 0) continue;
 
         for (var j = 0; j < members.length; j++) {
-            var memberId = members[j];
-            var logKey = room.id + '_' + memberId;
-            if (log[today][logKey]) continue;
-            if (Math.random() >= 0.01) continue;
+    var memberId = members[j];
+    if (isFeatureBlockedForFriend(memberId, 'money_group_redpacket') || !getFeatureGlobalEnabled('money_group_redpacket')) continue;
+    var logKey = room.id + '_' + memberId;
+    if (log[today][logKey]) continue;
 
             var friends = DataHub.get('friends', []);
             var friend = friends.find(function(f) { return f.id === memberId; });
@@ -30949,17 +32295,19 @@ function initAccountSystem() {
     DataHub.set('wallet', wallet);
 
     // 每个好友
-    var friends = DataHub.get('friends', []);
-    for (var i = 0; i < friends.length; i++) {
-        var f = friends[i];
-        if (!f.flows) f.flows = [];
-        if (!f.purchasedItems) f.purchasedItems = [];
-        if (!f.monthlyStats) f.monthlyStats = { month: '', mostCollected: '', mostBought: '', mostBoughtForMe: '', diaryTriggerProduct: '' };
-        if (!f.couple) f.couple = {};
-        if (!f.couple.piggy) f.couple.piggy = { balance: 0, flows: [] };
-        if (!f.couple.piggy.flows) f.couple.piggy.flows = [];
-    }
-    DataHub.set('friends', friends);
+var friends = DataHub.get('friends', []);
+for (var i = 0; i < friends.length; i++) {
+    var f = friends[i];
+    if (!f.flows) f.flows = [];
+    if (!f.purchasedItems) f.purchasedItems = [];
+    if (!f.monthlyStats) f.monthlyStats = { month: '', mostCollected: '', mostBought: '', mostBoughtForMe: '', diaryTriggerProduct: '' };
+    if (!f.couple) f.couple = {};
+    if (!f.couple.piggy) f.couple.piggy = { balance: 0, flows: [] };
+    if (!f.couple.piggy.flows) f.couple.piggy.flows = [];
+    if (!f.featureBlocks) f.featureBlocks = {};
+    if (!f.currentMood) f.currentMood = { level: 'normal', text: '', updatedAt: 0 };
+}
+DataHub.set('friends', friends);
 
     // 商场
 var mall = DataHub.get('mall', null);
@@ -31041,6 +32389,244 @@ function handleVisualViewport() {
 
     viewport.addEventListener('resize', adjust);
     adjust();
+}
+// ====== 功能申请：触发逻辑 ======
+
+var FEATURE_REQUEST_TYPES = [
+    { key: 'dislike', label: '不想要' },
+    { key: 'dontknow', label: '不会用' },
+    { key: 'broken', label: '不能用' },
+    { key: 'optimize', label: '想优化' },
+    { key: 'other', label: '其他' }
+];
+
+function pickRandomFeatureKey() {
+    return FEATURE_LIST[Math.floor(Math.random() * FEATURE_LIST.length)].key;
+}
+
+function pickRandomRequestType() {
+    return FEATURE_REQUEST_TYPES[Math.floor(Math.random() * FEATURE_REQUEST_TYPES.length)];
+}
+
+// 生成好友那句话：词条库 → 词典 → 兜底
+function generateFeatureRequestReason(friendId) {
+    var friends = DataHub.get('friends', []);
+    var friend = friends.find(function(f) { return f.id === friendId; });
+    if (!friend) return '没有词条能表达';
+
+    var allItems = [];
+    var publicData = DataHub.get('lexiconData', null);
+    if (publicData && publicData.items) {
+        publicData.items.forEach(function(item) {
+            if (item.type === 'word' || item.type === 'emoji' || item.type === 'yanwenzi' || item.type === 'status' || item.type === 'weather') {
+                if (item.content) allItems.push(item.content);
+            }
+        });
+    }
+    if (friend.privateLexicon && friend.privateLexicon.items) {
+        friend.privateLexicon.items.forEach(function(item) {
+            if (item.type === 'word' || item.type === 'emoji' || item.type === 'yanwenzi' || item.type === 'status' || item.type === 'weather') {
+                if (item.content) allItems.push(item.content);
+            }
+        });
+    }
+
+    if (allItems.length > 0) {
+        var count = Math.floor(Math.random() * 3) + 1;
+        var selected = [];
+        for (var i = 0; i < count; i++) {
+            selected.push(allItems[Math.floor(Math.random() * allItems.length)]);
+        }
+        return selected.join(' ');
+    }
+
+    if (!isDictionaryEmpty()) {
+        var sentence = generateDictionarySentence();
+        if (sentence) return sentence;
+    }
+
+    return '没有词条能表达';
+}
+
+// 检查该好友对该功能有没有 pending 申请
+function hasPendingFeatureRequest(friendId, featureKey) {
+    return getAllFeatureRequests().then(function(records) {
+        for (var i = 0; i < records.length; i++) {
+            var d = records[i].data;
+            if (d && d.friendId === friendId && d.featureKey === featureKey && d.status === 'pending') return true;
+        }
+        return false;
+    });
+}
+
+// 检查该好友今天是否已经提过申请
+function hasRequestedToday(friendId) {
+    var today = getTodayDateStr();
+    return getAllFeatureRequests().then(function(records) {
+        for (var i = 0; i < records.length; i++) {
+            var d = records[i].data;
+            if (d && d.friendId === friendId && d.createdAtStr && d.createdAtStr.indexOf(today) === 0) return true;
+        }
+        return false;
+    });
+}
+
+// 生成一条申请
+function createFeatureRequest(friendId, featureKey, source) {
+    return hasRequestedToday(friendId).then(function(alreadyToday) {
+        if (alreadyToday) return null;
+        return hasPendingFeatureRequest(friendId, featureKey).then(function(hasPending) {
+            if (hasPending) return null;
+
+            var typeObj = pickRandomRequestType();
+            var feature = getFeatureByKey(featureKey);
+            var featureName = feature ? feature.name : featureKey;
+            var reason = generateFeatureRequestReason(friendId);
+            var now = new Date();
+            var timeStr = now.getFullYear() + '.' + String(now.getMonth()+1).padStart(2,'0') + '.' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
+
+            var id = 'fr' + Date.now() + Math.random().toString(36).substr(2, 4);
+            var request = {
+                id: id,
+                friendId: friendId,
+                featureKey: featureKey,
+                featureName: featureName,
+                requestType: typeObj.key,
+                typeLabel: typeObj.label,
+                reason: reason,
+                status: 'pending',
+                source: source || 'timer',
+                createdAt: Date.now(),
+                createdAtStr: timeStr,
+                handledAt: null,
+                handledAtStr: '',
+                myReply: '',
+                cardMsgId: ''
+            };
+            return saveFeatureRequest(id, request).then(function() {
+                return request;
+            });
+        });
+    });
+}
+
+// 聊天夹带：好友回复时低概率附带申请卡片
+function tryAttachFeatureRequestInChat(chatId) {
+    var friends = DataHub.get('friends', []);
+    var friend = friends.find(function(f) { return f.id === chatId; });
+    if (!friend) return;
+    var mood = friend.currentMood || { level: 'normal' };
+    var baseProb = 2 + Math.random() * 3; // 2%~5%
+    var prob = baseProb;
+    if (mood.level === 'negative') prob *= 2;
+    else if (mood.level === 'positive') prob *= 0.5;
+    if (Math.random() * 100 >= prob) return;
+
+    var featureKey = pickRandomFeatureKey();
+    createFeatureRequest(chatId, featureKey, 'chat').then(function(request) {
+        if (!request) return;
+        var msgs = DataHub.get('messages', []);
+        var cardMsgId = 'm' + genId();
+        msgs.push({
+            id: cardMsgId,
+            chatId: chatId,
+            from: chatId,
+            text: '',
+            time: request.createdAtStr,
+            timestamp: Date.now(),
+            unread: (currentChatId === chatId) ? 0 : 1,
+            isFeatureRequest: true,
+            featureRequestId: request.id
+        });
+        DataHub.set('messages', msgs);
+        request.cardMsgId = cardMsgId;
+        saveFeatureRequest(request.id, request).then(function() {
+            if (currentChatId === chatId) renderChatMessages();
+            renderMessages();
+        });
+    });
+}
+
+// 定时随机触发：每个好友 6~24 小时一次
+function autoFeatureRequestByTimer() {
+    var friends = DataHub.get('friends', []);
+    if (friends.length === 0) return;
+    var log = DataHub.get('featureRequestTimerLog', {});
+    var now = Date.now();
+
+    friends.forEach(function(friend) {
+        var last = log[friend.id] || 0;
+        var interval = 6 * 3600 * 1000 + Math.random() * 18 * 3600 * 1000;
+        if (now - last < interval) return;
+        log[friend.id] = now;
+        DataHub.set('featureRequestTimerLog', log);
+
+        var mood = friend.currentMood || { level: 'normal' };
+        var prob = 50;
+        if (mood.level === 'negative') prob = 100;
+        else if (mood.level === 'positive') prob = 25;
+        if (Math.random() * 100 >= prob) return;
+
+        var featureKey = pickRandomFeatureKey();
+        createFeatureRequest(friend.id, featureKey, mood.level === 'normal' ? 'timer' : 'status');
+    });
+}
+
+// 心情更新：每天随机更新一次
+function updateFriendsMood() {
+    var friends = DataHub.get('friends', []);
+    if (friends.length === 0) return;
+    var now = Date.now();
+    var changed = false;
+    var negativeWords = ['工作', '开会', '学习', '写报告', '赶方案', '出差', '训练', '值班', '写论文', '做实验', '加班', '累', '困'];
+    var positiveWords = ['开心', '想你', '看晚霞', '泡温泉', '散步', '喝茶', '撸猫', '撸狗', '逛花店', '看烟花'];
+
+    for (var i = 0; i < friends.length; i++) {
+        var f = friends[i];
+        if (!f.currentMood) f.currentMood = { level: 'normal', text: '', updatedAt: 0 };
+        if (now - (f.currentMood.updatedAt || 0) < 24 * 3600 * 1000) continue;
+
+        var text = COUPLE_STATUS_TEXTS[Math.floor(Math.random() * COUPLE_STATUS_TEXTS.length)];
+        var level = 'normal';
+        if (negativeWords.indexOf(text) !== -1) level = 'negative';
+        else if (positiveWords.indexOf(text) !== -1) level = 'positive';
+        f.currentMood = { level: level, text: text, updatedAt: now };
+        changed = true;
+    }
+    if (changed) DataHub.set('friends', friends);
+}
+
+// 自动撤回：pending 超 12~24 小时，50% 概率撤回
+function autoWithdrawExpiredFeatureRequests() {
+    getAllFeatureRequests().then(function(records) {
+        var now = Date.now();
+        var changed = false;
+        var chain = Promise.resolve();
+
+        records.forEach(function(rec) {
+            var d = rec.data;
+            if (!d || d.status !== 'pending') return;
+            var age = now - (d.createdAt || 0);
+            if (age < 12 * 3600 * 1000) return;
+            if (age > 24 * 3600 * 1000 && Math.random() >= 0.5) return;
+
+            d.status = 'withdrawn';
+            d.handledAt = now;
+            d.handledAtStr = getNowTimeStringFull();
+            changed = true;
+            chain = chain.then(function() { return saveFeatureRequest(d.id, d); });
+        });
+
+        chain.then(function() {
+            if (changed) {
+                renderMessages();
+                var activePage = document.querySelector('.sub-page.active');
+                if (activePage && activePage.id === 'featureRequestPage') {
+                    renderFeatureRequestPage();
+                }
+            }
+        });
+    });
 }
 
 async function init() {
@@ -31158,6 +32744,17 @@ setInterval(function() {
 setInterval(function() {
     checkMonopolyInviteExpire();
 }, 60 * 1000);
+setInterval(function() {
+    autoFeatureRequestByTimer();
+}, 60 * 60 * 1000);
+setInterval(function() {
+    updateFriendsMood();
+}, 60 * 60 * 1000);
+setInterval(function() {
+    autoWithdrawExpiredFeatureRequests();
+}, 30 * 60 * 1000);
+updateFriendsMood();
+autoWithdrawExpiredFeatureRequests();
 
 startRandomDeleteChecker();
 checkMonopolyInviteExpire();
@@ -31556,6 +33153,31 @@ window.jumpChatToFirstUnread = jumpChatToFirstUnread;
 window.hasAlbumUnread = hasAlbumUnread;
 window.tryFriendCollectImage = tryFriendCollectImage;
 window.pickAlbumImageToSend = pickAlbumImageToSend;
+// ====== 功能总结 window 挂载 ======
+window.openFeatureSummaryPage = openFeatureSummaryPage;
+window.renderFeatureSummaryContent = renderFeatureSummaryContent;
+window.toggleFeatureGroup = toggleFeatureGroup;
+window.toggleFeatureGlobal = toggleFeatureGlobal;
+window.openFeatureRequestListPage = openFeatureRequestListPage;
+window.closeFeatureRequestPage = closeFeatureRequestPage;
+window.renderFeatureRequestPage = renderFeatureRequestPage;
+window.switchFeatureRequestFilter = switchFeatureRequestFilter;
+window.renderFeatureRequestCard = renderFeatureRequestCard;
+window.openFeatureRequestDetail = openFeatureRequestDetail;
+window.showRejectFeatureRequestInput = showRejectFeatureRequestInput;
+window.handleFeatureRequestAction = handleFeatureRequestAction;
+window.revokeFeatureBlock = revokeFeatureBlock;
+window.renderFeatureRequestCardInChat = renderFeatureRequestCardInChat;
+window.getUnreadFeatureRequestCount = getUnreadFeatureRequestCount;
+window.getFeatureRequestCountByFeature = getFeatureRequestCountByFeature;
+window.getUnreadCountByGroup = getUnreadCountByGroup;
+window.calcFeatureStatus = calcFeatureStatus;
+window.getFeatureByKey = getFeatureByKey;
+window.getFeatureGlobalEnabled = getFeatureGlobalEnabled;
+window.setFeatureGlobalEnabled = setFeatureGlobalEnabled;
+window.isFeatureBlockedForFriend = isFeatureBlockedForFriend;
+window.setFeatureBlockedForFriend = setFeatureBlockedForFriend;
+window.removeFeatureBlockForFriend = removeFeatureBlockForFriend;
 window.checkAlbumPendingReplies = checkAlbumPendingReplies;
 window.toggleCouple = toggleCouple;
 window.confirmOpenCouple = confirmOpenCouple;
