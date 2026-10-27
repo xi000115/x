@@ -20643,19 +20643,19 @@ if (state.players.length >= 4) {
 
         var html = '<div class="sub-page active" id="monopolyGamePage" style="z-index:70;background:#ffffff;pointer-events:auto;display:flex;flex-direction:column;position:absolute;top:0;left:0;right:0;bottom:0;height:100%;">' +
 
-    // 顶部栏（固定高度）
-    '<div class="sub-top" style="flex-shrink:0;">' +
+    // 顶部栏（大幅压缩高度）
+    '<div class="sub-top" style="flex-shrink:0; padding: 4px 16px; min-height: 36px;">' +
         '<div class="back-btn" onclick="exitMonopolyGame()">' +
-            '<svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>' +
+            '<svg viewBox="0 0 24 24" style="width:20px;height:20px;"><path d="M15 18l-6-6 6-6"/></svg>' +
         '</div>' +
         '<span style="flex:1;text-align:center;font-size:12px;">大富翁 · ' + (state.mode === 'single' ? '单人模式' : '双人模式') + ' · ' + state.round + '/' + state.maxRound + '回合</span>' +
     '</div>' +
 
     // 游戏区 + 日志/按钮区：合并为一个区域，让日志紧贴棋盘下方
-'<div style="flex:1 1 auto;display:flex;flex-direction:column;min-height:0;overflow:hidden;padding:4px 8px;box-sizing:border-box;">' +
+'<div style="flex:1 1 auto;display:flex;flex-direction:column;min-height:0;overflow:hidden;padding:2px 8px;box-sizing:border-box;">' +
 
-    // 状态条（固定高度，小字）
-    '<div id="monopolyStatusBar" style="flex-shrink:0;display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-bottom:4px;font-size:11px;">' + playersStatusHtml + '</div>' +
+    // 状态条（大幅压缩高度，缩小字体）
+    '<div id="monopolyStatusBar" style="flex-shrink:0;display:flex;flex-wrap:wrap;gap:4px;justify-content:center;margin-bottom:2px;font-size:10px;line-height:1.2;">' + playersStatusHtml + '</div>' +
 
     // 棋盘区（按比例分配高度）
     '<div style="flex:0 0 auto;display:flex;align-items:center;justify-content:center;position:relative;width:100%;">' +
@@ -22060,28 +22060,36 @@ function monopolySendChat() {
     var input = document.getElementById('monopolyChatInput');
     if (!input || !input.value.trim()) return;
     var text = input.value.trim();
+    
+    // 立即清空输入框，防止用户重复点击
+    input.value = '';
+    
     loadMonopolyCurrentGame().then(function(state) {
         if (!state) return;
 
         if (!state.chat) state.chat = [];
         state.chat.push({ from: 'me', text: text, time: Date.now() });
-        input.value = '';
-        saveMonopolyCurrentGame(state);
-        renderMonopolyChatAreaOnly(state);
+        
+        // 强制保存，确保消息进入数据库
+        saveMonopolyCurrentGame(state).then(function() {
+            // 保存成功后，强制重绘评论区并滚动
+            renderMonopolyChatAreaOnly(state);
 
-        // 好友回复（NPC 不回复）
-        if (state.mode === 'single' || state.mode === 'double') {
-            setTimeout(function() {
-                loadMonopolyCurrentGame().then(function(latest) {
-                    if (!latest) return;
-                    var reply = getMonopolyFriendReply(latest.chatId);
-                    if (!latest.chat) latest.chat = [];
-                    latest.chat.push({ from: 'friend', text: reply, time: Date.now() });
-                    saveMonopolyCurrentGame(latest);
-                    renderMonopolyChatAreaOnly(latest);
-                });
-            }, 1000 + Math.random() * 2000);
-        }
+            // 好友回复逻辑
+            if (state.mode === 'single' || state.mode === 'double') {
+                setTimeout(function() {
+                    loadMonopolyCurrentGame().then(function(latest) {
+                        if (!latest) return;
+                        var reply = getMonopolyFriendReply(latest.chatId);
+                        if (!latest.chat) latest.chat = [];
+                        latest.chat.push({ from: 'friend', text: reply, time: Date.now() });
+                        saveMonopolyCurrentGame(latest).then(function() {
+                            renderMonopolyChatAreaOnly(latest);
+                        });
+                    });
+                }, 1000 + Math.random() * 2000);
+            }
+        });
     });
 }
 
