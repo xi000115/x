@@ -17549,461 +17549,261 @@ function getFeatureGroups() {
     return groups;
 }
 
-// 计算某功能的使用统计文案，返回 { status, text, count }
-// status: '使用中' | '开启' | '未使用' | '已关闭'
-function calcFeatureStatus(featureKey) {
+// 功能统计：预计算缓存 + O(1) 读取
+var featureStatsCache = null;
+
+function buildFeatureStatsCache() {
     var friends = DataHub.get('friends', []);
     var chatrooms = DataHub.get('chatrooms', []);
     var messages = DataHub.get('messages', []);
-    var count = 0;
+    var hbList = DataHub.get('hongbaoTransfers', []);
+    var moments = DataHub.get('moments', []);
+    var diary = DataHub.get('diary', []);
+    var lexiconData = DataHub.get('lexiconData', null);
+    var myLexicon = DataHub.get('myLexicon', null);
+    var dict = DataHub.get('dictionary', { items: [] });
+    var voteBank = DataHub.get('voteBank', { questions: [] });
+    var myCollections = DataHub.get('myCollections', []);
+    var payRequests = DataHub.get('payRequests', []);
+    var helpRequests = DataHub.get('helpRequests', []);
+    var wallet = DataHub.get('wallet', { balance: 0, flows: [], purchasedItems: [], monthlyStats: {} });
+    var mall = DataHub.get('mall', { products: [], categories: [] });
+    var settings = DataHub.get('settings', {});
 
-    if (featureKey === 'chat_text') {
-        for (var i = 0; i < messages.length; i++) {
-            var m = messages[i];
-            if (!m.isImage && !m.isVoice && !m.isPat && !m.isVoteCard && !m.isHongbaoCard && !m.isQuestionnaireCard && !m.isHelpRequest && !m.isPayRequest && !m.isCollectionCard && !m.isMonopolyInvite && !m.isHongbaoResult && !m.isRecall) count++;
-        }
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 条', count: count };
-    }
-    if (featureKey === 'chat_image') {
-        for (var i2 = 0; i2 < messages.length; i2++) {
-            var m2 = messages[i2];
-            if (m2.isImage || (m2.text && m2.text.indexOf('<img') !== -1)) count++;
-        }
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 张', count: count };
-    }
-    if (featureKey === 'chat_voice') {
-        for (var i3 = 0; i3 < messages.length; i3++) if (messages[i3].isVoice) count++;
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 条', count: count };
-    }
-    if (featureKey === 'chat_pat') {
-        for (var i4 = 0; i4 < messages.length; i4++) if (messages[i4].isPat) count++;
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 次', count: count };
-    }
-    if (featureKey === 'chat_quote') {
-        for (var i5 = 0; i5 < messages.length; i5++) if (messages[i5].quote) count++;
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 条', count: count };
-    }
-    if (featureKey === 'chat_recall') {
-        for (var i6 = 0; i6 < messages.length; i6++) if (messages[i6].isRecall) count++;
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 条', count: count };
-    }
-    if (featureKey === 'chat_special_quote') {
-        for (var i7 = 0; i7 < messages.length; i7++) if (messages[i7].quote && messages[i7].quote.isSpecialQuote) count++;
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 次', count: count };
-    }
-    if (featureKey === 'chat_video_call') {
-        for (var i8 = 0; i8 < messages.length; i8++) if (messages[i8].text && messages[i8].text.indexOf('通话') !== -1) count++;
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 次', count: count };
-    }
-    if (featureKey === 'chat_hongbao_card') {
-        for (var i9 = 0; i9 < messages.length; i9++) if (messages[i9].isHongbaoCard && !messages[i9].isGroupHongbao) count++;
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 个', count: count };
-    }
-    if (featureKey === 'chat_transfer_card') {
-        var hbList = DataHub.get('hongbaoTransfers', []);
-        for (var h = 0; h < hbList.length; h++) if (hbList[h].type === 'transfer') count++;
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 笔', count: count };
-    }
-    if (featureKey === 'chat_group_hongbao_card') {
-        for (var i10 = 0; i10 < messages.length; i10++) if (messages[i10].isHongbaoCard && messages[i10].isGroupHongbao) count++;
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 个', count: count };
-    }
-    if (featureKey === 'chat_hongbao_result') {
-        for (var i11 = 0; i11 < messages.length; i11++) if (messages[i11].isHongbaoResult) count++;
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 张', count: count };
-    }
-    if (featureKey === 'chat_questionnaire_card') {
-        for (var i12 = 0; i12 < messages.length; i12++) if (messages[i12].isQuestionnaireCard) count++;
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 份', count: count };
-    }
-    if (featureKey === 'chat_vote_card') {
-        for (var i13 = 0; i13 < messages.length; i13++) if (messages[i13].isVoteCard) count++;
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 次', count: count };
-    }
-    if (featureKey === 'chat_help_request') {
-        for (var i14 = 0; i14 < messages.length; i14++) if (messages[i14].isHelpRequest) count++;
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 次', count: count };
-    }
-    if (featureKey === 'chat_pay_request') {
-        for (var i15 = 0; i15 < messages.length; i15++) if (messages[i15].isPayRequest) count++;
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 次', count: count };
-    }
-    if (featureKey === 'chat_collection_card') {
-        for (var i16 = 0; i16 < messages.length; i16++) if (messages[i16].isCollectionCard) count++;
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 张', count: count };
-    }
-    if (featureKey === 'chat_chatroom') {
-        return { status: chatrooms.length > 0 ? '使用中' : '未使用', text: '共 ' + chatrooms.length + ' 个群', count: chatrooms.length };
+    var cache = {};
+
+    var msgStats = {
+        text: 0, image: 0, voice: 0, pat: 0, quote: 0, recall: 0,
+        specialQuote: 0, videoCall: 0, hongbaoCard: 0, groupHongbaoCard: 0,
+        hongbaoResult: 0, questionnaireCard: 0, voteCard: 0, helpRequest: 0,
+        payRequest: 0, collectionCard: 0, voteSpecial: 0
+    };
+    for (var i = 0; i < messages.length; i++) {
+        var m = messages[i];
+        if (!m.isImage && !m.isVoice && !m.isPat && !m.isVoteCard && !m.isHongbaoCard && !m.isQuestionnaireCard && !m.isHelpRequest && !m.isPayRequest && !m.isCollectionCard && !m.isMonopolyInvite && !m.isHongbaoResult && !m.isRecall) msgStats.text++;
+        if (m.isImage || (m.text && m.text.indexOf('<img') !== -1)) msgStats.image++;
+        if (m.isVoice) msgStats.voice++;
+        if (m.isPat) msgStats.pat++;
+        if (m.quote) msgStats.quote++;
+        if (m.isRecall) msgStats.recall++;
+        if (m.quote && m.quote.isSpecialQuote) msgStats.specialQuote++;
+        if (m.text && m.text.indexOf('通话') !== -1) msgStats.videoCall++;
+        if (m.isHongbaoCard && !m.isGroupHongbao) msgStats.hongbaoCard++;
+        if (m.isHongbaoCard && m.isGroupHongbao) msgStats.groupHongbaoCard++;
+        if (m.isHongbaoResult) msgStats.hongbaoResult++;
+        if (m.isQuestionnaireCard) msgStats.questionnaireCard++;
+        if (m.isVoteCard) msgStats.voteCard++;
+        if (m.isHelpRequest) msgStats.helpRequest++;
+        if (m.isPayRequest) msgStats.payRequest++;
+        if (m.isCollectionCard) msgStats.collectionCard++;
+        if (m.isVoteCard && m.voteCard && m.voteCard.source === 'bank') msgStats.voteSpecial++;
     }
 
-    if (featureKey === 'social_moments') {
-        var moments = DataHub.get('moments', []);
-        return { status: moments.length > 0 ? '使用中' : '未使用', text: '共 ' + moments.length + ' 条动态', count: moments.length };
+    var hbStats = { redpacket: 0, transfer: 0, group: 0, expired: 0 };
+    for (var h = 0; h < hbList.length; h++) {
+        var hb = hbList[h];
+        if (hb.type === 'redpacket' && !hb.isGroup) hbStats.redpacket++;
+        if (hb.type === 'transfer') hbStats.transfer++;
+        if (hb.isGroup) hbStats.group++;
+        if (hb.status === 'expired') hbStats.expired++;
     }
-    if (featureKey === 'social_moments_reply') {
-        var moments2 = DataHub.get('moments', []);
-        for (var m2i = 0; m2i < moments2.length; m2i++) count += (moments2[m2i].replies || []).length;
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 条评论', count: count };
-    }
-    if (featureKey === 'social_diary') {
-        var diary = DataHub.get('diary', []);
-        return { status: diary.length > 0 ? '使用中' : '未使用', text: '共 ' + diary.length + ' 篇', count: diary.length };
-    }
-    if (featureKey === 'social_diary_reply') {
-        var diary2 = DataHub.get('diary', []);
-        for (var d2i = 0; d2i < diary2.length; d2i++) count += (diary2[d2i].replies || []).length;
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 条留言', count: count };
-    }
-    if (featureKey === 'social_friend_moments') {
-        for (var fm = 0; fm < friends.length; fm++) count += (friends[fm].moments || []).length;
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 条', count: count };
-    }
-    if (featureKey === 'social_friend_moments_reply') {
-        for (var fm2 = 0; fm2 < friends.length; fm2++) {
-            var fms = friends[fm2].moments || [];
-            for (var fmr = 0; fmr < fms.length; fmr++) count += (fms[fmr].replies || []).length;
+
+    var frStats = {
+        friendMoments: 0, friendMomentsReply: 0, friendDiary: 0, friendDiaryReply: 0,
+        shoppingDiary: 0, shoppingDiaryReply: 0, letter: 0, letterReply: 0,
+        privateAlbum: 0, albumMessage: 0, albumDeleteRequest: 0,
+        statusCalendar: 0, statusCalendarReply: 0, friendVoiceLibrary: 0,
+        friendFlow: 0, friendCollection: 0, purchasedFriend: 0,
+        privateLexicon: 0, privateLexiconPatLocked: 0,
+        piggyTotal: 0, piggyFlow: 0, coupleEnabled: 0, coupleInfo: 0
+    };
+    for (var fi = 0; fi < friends.length; fi++) {
+        var f = friends[fi];
+        var fMoments = f.moments || [];
+        for (var fmi = 0; fmi < fMoments.length; fmi++) {
+            frStats.friendMoments++;
+            frStats.friendMomentsReply += (fMoments[fmi].replies || []).length;
         }
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 条', count: count };
-    }
-    if (featureKey === 'social_friend_diary') {
-        for (var fd = 0; fd < friends.length; fd++) count += (friends[fd].diary || []).length;
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 篇', count: count };
-    }
-    if (featureKey === 'social_friend_diary_reply') {
-        for (var fd2 = 0; fd2 < friends.length; fd2++) {
-            var fds = friends[fd2].diary || [];
-            for (var fdr = 0; fdr < fds.length; fdr++) count += (fds[fdr].replies || []).length;
+        var fDiary = f.diary || [];
+        for (var fdi = 0; fdi < fDiary.length; fdi++) {
+            frStats.friendDiary++;
+            frStats.friendDiaryReply += (fDiary[fdi].replies || []).length;
         }
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 条', count: count };
-    }
-    if (featureKey === 'social_shopping_diary') {
-        for (var sd = 0; sd < friends.length; sd++) count += (friends[sd].shoppingDiary || []).length;
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 篇', count: count };
-    }
-    if (featureKey === 'social_shopping_diary_reply') {
-        for (var sd2 = 0; sd2 < friends.length; sd2++) {
-            var sds = friends[sd2].shoppingDiary || [];
-            for (var sdr = 0; sdr < sds.length; sdr++) count += (sds[sdr].replies || []).length;
+        var fShop = f.shoppingDiary || [];
+        for (var fsi = 0; fsi < fShop.length; fsi++) {
+            frStats.shoppingDiary++;
+            frStats.shoppingDiaryReply += (fShop[fsi].replies || []).length;
         }
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 条', count: count };
-    }
-    if (featureKey === 'social_letter') {
-        for (var lt = 0; lt < friends.length; lt++) {
-            var L = friends[lt].letters || {};
-            count += (L.toHim || []).length + (L.hisReply || []).length + (L.fromHim || []).length + (L.myReply || []).length;
+        var L = f.letters || {};
+        frStats.letter += (L.toHim || []).length + (L.hisReply || []).length + (L.fromHim || []).length + (L.myReply || []).length;
+        frStats.letterReply += (L.hisReply || []).length + (L.myReply || []).length;
+        var albums = f.privateAlbum || [];
+        for (var ai = 0; ai < albums.length; ai++) {
+            frStats.privateAlbum++;
+            frStats.albumMessage += (albums[ai].messages || []).length;
+            if (albums[ai].status === 'requesting') frStats.albumDeleteRequest++;
         }
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 封', count: count };
-    }
-    if (featureKey === 'social_letter_reply') {
-        for (var lr = 0; lr < friends.length; lr++) {
-            var L2 = friends[lr].letters || {};
-            count += (L2.hisReply || []).length + (L2.myReply || []).length;
-        }
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 封', count: count };
-    }
-    if (featureKey === 'social_friend_profile') {
-        return { status: '开启', text: friends.length + ' 位好友', count: friends.length };
-    }
-    if (featureKey === 'social_private_album') {
-        for (var pa = 0; pa < friends.length; pa++) count += (friends[pa].privateAlbum || []).length;
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 张', count: count };
-    }
-    if (featureKey === 'social_album_message') {
-        for (var am = 0; am < friends.length; am++) {
-            var albums = friends[am].privateAlbum || [];
-            for (var ami = 0; ami < albums.length; ami++) count += (albums[ami].messages || []).length;
-        }
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 条', count: count };
-    }
-    if (featureKey === 'social_album_delete_request') {
-        for (var adr = 0; adr < friends.length; adr++) {
-            var albums2 = friends[adr].privateAlbum || [];
-            for (var adri = 0; adri < albums2.length; adri++) {
-                if (albums2[adri].status === 'requesting') count++;
+        if (f.couple && f.couple.statusCalendar) {
+            var calKeys = Object.keys(f.couple.statusCalendar);
+            frStats.statusCalendar += calKeys.length;
+            for (var cki = 0; cki < calKeys.length; cki++) {
+                var dayData = f.couple.statusCalendar[calKeys[cki]];
+                if (dayData && dayData.myReply) frStats.statusCalendarReply++;
             }
         }
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 次', count: count };
-    }
-    if (featureKey === 'social_status_calendar') {
-        for (var sc = 0; sc < friends.length; sc++) {
-            if (friends[sc].couple && friends[sc].couple.statusCalendar) {
-                count += Object.keys(friends[sc].couple.statusCalendar).length;
+        frStats.friendVoiceLibrary += (f.voiceLibrary || []).length;
+        frStats.friendFlow += (f.flows || []).length;
+        frStats.friendCollection += (f.collections || []).length;
+        frStats.purchasedFriend += (f.purchasedItems || []).length;
+        if (f.privateLexicon && f.privateLexicon.items) {
+            frStats.privateLexicon += f.privateLexicon.items.length;
+            for (var pli = 0; pli < f.privateLexicon.items.length; pli++) {
+                var it = f.privateLexicon.items[pli];
+                if (it.type === 'pat' && it.locked === true) frStats.privateLexiconPatLocked++;
             }
         }
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 天', count: count };
-    }
-    if (featureKey === 'social_status_calendar_reply') {
-        for (var scr = 0; scr < friends.length; scr++) {
-            if (friends[scr].couple && friends[scr].couple.statusCalendar) {
-                var cal = friends[scr].couple.statusCalendar;
-                for (var ck in cal) {
-                    if (cal[ck] && cal[ck].myReply) count++;
-                }
-            }
+        if (f.couple && f.couple.piggy) {
+            frStats.piggyTotal += (f.couple.piggy.balance || 0);
+            frStats.piggyFlow += (f.couple.piggy.flows || []).length;
         }
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 条', count: count };
-    }
-    if (featureKey === 'social_friend_voice_library') {
-        for (var vl = 0; vl < friends.length; vl++) count += (friends[vl].voiceLibrary || []).length;
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 条', count: count };
+        if (f.couple && f.couple.enabled === true) frStats.coupleEnabled++;
+        if (f.couple && f.couple.info) {
+            var info = f.couple.info;
+            if (info.name || info.birthday || info.height || info.nickname || info.startDate) frStats.coupleInfo++;
+        }
     }
 
-    if (featureKey === 'money_my_account') {
-        var wallet = DataHub.get('wallet', { balance: 0, flows: [] });
-        return { status: '开启', text: '余额 ¥' + (wallet.balance || 0).toFixed(2), count: 1 };
-    }
-    if (featureKey === 'money_my_flow') {
-        var wallet2 = DataHub.get('wallet', { balance: 0, flows: [] });
-        var mf = (wallet2.flows || []).length;
-        return { status: mf > 0 ? '使用中' : '未使用', text: '共 ' + mf + ' 条', count: mf };
-    }
-    if (featureKey === 'money_friend_flow') {
-        for (var ff = 0; ff < friends.length; ff++) count += (friends[ff].flows || []).length;
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 条', count: count };
-    }
-    if (featureKey === 'money_redpacket') {
-        var hbList2 = DataHub.get('hongbaoTransfers', []);
-        for (var hr = 0; hr < hbList2.length; hr++) {
-            if (hbList2[hr].type === 'redpacket' && !hbList2[hr].isGroup) count++;
-        }
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 个', count: count };
-    }
-    if (featureKey === 'money_transfer') {
-        var hbList3 = DataHub.get('hongbaoTransfers', []);
-        for (var ht = 0; ht < hbList3.length; ht++) {
-            if (hbList3[ht].type === 'transfer') count++;
-        }
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 笔', count: count };
-    }
-    if (featureKey === 'money_group_redpacket') {
-        var hbList4 = DataHub.get('hongbaoTransfers', []);
-        for (var hg = 0; hg < hbList4.length; hg++) if (hbList4[hg].isGroup) count++;
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 个', count: count };
-    }
-    if (featureKey === 'money_redpacket_expired') {
-        var hbList5 = DataHub.get('hongbaoTransfers', []);
-        for (var he = 0; he < hbList5.length; he++) if (hbList5[he].status === 'expired') count++;
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 个', count: count };
-    }
-    if (featureKey === 'money_mall') {
-        var mall = DataHub.get('mall', { products: [], categories: [] });
-        return { status: (mall.products || []).length > 0 ? '使用中' : '未使用', text: (mall.products || []).length + ' 件商品', count: (mall.products || []).length };
-    }
-    if (featureKey === 'money_mall_category') {
-        var mall2 = DataHub.get('mall', { products: [], categories: [] });
-        return { status: (mall2.categories || []).length > 0 ? '使用中' : '未使用', text: (mall2.categories || []).length + ' 个分类', count: (mall2.categories || []).length };
-    }
-    if (featureKey === 'money_friend_collection') {
-        for (var fc = 0; fc < friends.length; fc++) count += (friends[fc].collections || []).length;
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 件', count: count };
-    }
-    if (featureKey === 'money_my_collection') {
-        var mc = DataHub.get('myCollections', []);
-        return { status: mc.length > 0 ? '使用中' : '未使用', text: '共 ' + mc.length + ' 件', count: mc.length };
-    }
-    if (featureKey === 'money_purchased') {
-        var w = DataHub.get('wallet', { purchasedItems: [] });
-        var myItems = (w.purchasedItems || []).length;
-        for (var pi = 0; pi < friends.length; pi++) myItems += (friends[pi].purchasedItems || []).length;
-        return { status: myItems > 0 ? '使用中' : '未使用', text: '共 ' + myItems + ' 件', count: myItems };
-    }
-    if (featureKey === 'money_piggy') {
-        var piggyTotal = 0;
-        for (var pg = 0; pg < friends.length; pg++) {
-            if (friends[pg].couple && friends[pg].couple.piggy) piggyTotal += (friends[pg].couple.piggy.balance || 0);
-        }
-        return { status: piggyTotal > 0 ? '使用中' : '未使用', text: '共 ¥' + piggyTotal.toFixed(2), count: piggyTotal };
-    }
-    if (featureKey === 'money_piggy_flow') {
-        for (var pf = 0; pf < friends.length; pf++) {
-            if (friends[pf].couple && friends[pf].couple.piggy) count += (friends[pf].couple.piggy.flows || []).length;
-        }
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 条', count: count };
-    }
-    if (featureKey === 'money_piggy_stats') {
-        return { status: '开启', text: '—', count: 1 };
-    }
-    if (featureKey === 'money_pay_request') {
-        var pr = DataHub.get('payRequests', []);
-        return { status: pr.length > 0 ? '使用中' : '未使用', text: '共 ' + pr.length + ' 次', count: pr.length };
-    }
-    if (featureKey === 'money_help_request') {
-        var hr2 = DataHub.get('helpRequests', []);
-        return { status: hr2.length > 0 ? '使用中' : '未使用', text: '共 ' + hr2.length + ' 次', count: hr2.length };
-    }
-    if (featureKey === 'money_monthly_stats') {
-        var w2 = DataHub.get('wallet', { monthlyStats: {} });
-        var ms = w2.monthlyStats || {};
-        return { status: ms.month ? '使用中' : '未使用', text: ms.month ? ('统计月份 ' + ms.month) : '暂无', count: ms.month ? 1 : 0 };
-    }
+    var myMomentsReplyCount = 0;
+    for (var mmi = 0; mmi < moments.length; mmi++) myMomentsReplyCount += (moments[mmi].replies || []).length;
+    var myDiaryReplyCount = 0;
+    for (var mdi = 0; mdi < diary.length; mdi++) myDiaryReplyCount += (diary[mdi].replies || []).length;
 
-    if (featureKey === 'fun_monopoly') {
-        var monopoly = currentMonopolyData;
-        var recs = monopoly.recordsByFriend || {};
+    var lexItems = (lexiconData && lexiconData.items) ? lexiconData.items : [];
+    var lexTypeCount = { word: 0, emoji: 0, yanwenzi: 0, emoji_pack: 0, pat: 0, status: 0, weather: 0 };
+    for (var li = 0; li < lexItems.length; li++) {
+        var lt = lexItems[li].type;
+        if (lexTypeCount[lt] !== undefined) lexTypeCount[lt]++;
+    }
+    var myLexItems = (myLexicon && myLexicon.items) ? myLexicon.items : [];
+
+    var dictItems = dict.items || [];
+    var posSet = {};
+    for (var di = 0; di < dictItems.length; di++) {
+        var posArr = getPosArray(dictItems[di]);
+        for (var pj = 0; pj < posArr.length; pj++) posSet[posArr[pj]] = true;
+    }
+    var posCount = Object.keys(posSet).length;
+
+    var monoStats = { total: 0, single: 0, double: 0, question: 0 };
+    if (currentMonopolyData) {
+        var recs = currentMonopolyData.recordsByFriend || {};
         for (var rf in recs) {
-            count += (recs[rf].single || []).length + (recs[rf].double || []).length;
+            monoStats.single += (recs[rf].single || []).length;
+            monoStats.double += (recs[rf].double || []).length;
         }
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 局', count: count };
-    }
-    if (featureKey === 'fun_monopoly_single') {
-        var monopoly2 = currentMonopolyData;
-        var recs2 = monopoly2.recordsByFriend || {};
-        for (var rf2 in recs2) count += (recs2[rf2].single || []).length;
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 局', count: count };
-    }
-    if (featureKey === 'fun_monopoly_double') {
-        var monopoly3 = currentMonopolyData;
-        var recs3 = monopoly3.recordsByFriend || {};
-        for (var rf3 in recs3) count += (recs3[rf3].double || []).length;
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 局', count: count };
-    }
-    if (featureKey === 'fun_monopoly_custom') {
-        var monopoly4 = currentMonopolyData;
-        var qs = (monopoly4.questions || []).length;
-        return { status: qs > 0 ? '使用中' : '未使用', text: '共 ' + qs + ' 题', count: qs };
-    }
-    if (featureKey === 'fun_monopoly_chat') {
-        return { status: '开启', text: '—', count: 1 };
-    }
-    if (featureKey === 'fun_questionnaire') {
-        return { status: '开启', text: '独立记录', count: 1 };
-    }
-    if (featureKey === 'fun_questionnaire_bank') {
-        return { status: '开启', text: '独立记录', count: 1 };
-    }
-    if (featureKey === 'fun_questionnaire_interaction') {
-        return { status: '开启', text: '独立记录', count: 1 };
-    }
-    if (featureKey === 'fun_vote') {
-        for (var vv = 0; vv < messages.length; vv++) if (messages[vv].isVoteCard) count++;
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 次', count: count };
-    }
-    if (featureKey === 'fun_vote_bank') {
-        var vb = DataHub.get('voteBank', { questions: [] });
-        var vbq = (vb.questions || []).length;
-        return { status: vbq > 0 ? '使用中' : '未使用', text: '共 ' + vbq + ' 题', count: vbq };
-    }
-    if (featureKey === 'fun_vote_special') {
-        for (var vs = 0; vs < messages.length; vs++) {
-            if (messages[vs].isVoteCard && messages[vs].voteCard && messages[vs].voteCard.source === 'bank') count++;
-        }
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 次', count: count };
+        monoStats.total = monoStats.single + monoStats.double;
+        monoStats.question = (currentMonopolyData.questions || []).length;
     }
 
-    if (featureKey === 'lexicon_public') {
-        var ld = DataHub.get('lexiconData', null);
-        var li = (ld && ld.items) ? ld.items.length : 0;
-        return { status: li > 0 ? '使用中' : '未使用', text: '共 ' + li + ' 条', count: li };
-    }
-    if (featureKey === 'lexicon_public_word') {
-        var ld2 = DataHub.get('lexiconData', null);
-        var lw = 0;
-        if (ld2 && ld2.items) for (var lwi = 0; lwi < ld2.items.length; lwi++) if (ld2.items[lwi].type === 'word') lw++;
-        return { status: lw > 0 ? '使用中' : '未使用', text: '共 ' + lw + ' 条', count: lw };
-    }
-    if (featureKey === 'lexicon_public_emoji') {
-        var ld3 = DataHub.get('lexiconData', null);
-        var le = 0;
-        if (ld3 && ld3.items) for (var lei = 0; lei < ld3.items.length; lei++) if (ld3.items[lei].type === 'emoji') le++;
-        return { status: le > 0 ? '使用中' : '未使用', text: '共 ' + le + ' 条', count: le };
-    }
-    if (featureKey === 'lexicon_public_yanwenzi') {
-        var ld4 = DataHub.get('lexiconData', null);
-        var ly = 0;
-        if (ld4 && ld4.items) for (var lyi = 0; lyi < ld4.items.length; lyi++) if (ld4.items[lyi].type === 'yanwenzi') ly++;
-        return { status: ly > 0 ? '使用中' : '未使用', text: '共 ' + ly + ' 条', count: ly };
-    }
-    if (featureKey === 'lexicon_public_emoji_pack') {
-        var ld5 = DataHub.get('lexiconData', null);
-        var lp = 0;
-        if (ld5 && ld5.items) for (var lpi = 0; lpi < ld5.items.length; lpi++) if (ld5.items[lpi].type === 'emoji_pack') lp++;
-        return { status: lp > 0 ? '使用中' : '未使用', text: '共 ' + lp + ' 条', count: lp };
-    }
-    if (featureKey === 'lexicon_public_pat') {
-        var ld6 = DataHub.get('lexiconData', null);
-        var lpt = 0;
-        if (ld6 && ld6.items) for (var lpti = 0; lpti < ld6.items.length; lpti++) if (ld6.items[lpti].type === 'pat') lpt++;
-        return { status: lpt > 0 ? '使用中' : '未使用', text: '共 ' + lpt + ' 条', count: lpt };
-    }
-    if (featureKey === 'lexicon_public_status') {
-        var ld7 = DataHub.get('lexiconData', null);
-        var ls = 0;
-        if (ld7 && ld7.items) for (var lsi = 0; lsi < ld7.items.length; lsi++) if (ld7.items[lsi].type === 'status') ls++;
-        return { status: ls > 0 ? '使用中' : '未使用', text: '共 ' + ls + ' 条', count: ls };
-    }
-    if (featureKey === 'lexicon_public_weather') {
-        var ld8 = DataHub.get('lexiconData', null);
-        var lwt = 0;
-        if (ld8 && ld8.items) for (var lwti = 0; lwti < ld8.items.length; lwti++) if (ld8.items[lwti].type === 'weather') lwt++;
-        return { status: lwt > 0 ? '使用中' : '未使用', text: '共 ' + lwt + ' 条', count: lwt };
-    }
-    if (featureKey === 'lexicon_my') {
-        var ml = DataHub.get('myLexicon', null);
-        var mli = (ml && ml.items) ? ml.items.length : 0;
-        return { status: mli > 0 ? '使用中' : '未使用', text: '共 ' + mli + ' 条', count: mli };
-    }
-    if (featureKey === 'lexicon_private') {
-        for (var pv = 0; pv < friends.length; pv++) {
-            if (friends[pv].privateLexicon && friends[pv].privateLexicon.items) count += friends[pv].privateLexicon.items.length;
-        }
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 条', count: count };
-    }
-    if (featureKey === 'lexicon_private_pat_locked') {
-        for (var pl = 0; pl < friends.length; pl++) {
-            if (friends[pl].privateLexicon && friends[pl].privateLexicon.items) {
-                for (var pli = 0; pli < friends[pl].privateLexicon.items.length; pli++) {
-                    var it = friends[pl].privateLexicon.items[pli];
-                    if (it.type === 'pat' && it.locked === true) count++;
-                }
-            }
-        }
-        return { status: count > 0 ? '使用中' : '未使用', text: '共 ' + count + ' 条', count: count };
-    }
-    if (featureKey === 'lexicon_dictionary') {
-        var dict = DataHub.get('dictionary', { items: [] });
-        var di = (dict.items || []).length;
-        return { status: di > 0 ? '使用中' : '未使用', text: '共 ' + di + ' 条', count: di };
-    }
-    if (featureKey === 'lexicon_dictionary_pos') {
-        var dict2 = DataHub.get('dictionary', { items: [] });
-        var posSet = {};
-        var dictItems = dict2.items || [];
-        for (var dpi = 0; dpi < dictItems.length; dpi++) {
-            var posArr = getPosArray(dictItems[dpi]);
-            for (var pj = 0; pj < posArr.length; pj++) posSet[posArr[pj]] = true;
-        }
-        var posCount = Object.keys(posSet).length;
-        return { status: posCount > 0 ? '使用中' : '未使用', text: '共 ' + posCount + ' 个词性', count: posCount };
-    }
-    if (featureKey === 'lexicon_dictionary_sentence') {
-        var s = DataHub.get('settings', {});
-        var prob = (s.dictionaryProbability !== undefined) ? s.dictionaryProbability : 50;
-        return { status: '开启', text: '概率 ' + prob + '%', count: 1 };
-    }
-    if (featureKey === 'lexicon_emoji_panel') {
-        var ml2 = DataHub.get('myLexicon', { items: [] });
-        var emp = (ml2.items || []).length;
-        return { status: emp > 0 ? '使用中' : '未使用', text: '共 ' + emp + ' 条', count: emp };
-    }
+    cache['chat_text'] = { status: msgStats.text > 0 ? '使用中' : '未使用', text: '共 ' + msgStats.text + ' 条', count: msgStats.text };
+    cache['chat_image'] = { status: msgStats.image > 0 ? '使用中' : '未使用', text: '共 ' + msgStats.image + ' 张', count: msgStats.image };
+    cache['chat_voice'] = { status: msgStats.voice > 0 ? '使用中' : '未使用', text: '共 ' + msgStats.voice + ' 条', count: msgStats.voice };
+    cache['chat_pat'] = { status: msgStats.pat > 0 ? '使用中' : '未使用', text: '共 ' + msgStats.pat + ' 次', count: msgStats.pat };
+    cache['chat_quote'] = { status: msgStats.quote > 0 ? '使用中' : '未使用', text: '共 ' + msgStats.quote + ' 条', count: msgStats.quote };
+    cache['chat_recall'] = { status: msgStats.recall > 0 ? '使用中' : '未使用', text: '共 ' + msgStats.recall + ' 条', count: msgStats.recall };
+    cache['chat_special_quote'] = { status: msgStats.specialQuote > 0 ? '使用中' : '未使用', text: '共 ' + msgStats.specialQuote + ' 次', count: msgStats.specialQuote };
+    cache['chat_video_call'] = { status: msgStats.videoCall > 0 ? '使用中' : '未使用', text: '共 ' + msgStats.videoCall + ' 次', count: msgStats.videoCall };
+    cache['chat_hongbao_card'] = { status: msgStats.hongbaoCard > 0 ? '使用中' : '未使用', text: '共 ' + msgStats.hongbaoCard + ' 个', count: msgStats.hongbaoCard };
+    cache['chat_transfer_card'] = { status: hbStats.transfer > 0 ? '使用中' : '未使用', text: '共 ' + hbStats.transfer + ' 笔', count: hbStats.transfer };
+    cache['chat_group_hongbao_card'] = { status: msgStats.groupHongbaoCard > 0 ? '使用中' : '未使用', text: '共 ' + msgStats.groupHongbaoCard + ' 个', count: msgStats.groupHongbaoCard };
+    cache['chat_hongbao_result'] = { status: msgStats.hongbaoResult > 0 ? '使用中' : '未使用', text: '共 ' + msgStats.hongbaoResult + ' 张', count: msgStats.hongbaoResult };
+    cache['chat_questionnaire_card'] = { status: msgStats.questionnaireCard > 0 ? '使用中' : '未使用', text: '共 ' + msgStats.questionnaireCard + ' 份', count: msgStats.questionnaireCard };
+    cache['chat_vote_card'] = { status: msgStats.voteCard > 0 ? '使用中' : '未使用', text: '共 ' + msgStats.voteCard + ' 次', count: msgStats.voteCard };
+    cache['chat_help_request'] = { status: msgStats.helpRequest > 0 ? '使用中' : '未使用', text: '共 ' + msgStats.helpRequest + ' 次', count: msgStats.helpRequest };
+    cache['chat_pay_request'] = { status: msgStats.payRequest > 0 ? '使用中' : '未使用', text: '共 ' + msgStats.payRequest + ' 次', count: msgStats.payRequest };
+    cache['chat_collection_card'] = { status: msgStats.collectionCard > 0 ? '使用中' : '未使用', text: '共 ' + msgStats.collectionCard + ' 张', count: msgStats.collectionCard };
+    cache['chat_chatroom'] = { status: chatrooms.length > 0 ? '使用中' : '未使用', text: '共 ' + chatrooms.length + ' 个群', count: chatrooms.length };
 
-    if (featureKey === 'couple_space') {
-        var coupleCount = 0;
-        for (var cs = 0; cs < friends.length; cs++) {
-            if (friends[cs].couple && friends[cs].couple.enabled === true) coupleCount++;
-        }
-        return { status: coupleCount > 0 ? '使用中' : '未使用', text: coupleCount + ' 位好友开启', count: coupleCount };
-    }
-    if (featureKey === 'couple_info') {
-        var infoCount = 0;
-        for (var ci = 0; ci < friends.length; ci++) {
-            if (friends[ci].couple && friends[ci].couple.info) {
-                var info = friends[ci].couple.info;
-                if (info.name || info.birthday || info.height || info.nickname || info.startDate) infoCount++;
-            }
-        }
-        return { status: infoCount > 0 ? '使用中' : '未使用', text: infoCount + ' 位好友填写', count: infoCount };
-    }
+    cache['social_moments'] = { status: moments.length > 0 ? '使用中' : '未使用', text: '共 ' + moments.length + ' 条动态', count: moments.length };
+    cache['social_moments_reply'] = { status: myMomentsReplyCount > 0 ? '使用中' : '未使用', text: '共 ' + myMomentsReplyCount + ' 条评论', count: myMomentsReplyCount };
+    cache['social_diary'] = { status: diary.length > 0 ? '使用中' : '未使用', text: '共 ' + diary.length + ' 篇', count: diary.length };
+    cache['social_diary_reply'] = { status: myDiaryReplyCount > 0 ? '使用中' : '未使用', text: '共 ' + myDiaryReplyCount + ' 条留言', count: myDiaryReplyCount };
+    cache['social_friend_moments'] = { status: frStats.friendMoments > 0 ? '使用中' : '未使用', text: '共 ' + frStats.friendMoments + ' 条', count: frStats.friendMoments };
+    cache['social_friend_moments_reply'] = { status: frStats.friendMomentsReply > 0 ? '使用中' : '未使用', text: '共 ' + frStats.friendMomentsReply + ' 条', count: frStats.friendMomentsReply };
+    cache['social_friend_diary'] = { status: frStats.friendDiary > 0 ? '使用中' : '未使用', text: '共 ' + frStats.friendDiary + ' 篇', count: frStats.friendDiary };
+    cache['social_friend_diary_reply'] = { status: frStats.friendDiaryReply > 0 ? '使用中' : '未使用', text: '共 ' + frStats.friendDiaryReply + ' 条', count: frStats.friendDiaryReply };
+    cache['social_shopping_diary'] = { status: frStats.shoppingDiary > 0 ? '使用中' : '未使用', text: '共 ' + frStats.shoppingDiary + ' 篇', count: frStats.shoppingDiary };
+    cache['social_shopping_diary_reply'] = { status: frStats.shoppingDiaryReply > 0 ? '使用中' : '未使用', text: '共 ' + frStats.shoppingDiaryReply + ' 条', count: frStats.shoppingDiaryReply };
+    cache['social_letter'] = { status: frStats.letter > 0 ? '使用中' : '未使用', text: '共 ' + frStats.letter + ' 封', count: frStats.letter };
+    cache['social_letter_reply'] = { status: frStats.letterReply > 0 ? '使用中' : '未使用', text: '共 ' + frStats.letterReply + ' 封', count: frStats.letterReply };
+    cache['social_friend_profile'] = { status: '开启', text: friends.length + ' 位好友', count: friends.length };
+    cache['social_private_album'] = { status: frStats.privateAlbum > 0 ? '使用中' : '未使用', text: '共 ' + frStats.privateAlbum + ' 张', count: frStats.privateAlbum };
+    cache['social_album_message'] = { status: frStats.albumMessage > 0 ? '使用中' : '未使用', text: '共 ' + frStats.albumMessage + ' 条', count: frStats.albumMessage };
+    cache['social_album_delete_request'] = { status: frStats.albumDeleteRequest > 0 ? '使用中' : '未使用', text: '共 ' + frStats.albumDeleteRequest + ' 次', count: frStats.albumDeleteRequest };
+    cache['social_status_calendar'] = { status: frStats.statusCalendar > 0 ? '使用中' : '未使用', text: '共 ' + frStats.statusCalendar + ' 天', count: frStats.statusCalendar };
+    cache['social_status_calendar_reply'] = { status: frStats.statusCalendarReply > 0 ? '使用中' : '未使用', text: '共 ' + frStats.statusCalendarReply + ' 条', count: frStats.statusCalendarReply };
+    cache['social_friend_voice_library'] = { status: frStats.friendVoiceLibrary > 0 ? '使用中' : '未使用', text: '共 ' + frStats.friendVoiceLibrary + ' 条', count: frStats.friendVoiceLibrary };
 
+    cache['money_my_account'] = { status: '开启', text: '余额 ¥' + (wallet.balance || 0).toFixed(2), count: 1 };
+    cache['money_my_flow'] = { status: (wallet.flows || []).length > 0 ? '使用中' : '未使用', text: '共 ' + (wallet.flows || []).length + ' 条', count: (wallet.flows || []).length };
+    cache['money_friend_flow'] = { status: frStats.friendFlow > 0 ? '使用中' : '未使用', text: '共 ' + frStats.friendFlow + ' 条', count: frStats.friendFlow };
+    cache['money_redpacket'] = { status: hbStats.redpacket > 0 ? '使用中' : '未使用', text: '共 ' + hbStats.redpacket + ' 个', count: hbStats.redpacket };
+    cache['money_transfer'] = { status: hbStats.transfer > 0 ? '使用中' : '未使用', text: '共 ' + hbStats.transfer + ' 笔', count: hbStats.transfer };
+    cache['money_group_redpacket'] = { status: hbStats.group > 0 ? '使用中' : '未使用', text: '共 ' + hbStats.group + ' 个', count: hbStats.group };
+    cache['money_redpacket_expired'] = { status: hbStats.expired > 0 ? '使用中' : '未使用', text: '共 ' + hbStats.expired + ' 个', count: hbStats.expired };
+    cache['money_mall'] = { status: (mall.products || []).length > 0 ? '使用中' : '未使用', text: (mall.products || []).length + ' 件商品', count: (mall.products || []).length };
+    cache['money_mall_category'] = { status: (mall.categories || []).length > 0 ? '使用中' : '未使用', text: (mall.categories || []).length + ' 个分类', count: (mall.categories || []).length };
+    cache['money_friend_collection'] = { status: frStats.friendCollection > 0 ? '使用中' : '未使用', text: '共 ' + frStats.friendCollection + ' 件', count: frStats.friendCollection };
+    cache['money_my_collection'] = { status: myCollections.length > 0 ? '使用中' : '未使用', text: '共 ' + myCollections.length + ' 件', count: myCollections.length };
+    cache['money_purchased'] = { status: ((wallet.purchasedItems || []).length + frStats.purchasedFriend) > 0 ? '使用中' : '未使用', text: '共 ' + ((wallet.purchasedItems || []).length + frStats.purchasedFriend) + ' 件', count: (wallet.purchasedItems || []).length + frStats.purchasedFriend };
+    cache['money_piggy'] = { status: frStats.piggyTotal > 0 ? '使用中' : '未使用', text: '共 ¥' + frStats.piggyTotal.toFixed(2), count: frStats.piggyTotal };
+    cache['money_piggy_flow'] = { status: frStats.piggyFlow > 0 ? '使用中' : '未使用', text: '共 ' + frStats.piggyFlow + ' 条', count: frStats.piggyFlow };
+    cache['money_piggy_stats'] = { status: '开启', text: '—', count: 1 };
+    cache['money_pay_request'] = { status: payRequests.length > 0 ? '使用中' : '未使用', text: '共 ' + payRequests.length + ' 次', count: payRequests.length };
+    cache['money_help_request'] = { status: helpRequests.length > 0 ? '使用中' : '未使用', text: '共 ' + helpRequests.length + ' 次', count: helpRequests.length };
+    cache['money_monthly_stats'] = { status: (wallet.monthlyStats && wallet.monthlyStats.month) ? '使用中' : '未使用', text: (wallet.monthlyStats && wallet.monthlyStats.month) ? ('统计月份 ' + wallet.monthlyStats.month) : '暂无', count: (wallet.monthlyStats && wallet.monthlyStats.month) ? 1 : 0 };
+
+    cache['fun_monopoly'] = { status: monoStats.total > 0 ? '使用中' : '未使用', text: '共 ' + monoStats.total + ' 局', count: monoStats.total };
+    cache['fun_monopoly_single'] = { status: monoStats.single > 0 ? '使用中' : '未使用', text: '共 ' + monoStats.single + ' 局', count: monoStats.single };
+    cache['fun_monopoly_double'] = { status: monoStats.double > 0 ? '使用中' : '未使用', text: '共 ' + monoStats.double + ' 局', count: monoStats.double };
+    cache['fun_monopoly_custom'] = { status: monoStats.question > 0 ? '使用中' : '未使用', text: '共 ' + monoStats.question + ' 题', count: monoStats.question };
+    cache['fun_monopoly_chat'] = { status: '开启', text: '—', count: 1 };
+    cache['fun_questionnaire'] = { status: '开启', text: '独立记录', count: 1 };
+    cache['fun_questionnaire_bank'] = { status: '开启', text: '独立记录', count: 1 };
+    cache['fun_questionnaire_interaction'] = { status: '开启', text: '独立记录', count: 1 };
+    cache['fun_vote'] = { status: msgStats.voteCard > 0 ? '使用中' : '未使用', text: '共 ' + msgStats.voteCard + ' 次', count: msgStats.voteCard };
+    cache['fun_vote_bank'] = { status: (voteBank.questions || []).length > 0 ? '使用中' : '未使用', text: '共 ' + (voteBank.questions || []).length + ' 题', count: (voteBank.questions || []).length };
+    cache['fun_vote_special'] = { status: msgStats.voteSpecial > 0 ? '使用中' : '未使用', text: '共 ' + msgStats.voteSpecial + ' 次', count: msgStats.voteSpecial };
+
+    var lexTotal = lexItems.length;
+    cache['lexicon_public'] = { status: lexTotal > 0 ? '使用中' : '未使用', text: '共 ' + lexTotal + ' 条', count: lexTotal };
+    cache['lexicon_public_word'] = { status: lexTypeCount.word > 0 ? '使用中' : '未使用', text: '共 ' + lexTypeCount.word + ' 条', count: lexTypeCount.word };
+    cache['lexicon_public_emoji'] = { status: lexTypeCount.emoji > 0 ? '使用中' : '未使用', text: '共 ' + lexTypeCount.emoji + ' 条', count: lexTypeCount.emoji };
+    cache['lexicon_public_yanwenzi'] = { status: lexTypeCount.yanwenzi > 0 ? '使用中' : '未使用', text: '共 ' + lexTypeCount.yanwenzi + ' 条', count: lexTypeCount.yanwenzi };
+    cache['lexicon_public_emoji_pack'] = { status: lexTypeCount.emoji_pack > 0 ? '使用中' : '未使用', text: '共 ' + lexTypeCount.emoji_pack + ' 条', count: lexTypeCount.emoji_pack };
+    cache['lexicon_public_pat'] = { status: lexTypeCount.pat > 0 ? '使用中' : '未使用', text: '共 ' + lexTypeCount.pat + ' 条', count: lexTypeCount.pat };
+    cache['lexicon_public_status'] = { status: lexTypeCount.status > 0 ? '使用中' : '未使用', text: '共 ' + lexTypeCount.status + ' 条', count: lexTypeCount.status };
+    cache['lexicon_public_weather'] = { status: lexTypeCount.weather > 0 ? '使用中' : '未使用', text: '共 ' + lexTypeCount.weather + ' 条', count: lexTypeCount.weather };
+    cache['lexicon_my'] = { status: myLexItems.length > 0 ? '使用中' : '未使用', text: '共 ' + myLexItems.length + ' 条', count: myLexItems.length };
+    cache['lexicon_private'] = { status: frStats.privateLexicon > 0 ? '使用中' : '未使用', text: '共 ' + frStats.privateLexicon + ' 条', count: frStats.privateLexicon };
+    cache['lexicon_private_pat_locked'] = { status: frStats.privateLexiconPatLocked > 0 ? '使用中' : '未使用', text: '共 ' + frStats.privateLexiconPatLocked + ' 条', count: frStats.privateLexiconPatLocked };
+    cache['lexicon_dictionary'] = { status: dictItems.length > 0 ? '使用中' : '未使用', text: '共 ' + dictItems.length + ' 条', count: dictItems.length };
+    cache['lexicon_dictionary_pos'] = { status: posCount > 0 ? '使用中' : '未使用', text: '共 ' + posCount + ' 个词性', count: posCount };
+    var dictProb = (settings.dictionaryProbability !== undefined) ? settings.dictionaryProbability : 50;
+    cache['lexicon_dictionary_sentence'] = { status: '开启', text: '概率 ' + dictProb + '%', count: 1 };
+    cache['lexicon_emoji_panel'] = { status: myLexItems.length > 0 ? '使用中' : '未使用', text: '共 ' + myLexItems.length + ' 条', count: myLexItems.length };
+
+    cache['couple_space'] = { status: frStats.coupleEnabled > 0 ? '使用中' : '未使用', text: frStats.coupleEnabled + ' 位好友开启', count: frStats.coupleEnabled };
+    cache['couple_info'] = { status: frStats.coupleInfo > 0 ? '使用中' : '未使用', text: frStats.coupleInfo + ' 位好友填写', count: frStats.coupleInfo };
+
+    featureStatsCache = cache;
+    return cache;
+}
+
+function calcFeatureStatus(featureKey) {
+    if (!featureStatsCache) buildFeatureStatsCache();
+    var cached = featureStatsCache[featureKey];
+    if (cached) return cached;
     return { status: '未使用', text: '暂无数据', count: 0 };
 }
 
@@ -19022,7 +18822,7 @@ function renderSettings() {
             <div class="title">导出导入</div>
         </div>
     `;
-    getUnreadFeatureRequestCount().then(function(cnt) {
+    getUnreadFeatureRequestCountCached().then(function(cnt) {
         var badge = document.getElementById('featureSummaryBadge');
         if (badge) {
             if (cnt > 0) {
@@ -19031,6 +18831,21 @@ function renderSettings() {
                 badge.innerHTML = '';
             }
         }
+    });
+}
+
+// 未读数 5 秒缓存（内存变量，不走主数据）
+var unreadFeatureRequestCache = { count: 0, at: 0 };
+
+function getUnreadFeatureRequestCountCached() {
+    var now = Date.now();
+    if (now - unreadFeatureRequestCache.at < 5000) {
+        return Promise.resolve(unreadFeatureRequestCache.count);
+    }
+    return getUnreadFeatureRequestCount().then(function(cnt) {
+        unreadFeatureRequestCache.count = cnt;
+        unreadFeatureRequestCache.at = Date.now();
+        return cnt;
     });
 }
 
