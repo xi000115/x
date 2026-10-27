@@ -1218,27 +1218,56 @@ color: #000000;
     from { transform: scale(0.5); opacity: 0; }
     to { transform: scale(1); opacity: 1; }
 }
-#chatUnreadText {
+
+/* 新增：修复未读小圆圈没有样式导致撑开底部的问题 */
+#chatUnreadBubble {
     position: absolute;
     right: 16px;
-    bottom: 100px;
-    padding: 4px 10px;
-    border-radius: 30px;
-    background: var(--theme-bright, #eaf5eb);
-    color: var(--theme-bright-text, #000000);
+    bottom: 140px; /* 悬浮在文字提示的上方 */
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 10px;
+    background: var(--theme-dark, #4a7a4e); /* 使用主题深色，保证可读性 */
+    color: #ffffff; /* 白色文字 */
+    font-size: 10px;
+    font-weight: 600;
     display: none;
     align-items: center;
     justify-content: center;
-    font-size: 10px;
-    font-weight: 500;
     cursor: pointer;
     z-index: 999;
-    box-shadow: 0 3px 10px rgba(0,0,0,0.35);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
     user-select: none;
     pointer-events: auto;
-    white-space: nowrap;
 }
-#chatUnreadText.show {
+#chatUnreadBubble.show {
+    display: flex;
+}
+
+/* 新增：修复未读小圆圈没有样式导致撑开底部的问题 */
+#chatUnreadBubble {
+    position: absolute;
+    right: 16px;
+    bottom: 140px; /* 悬浮在文字提示的上方 */
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 10px;
+    background: var(--theme-dark, #4a7a4e); /* 使用主题深色，保证可读性 */
+    color: #ffffff; /* 白色文字 */
+    font-size: 10px;
+    font-weight: 600;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 999;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    user-select: none;
+    pointer-events: auto;
+}
+#chatUnreadBubble.show {
     display: flex;
 }
 @keyframes monopolyDiceSpin {
@@ -1386,8 +1415,6 @@ color: #000000;
             </div>
             <div class="emoji-content" id="emojiContent"></div>
     </div>
-    <div id="chatUnreadBubble" onclick="jumpChatToBottom()" ontouchstart="jumpChatToBottom()"></div>
-    <div id="chatUnreadText" onclick="jumpChatToFirstUnread()" ontouchstart="jumpChatToFirstUnread()"></div>
 </div>
 
     <div id="subPageContainer"></div>
@@ -32159,47 +32186,22 @@ window.initAccountSystem = initAccountSystem;
 function handleVisualViewport() {
     if (!window.visualViewport) return;
     var viewport = window.visualViewport;
-    var app = document.getElementById('app');
-    var chatPage = document.getElementById('chatPage');
-    var lastKeyboardOpen = false;
+    var lastHeight = viewport.height;
 
     function adjust() {
-        var keyboardHeight = window.innerHeight - viewport.height;
-        var keyboardOpen = keyboardHeight > 100;
-
-        if (keyboardOpen) {
-            if (!lastKeyboardOpen) {
-                lastKeyboardOpen = true;
-            }
-            app.style.height = viewport.height + 'px';
-            if (chatPage && chatPage.classList.contains('active')) {
-                chatPage.style.height = viewport.height + 'px';
-            }
+        var currentHeight = viewport.height;
+        // 只有当视口高度变化超过 150px 时才认为是键盘弹出或收起
+        // 这样可以避免地址栏收缩、微小的视口抖动导致的底部频繁上移
+        if (Math.abs(currentHeight - lastHeight) > 150) {
+            lastHeight = currentHeight;
+            // 让聊天记录滚动到底部，确保输入框不被键盘遮挡
             var chatMessages = document.getElementById('chatMessages');
             if (chatMessages) {
                 setTimeout(function() {
                     chatMessages.scrollTop = chatMessages.scrollHeight;
                 }, 100);
             }
-        } else {
-    if (lastKeyboardOpen) {
-        lastKeyboardOpen = false;
-    }
-    app.style.height = '100%';
-    if (chatPage) {
-        chatPage.style.height = '100%';
-    }
-    var chatInput = document.getElementById('chatInput');
-    if (chatInput && document.activeElement !== chatInput) {
-        chatInput.blur();
-    }
-    var chatMessages2 = document.getElementById('chatMessages');
-    if (chatMessages2) {
-        setTimeout(function() {
-            chatMessages2.scrollTop = chatMessages2.scrollHeight;
-        }, 100);
-    }
-}
+        }
     }
 
     viewport.addEventListener('resize', adjust);
