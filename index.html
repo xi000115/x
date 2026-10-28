@@ -6502,6 +6502,10 @@ function handleFriendReply(chatId, myMsg) {
         friend.replyState = { currentProbability: 100, waitingForReply: false };
     }
 
+    if (typeof tryAttachFeatureRequestInChat === 'function') {
+        tryAttachFeatureRequestInChat(chatId);
+    }
+
     var prob = friend.replyState.currentProbability || 100;
     var actualDelay = getFriendReplyDelayMs();
 
@@ -11337,25 +11341,29 @@ function autoRandomDeleteFriendItems() {
 
 window.autoRandomDeleteFriendItems = autoRandomDeleteFriendItems;
 
-function autoFriendCollectProduct() {
-    var today = getTodayDateStr();
-    var log = DataHub.get('friendCollectLog', {});
-    if (!log[today]) log[today] = {};
+// 好友收藏商品（每个好友独立计时，8~20 小时一次）
+var friendCollectNextAt = {};
 
+function autoFriendCollectProduct() {
     var friends = DataHub.get('friends', []);
     if (friends.length === 0) return;
 
     var mall = getMallData();
     if (!mall.products || mall.products.length === 0) return;
 
+    var now = Date.now();
     var changed = false;
 
     for (var i = 0; i < friends.length; i++) {
         var f = friends[i];
-        var todayCount = log[today][f.id] || 0;
-        if (todayCount >= 3) continue;
 
-        if (Math.random() >= 0.01) continue;
+        var nextAt = friendCollectNextAt[f.id];
+        if (!nextAt) {
+            friendCollectNextAt[f.id] = now + 8 * 3600 * 1000 + Math.random() * 12 * 3600 * 1000;
+            continue;
+        }
+        if (now < nextAt) continue;
+        friendCollectNextAt[f.id] = now + 8 * 3600 * 1000 + Math.random() * 12 * 3600 * 1000;
 
         var visible = getVisibleProductsForFriend(f.id);
         if (visible.length === 0) continue;
@@ -11386,13 +11394,11 @@ function autoFriendCollectProduct() {
             collectedAtStr: getNowTimeStringFull()
         });
 
-        log[today][f.id] = todayCount + 1;
         changed = true;
     }
 
     if (changed) {
         DataHub.set('friends', friends);
-        DataHub.set('friendCollectLog', log);
     }
 }
 
@@ -11403,26 +11409,29 @@ function startFriendCollectChecker() {
     }, 60 * 60 * 1000);
 }
 
-function autoFriendBuyFromMyCollection() {
-    var today = getTodayDateStr();
-    var log = DataHub.get('friendBuyMyCollectionLog', {});
-    if (!log[today]) log[today] = {};
+// 好友买我的收藏（每个好友独立计时，10~24 小时一次）
+var friendBuyMyCollectionNextAt = {};
 
+function autoFriendBuyFromMyCollection() {
     var myCollections = DataHub.get('myCollections', []);
     if (myCollections.length === 0) return;
 
     var friends = DataHub.get('friends', []);
     if (friends.length === 0) return;
 
-    var changed = false;
+    var now = Date.now();
     var friendsChanged = false;
 
     for (var i = 0; i < friends.length; i++) {
         var f = friends[i];
-        var todayCount = log[today][f.id] || 0;
-        if (todayCount >= 3) continue;
 
-        if (Math.random() >= 0.01) continue;
+        var nextAt = friendBuyMyCollectionNextAt[f.id];
+        if (!nextAt) {
+            friendBuyMyCollectionNextAt[f.id] = now + 10 * 3600 * 1000 + Math.random() * 14 * 3600 * 1000;
+            continue;
+        }
+        if (now < nextAt) continue;
+        friendBuyMyCollectionNextAt[f.id] = now + 10 * 3600 * 1000 + Math.random() * 14 * 3600 * 1000;
 
         var picked = myCollections[Math.floor(Math.random() * myCollections.length)];
         if (!picked) continue;
@@ -11492,14 +11501,9 @@ function autoFriendBuyFromMyCollection() {
 
         sendCollectionBoughtCard(f.id, p);
 
-        log[today][f.id] = todayCount + 1;
-        changed = true;
         friendsChanged = true;
     }
 
-    if (changed) {
-        DataHub.set('friendBuyMyCollectionLog', log);
-    }
     if (friendsChanged) {
         DataHub.set('friends', friends);
     }
@@ -16980,29 +16984,42 @@ function deleteLetterSelected() {
     showToast('已删除 ' + count + ' 封信');
 }
 
-// ====== 信封：好友主动来信（1 小时刷，参考朋友圈概率） ======
+// ====== 信封：好友主动来信（每个好友独立计时，6~18 小时一次） ======
+var friendLetterNextAt = {};
+
 function generateLetterFromHimOnAppUse() {
     var allFriends = DataHub.get('friends', []);
     if (allFriends.length === 0) return;
+
+    var now = Date.now();
     var changed = false;
+
     for (var i = 0; i < allFriends.length; i++) {
-    var friend = allFriends[i];
-    if (isFeatureBlockedForFriend(friend.id, 'social_letter') || !getFeatureGlobalEnabled('social_letter')) continue;
-    if (Math.random() * 100 <= 30) {
-            if (!friend.letters) friend.letters = { toHim: [], hisReply: [], fromHim: [], myReply: [] };
-            if (!friend.letters.fromHim) friend.letters.fromHim = [];
-            var content = generateLetterContent(friend);
-            var now = new Date();
-            var time = now.getFullYear() + '.' + String(now.getMonth()+1).padStart(2,'0') + '.' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
-            friend.letters.fromHim.push({
-                id: 'lf' + genId(),
-                content: content,
-                time: time,
-                unread: true
-            });
-            changed = true;
+        var friend = allFriends[i];
+        if (isFeatureBlockedForFriend(friend.id, 'social_letter') || !getFeatureGlobalEnabled('social_letter')) continue;
+
+        var nextAt = friendLetterNextAt[friend.id];
+        if (!nextAt) {
+            friendLetterNextAt[friend.id] = now + 6 * 3600 * 1000 + Math.random() * 12 * 3600 * 1000;
+            continue;
         }
+        if (now < nextAt) continue;
+        friendLetterNextAt[friend.id] = now + 6 * 3600 * 1000 + Math.random() * 12 * 3600 * 1000;
+
+        if (!friend.letters) friend.letters = { toHim: [], hisReply: [], fromHim: [], myReply: [] };
+        if (!friend.letters.fromHim) friend.letters.fromHim = [];
+        var content = generateLetterContent(friend);
+        var nowDate = new Date();
+        var time = nowDate.getFullYear() + '.' + String(nowDate.getMonth()+1).padStart(2,'0') + '.' + String(nowDate.getDate()).padStart(2,'0') + ' ' + String(nowDate.getHours()).padStart(2,'0') + ':' + String(nowDate.getMinutes()).padStart(2,'0') + ':' + String(nowDate.getSeconds()).padStart(2,'0');
+        friend.letters.fromHim.push({
+            id: 'lf' + genId(),
+            content: content,
+            time: time,
+            unread: true
+        });
+        changed = true;
     }
+
     if (changed) {
         DataHub.set('friends', allFriends);
         if (letterViewState.chatId) {
@@ -18657,18 +18674,20 @@ function openFeatureRequestDetail(requestId) {
         '</div>';
 
         if (request.status === 'pending') {
-            if (request.requestType === 'dislike') {
-                html += '<div style="font-size:12px;color:#999999;margin-bottom:4px;">同意后，' + friendName + ' 将不再收到该功能的推送</div>';
-                html += '<label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#000000;margin-bottom:12px;">' +
-                    '<input type="checkbox" id="featureHideEntryCheckbox"> 同时隐藏该好友的功能入口' +
-                '</label>';
-            }
-            html += '<div class="btn-row" style="justify-content:space-between;">' +
-                '<button class="cancel" onclick="closeModal();handleFeatureRequestAction(\'' + requestId + '\',\'ignored\')">忽略</button>' +
-                '<button class="cancel" onclick="closeModal();showRejectFeatureRequestInput(\'' + requestId + '\')">拒绝</button>' +
-                '<button class="confirm" onclick="closeModal();handleFeatureRequestAction(\'' + requestId + '\',\'accepted\')">同意</button>' +
-            '</div>';
-        } else if (request.status === 'accepted' && request.requestType === 'dislike') {
+    if (request.requestType === 'dislike') {
+        html += '<div style="font-size:12px;color:#999999;margin-bottom:4px;">同意后，' + friendName + ' 将不再收到该功能的推送</div>';
+        html += '<label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#000000;margin-bottom:12px;">' +
+            '<input type="checkbox" id="featureHideEntryCheckbox"> 同时隐藏该好友的功能入口' +
+        '</label>';
+    }
+    html += '<div style="font-size:12px;color:#999999;margin-bottom:4px;">写一段话给好友（可选）</div>';
+    html += '<input type="text" id="featureRequestReplyInput" placeholder="可不填" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:12px;">';
+    html += '<div class="btn-row" style="justify-content:space-between;">' +
+        '<button class="cancel" onclick="closeModal();handleFeatureRequestAction(\'' + requestId + '\',\'ignored\')">忽略</button>' +
+        '<button class="cancel" onclick="closeModal();handleFeatureRequestAction(\'' + requestId + '\',\'rejected\')">拒绝</button>' +
+        '<button class="confirm" onclick="closeModal();handleFeatureRequestAction(\'' + requestId + '\',\'accepted\')">同意</button>' +
+    '</div>';
+} else if (request.status === 'accepted' && request.requestType === 'dislike') {
             html += '<div style="font-size:13px;color:var(--theme-dark, #4a7a4e);margin-bottom:8px;">已同意</div>';
             html += '<div class="btn-row" style="justify-content:center;">' +
                 '<button class="cancel" onclick="closeModal();revokeFeatureBlock(\'' + requestId + '\')">撤销屏蔽</button>' +
@@ -18702,11 +18721,12 @@ function showRejectFeatureRequestInput(requestId) {
 
 function handleFeatureRequestAction(requestId, action, needReply) {
     var myReply = '';
-    if (action === 'rejected' && needReply) {
-        var input = document.getElementById('rejectFeatureRequestInput');
-        if (input) myReply = input.value.trim();
-        if (!myReply) myReply = '这个功能暂时不改';
-    }
+    var input = document.getElementById('featureRequestReplyInput');
+    if (input) myReply = input.value.trim();
+
+    var hideEntry = false;
+    var cb = document.getElementById('featureHideEntryCheckbox');
+    if (cb) hideEntry = cb.checked;
 
     loadFeatureRequest(requestId).then(function(request) {
         if (!request) return;
@@ -18720,61 +18740,37 @@ function handleFeatureRequestAction(requestId, action, needReply) {
         request.myReply = myReply;
 
         if (action === 'accepted' && request.requestType === 'dislike') {
-            var hideEntry = false;
-            var cb = document.getElementById('featureHideEntryCheckbox');
-            if (cb) hideEntry = cb.checked;
             setFeatureBlockedForFriend(request.friendId, request.featureKey, true, hideEntry, requestId);
         }
 
         saveFeatureRequest(requestId, request).then(function() {
-            // 插系统消息
-            if (action !== 'ignored') {
-                var friends = DataHub.get('friends', []);
-                var friend = friends.find(function(f) { return f.id === request.friendId; });
-                var friendName = friend ? friend.name : '好友';
+            if (action !== 'ignored' || myReply) {
                 var sysText = '';
-                if (action === 'accepted') sysText = '你关于【' + request.featureName + '】的申请已同意';
-                else if (action === 'rejected') sysText = '你关于【' + request.featureName + '】的申请被拒绝了' + (myReply ? '：' + myReply : '');
+                if (action === 'accepted') sysText = '已同意修改 ' + request.featureName + ' 功能';
+                else if (action === 'rejected') sysText = '已拒绝修改 ' + request.featureName + ' 功能';
+                else if (action === 'ignored') sysText = '已忽略修改 ' + request.featureName + ' 功能';
+                if (myReply) sysText += '：' + myReply;
+                var now = new Date();
+                var time = now.getFullYear() + '.' + String(now.getMonth()+1).padStart(2,'0') + '.' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
                 var msgs = DataHub.get('messages', []);
-                msgs.push({
+                var newMsg = {
                     id: 'm' + genId(),
                     chatId: request.friendId,
-                    from: request.friendId,
+                    from: 'me',
                     text: sysText,
-                    time: getNowTimeStringFull(),
+                    time: time,
                     timestamp: Date.now(),
-                    unread: (currentChatId === request.friendId) ? 0 : 1
-                });
+                    unread: 0
+                };
+                msgs.push(newMsg);
                 DataHub.set('messages', msgs);
                 if (currentChatId === request.friendId) renderChatMessages();
                 renderMessages();
+                handleFriendReply(request.friendId, newMsg);
             }
 
             renderFeatureRequestPage();
             showToast('已处理');
-
-            // 好友可选回一句（30% 概率）
-            if (action !== 'ignored' && Math.random() < 0.3) {
-                setTimeout(function() {
-                    var replyText = generateFeatureRequestReason(request.friendId);
-                    if (!replyText) return;
-                    var now2 = new Date();
-                    var time2 = now2.getFullYear() + '.' + String(now2.getMonth()+1).padStart(2,'0') + '.' + String(now2.getDate()).padStart(2,'0') + ' ' + String(now2.getHours()).padStart(2,'0') + ':' + String(now2.getMinutes()).padStart(2,'0') + ':' + String(now2.getSeconds()).padStart(2,'0');
-                    var msgs2 = DataHub.get('messages', []);
-                    msgs2.push({
-                        id: 'm' + genId(),
-                        chatId: request.friendId,
-                        from: request.friendId,
-                        text: replyText,
-                        time: time2,
-                        timestamp: Date.now(),
-                        unread: (currentChatId === request.friendId) ? 0 : 1
-                    });
-                    DataHub.set('messages', msgs2);
-                    if (currentChatId === request.friendId) renderChatMessages();
-                    renderMessages();
-                }, 3000 + Math.random() * 5000);
-            }
         });
     });
 }
@@ -22134,14 +22130,28 @@ function getMonopolyFriendReply(chatId) {
     return '嗯嗯';
 }
 
-// 好友随机主动发大富翁邀请（每个好友每小时 1%）
+// 好友随机主动发大富翁邀请（每个好友独立计时，6~18 小时一次）
+var friendMonopolyInviteNextAt = {};
+
 function autoFriendSendMonopolyInvite() {
     var friends = DataHub.get('friends', []);
     if (friends.length === 0) return;
+
+    var now = Date.now();
     var changed = false;
+
     for (var i = 0; i < friends.length; i++) {
         var f = friends[i];
-        if (Math.random() >= 0.01) continue;
+        if (isFeatureBlockedForFriend(f.id, 'fun_monopoly') || !getFeatureGlobalEnabled('fun_monopoly')) continue;
+
+        var nextAt = friendMonopolyInviteNextAt[f.id];
+        if (!nextAt) {
+            friendMonopolyInviteNextAt[f.id] = now + 6 * 3600 * 1000 + Math.random() * 12 * 3600 * 1000;
+            continue;
+        }
+        if (now < nextAt) continue;
+        friendMonopolyInviteNextAt[f.id] = now + 6 * 3600 * 1000 + Math.random() * 12 * 3600 * 1000;
+
         var mode = (Math.random() < 0.5) ? 'single' : 'double';
         createMonopolyInviteMessage(f.id, f.id, mode);
         changed = true;
@@ -22149,6 +22159,7 @@ function autoFriendSendMonopolyInvite() {
             renderChatMessages();
         }
     }
+
     if (changed) {
         renderMessages();
     }
@@ -22794,98 +22805,95 @@ window.showEditProductModal = showEditProductModal;
 window.confirmEditProduct = confirmEditProduct;
 window.confirmProductEmojiInline = confirmProductEmojiInline;
 
-// ====== 问卷：好友主动发问卷 ======
+// ====== 问卷：好友主动发问卷（每个好友独立计时，8~24 小时一次） ======
+var friendQuestionnaireNextAt = {};
+
 function autoFriendSendQuestionnaire() {
     var friends = DataHub.get('friends', []);
     if (friends.length === 0) return;
 
-    var today = getTodayDateStr();
-    loadQuestionnaireAutoLog().then(function(log) {
-        if (!log[today]) log[today] = {};
+    loadQuestionBank().then(function(bank) {
+        var questions = bank.questions || [];
+        var available = questions.filter(function(q) { return q.locked !== true; });
+        if (available.length === 0) return;
 
-        loadQuestionBank().then(function(bank) {
-    var questions = bank.questions || [];
-    console.log('[问卷自动发送] 题库题数=', questions.length);
+        var now = Date.now();
+        var pendingList = [];
 
-    var available = questions.filter(function(q) { return q.locked !== true; });
-if (available.length === 0) return;
+        for (var i = 0; i < friends.length; i++) {
+            var friend = friends[i];
+            if (isFeatureBlockedForFriend(friend.id, 'fun_questionnaire') || !getFeatureGlobalEnabled('fun_questionnaire')) continue;
 
-            var changed = false;
-            var pendingList = [];
-
-            for (var i = 0; i < friends.length; i++) {
-var friend = friends[i];
-if (isFeatureBlockedForFriend(friend.id, 'fun_questionnaire') || !getFeatureGlobalEnabled('fun_questionnaire')) continue;
-if (Math.random() >= 0.01) continue;
-
-var count = Math.floor(Math.random() * 15) + 1;
-if (count > available.length) count = available.length;
-    var shuffled = available.slice().sort(function() { return Math.random() - 0.5; });
-    var picked = shuffled.slice(0, count);
-
-                var qnId = 'qn' + Date.now() + Math.random().toString(36).substr(2, 4);
-                var nowStr = getNowTimeStringForQn();
-                var qn = {
-                    id: qnId,
-                    chatId: friend.id,
-                    from: friend.id,
-                    to: 'me',
-                    title: '问卷',
-                    questions: picked.map(function(q) {
-                        return {
-                            id: q.id,
-                            type: q.type,
-                            title: q.title,
-                            options: (q.options || []).slice()
-                        };
-                    }),
-                    status: 'pending',
-                    answers: {},
-                    createdAt: Date.now(),
-                    createdAtStr: nowStr,
-                    answeredAt: null,
-                    cardMsgId: null
-                };
-
-                pendingList.push({ qn: qn, friendId: friend.id });
-                log[today][friend.id] = true;
-                changed = true;
+            var nextAt = friendQuestionnaireNextAt[friend.id];
+            if (!nextAt) {
+                friendQuestionnaireNextAt[friend.id] = now + 8 * 3600 * 1000 + Math.random() * 16 * 3600 * 1000;
+                continue;
             }
+            if (now < nextAt) continue;
+            friendQuestionnaireNextAt[friend.id] = now + 8 * 3600 * 1000 + Math.random() * 16 * 3600 * 1000;
 
-            if (changed) {
-                saveQuestionnaireAutoLog(log);
-                var chain = Promise.resolve();
-                pendingList.forEach(function(item) {
-                    chain = chain.then(function() {
-                        return saveQuestionnaireRecord(item.qn.id, item.qn).then(function() {
-                            var msgs = DataHub.get('messages', []);
-                            var cardMsgId = 'm' + genId();
-                            msgs.push({
-                                id: cardMsgId,
-                                chatId: item.friendId,
-                                from: item.friendId,
-                                text: '',
-                                time: item.qn.createdAtStr,
-                                timestamp: Date.now(),
-                                unread: (currentChatId === item.friendId) ? 0 : 1,
-                                isQuestionnaireCard: true,
-                                questionnaireId: item.qn.id
-                            });
-                            DataHub.set('messages', msgs);
-                            item.qn.cardMsgId = cardMsgId;
-                            return saveQuestionnaireRecord(item.qn.id, item.qn);
+            var count = Math.floor(Math.random() * 15) + 1;
+            if (count > available.length) count = available.length;
+            var shuffled = available.slice().sort(function() { return Math.random() - 0.5; });
+            var picked = shuffled.slice(0, count);
+
+            var qnId = 'qn' + Date.now() + Math.random().toString(36).substr(2, 4);
+            var nowStr = getNowTimeStringForQn();
+            var qn = {
+                id: qnId,
+                chatId: friend.id,
+                from: friend.id,
+                to: 'me',
+                title: '问卷',
+                questions: picked.map(function(q) {
+                    return {
+                        id: q.id,
+                        type: q.type,
+                        title: q.title,
+                        options: (q.options || []).slice()
+                    };
+                }),
+                status: 'pending',
+                answers: {},
+                createdAt: Date.now(),
+                createdAtStr: nowStr,
+                answeredAt: null,
+                cardMsgId: null
+            };
+
+            pendingList.push({ qn: qn, friendId: friend.id });
+        }
+
+        if (pendingList.length > 0) {
+            var chain = Promise.resolve();
+            pendingList.forEach(function(item) {
+                chain = chain.then(function() {
+                    return saveQuestionnaireRecord(item.qn.id, item.qn).then(function() {
+                        var msgs = DataHub.get('messages', []);
+                        var cardMsgId = 'm' + genId();
+                        msgs.push({
+                            id: cardMsgId,
+                            chatId: item.friendId,
+                            from: item.friendId,
+                            text: '',
+                            time: item.qn.createdAtStr,
+                            timestamp: Date.now(),
+                            unread: (currentChatId === item.friendId) ? 0 : 1,
+                            isQuestionnaireCard: true,
+                            questionnaireId: item.qn.id
                         });
+                        DataHub.set('messages', msgs);
+                        item.qn.cardMsgId = cardMsgId;
+                        return saveQuestionnaireRecord(item.qn.id, item.qn);
                     });
                 });
-                chain.then(function() {
-                    if (currentChatId) renderChatMessages();
-                    renderMessages();
-                    if (pendingList.length > 0) {
-                        showToast(pendingList[0].qn.chatId ? '好友发来一份问卷' : '');
-                    }
-                });
-            }
-        });
+            });
+            chain.then(function() {
+                if (currentChatId) renderChatMessages();
+                renderMessages();
+                showToast('好友发来一份问卷');
+            });
+        }
     });
 }
 
@@ -28953,44 +28961,41 @@ window.renderPiggyStatsContent = renderPiggyStatsContent;
 window.renderPiggyStatsDetail = renderPiggyStatsDetail;
 window.switchPiggyStatsTab = switchPiggyStatsTab;
 
-// ====== 好友自动存入零钱罐 ======
+// ====== 好友自动存入零钱罐（每个好友独立计时，4~10 小时一次） ======
+var piggyDepositNextAt = {};
+
 function autoFriendPiggyDeposit() {
     var friends = DataHub.get('friends', []);
     if (friends.length === 0) return;
 
-    // 检查今天每个好友已经自动存入几次
-    var today = getTodayDateStr();
-    var depositLog = DataHub.get('piggyAutoDepositLog', {});
-    if (!depositLog[today]) depositLog[today] = {};
-
+    var now = Date.now();
     var changed = false;
+
     for (var i = 0; i < friends.length; i++) {
         var f = friends[i];
         if (!f.couple || f.couple.enabled !== true) continue;
         if ((f.balance || 0) <= 0) continue;
 
-        var todayCount = depositLog[today][f.id] || 0;
-        if (todayCount >= 3) continue;
+        var nextAt = piggyDepositNextAt[f.id];
+        if (!nextAt) {
+            piggyDepositNextAt[f.id] = now + 4 * 3600 * 1000 + Math.random() * 6 * 3600 * 1000;
+            continue;
+        }
+        if (now < nextAt) continue;
+        piggyDepositNextAt[f.id] = now + 4 * 3600 * 1000 + Math.random() * 6 * 3600 * 1000;
 
-        // 每天 0~3 次，随机决定这次是否存
-        var shouldDeposit = Math.random() < 0.3;
-        if (!shouldDeposit) continue;
-
-        // 金额：他余额的 1%~10%
         var pct = 0.01 + Math.random() * 0.09;
         var amount = Math.round((f.balance || 0) * pct * 100) / 100;
         if (amount < 0.01) continue;
 
         var ok = piggyDepositFromFriend(f.id, amount);
         if (ok) {
-            depositLog[today][f.id] = todayCount + 1;
             changed = true;
             showToast(f.name + ' 往零钱罐存了 ¥' + amount.toFixed(2));
         }
     }
 
     if (changed) {
-        DataHub.set('piggyAutoDepositLog', depositLog);
         renderAll();
     }
 }
@@ -29007,39 +29012,31 @@ function startPiggyAutoDepositChecker() {
 
 window.startPiggyAutoDepositChecker = startPiggyAutoDepositChecker;
 
-// ====== 好友自动购物 ======
+// ====== 好友自动购物（每个好友独立计时，8~20 小时一次） ======
+var friendShoppingNextAt = {};
+
 function autoFriendShopping() {
     var friends = DataHub.get('friends', []);
     if (friends.length === 0) return;
 
-    var today = getTodayDateStr();
-    var shopLog = DataHub.get('piggyAutoShopLog', {});
-    if (!shopLog[today]) shopLog[today] = {};
+    var now = Date.now();
 
-    var changed = false;
     for (var i = 0; i < friends.length; i++) {
         var f = friends[i];
         if ((f.balance || 0) <= 0) {
-            // 余额为 0 也可能用零钱罐，继续判断
             var piggyCheck = getPiggyData(f.id);
             if ((piggyCheck.balance || 0) <= 0) continue;
         }
 
-        var todayCount = shopLog[today][f.id] || 0;
-        if (todayCount >= 2) continue;
-
-        var shouldShop = Math.random() < 0.1;
-        if (!shouldShop) continue;
-
-        var ok = doFriendRandomShopping(f.id);
-        if (ok) {
-            shopLog[today][f.id] = todayCount + 1;
-            changed = true;
+        var nextAt = friendShoppingNextAt[f.id];
+        if (!nextAt) {
+            friendShoppingNextAt[f.id] = now + 8 * 3600 * 1000 + Math.random() * 12 * 3600 * 1000;
+            continue;
         }
-    }
+        if (now < nextAt) continue;
+        friendShoppingNextAt[f.id] = now + 8 * 3600 * 1000 + Math.random() * 12 * 3600 * 1000;
 
-    if (changed) {
-        DataHub.set('piggyAutoShopLog', shopLog);
+        doFriendRandomShopping(f.id);
     }
 }
 
@@ -30531,12 +30528,13 @@ window.showPayForRequestModal = showPayForRequestModal;
 window.selectPayReqOption = selectPayReqOption;
 window.confirmPayForRequest = confirmPayForRequest;
 
-// ====== 好友自动发起支付礼物请求 ======
+// ====== 好友自动发起支付礼物请求（每个好友独立计时，12~30 小时一次） ======
+var friendPayRequestNextAt = {};
+
 function autoFriendPayRequest() {
     var friends = DataHub.get('friends', []);
     if (friends.length === 0) return;
 
-    // 避免同时太多 pending 请求
     var requests = DataHub.get('payRequests', []);
     var pendingCount = 0;
     for (var pi = 0; pi < requests.length; pi++) {
@@ -30544,20 +30542,19 @@ function autoFriendPayRequest() {
     }
     if (pendingCount >= 3) return;
 
-    var today = getTodayDateStr();
-    var log = DataHub.get('payRequestAutoLog', {});
-    if (!log[today]) log[today] = {};
+    var now = Date.now();
 
-    var changed = false;
     for (var i = 0; i < friends.length; i++) {
-    var f = friends[i];
-    if (isFeatureBlockedForFriend(f.id, 'money_pay_request') || !getFeatureGlobalEnabled('money_pay_request')) continue;
+        var f = friends[i];
+        if (isFeatureBlockedForFriend(f.id, 'money_pay_request') || !getFeatureGlobalEnabled('money_pay_request')) continue;
 
-    var todayCount = log[today][f.id] || 0;
-    if (todayCount >= 1) continue;
-
-        var shouldReq = Math.random() < 0.03;
-        if (!shouldReq) continue;
+        var nextAt = friendPayRequestNextAt[f.id];
+        if (!nextAt) {
+            friendPayRequestNextAt[f.id] = now + 12 * 3600 * 1000 + Math.random() * 18 * 3600 * 1000;
+            continue;
+        }
+        if (now < nextAt) continue;
+        friendPayRequestNextAt[f.id] = now + 12 * 3600 * 1000 + Math.random() * 18 * 3600 * 1000;
 
         var visible = getVisibleProductsForFriend(f.id);
         if (visible.length === 0) continue;
@@ -30565,15 +30562,7 @@ function autoFriendPayRequest() {
         var product = visible[Math.floor(Math.random() * visible.length)];
         if (!product) continue;
 
-        var ok = createPayRequest(f.id, product.id);
-        if (ok) {
-            log[today][f.id] = todayCount + 1;
-            changed = true;
-        }
-    }
-
-    if (changed) {
-        DataHub.set('payRequestAutoLog', log);
+        createPayRequest(f.id, product.id);
     }
 }
 
@@ -31634,28 +31623,34 @@ function checkGroupRedpacketExpire() {
     }
 }
 
-// 好友主动发群红包（定时触发）
+// 好友主动发群红包（每个群成员独立计时，6~12 小时一次）
+var groupRedpacketNextAt = {};
+
 function autoFriendSendGroupRedpacket() {
     var chatrooms = DataHub.get('chatrooms', []);
     if (chatrooms.length === 0) return;
 
-    var today = getTodayDateStr();
-    var log = DataHub.get('groupRedpacketAutoLog', {});
-    if (!log[today]) log[today] = {};
+    var now = Date.now();
+    var friends = DataHub.get('friends', []);
 
-    var changed = false;
     for (var i = 0; i < chatrooms.length; i++) {
         var room = chatrooms[i];
         var members = room.members || [];
         if (members.length === 0) continue;
 
         for (var j = 0; j < members.length; j++) {
-    var memberId = members[j];
-    if (isFeatureBlockedForFriend(memberId, 'money_group_redpacket') || !getFeatureGlobalEnabled('money_group_redpacket')) continue;
-    var logKey = room.id + '_' + memberId;
-    if (log[today][logKey]) continue;
+            var memberId = members[j];
+            if (isFeatureBlockedForFriend(memberId, 'money_group_redpacket') || !getFeatureGlobalEnabled('money_group_redpacket')) continue;
 
-            var friends = DataHub.get('friends', []);
+            var logKey = room.id + '_' + memberId;
+            var nextAt = groupRedpacketNextAt[logKey];
+            if (!nextAt) {
+                groupRedpacketNextAt[logKey] = now + 6 * 3600 * 1000 + Math.random() * 6 * 3600 * 1000;
+                continue;
+            }
+            if (now < nextAt) continue;
+            groupRedpacketNextAt[logKey] = now + 6 * 3600 * 1000 + Math.random() * 6 * 3600 * 1000;
+
             var friend = friends.find(function(f) { return f.id === memberId; });
             if (!friend) continue;
             var friendBalance = friend.balance || 0;
@@ -31663,21 +31658,14 @@ function autoFriendSendGroupRedpacket() {
 
             var mode = Math.random() < 0.5 ? 'lucky' : 'normal';
             var minTotal = members.length * 0.01;
-if (friendBalance < minTotal) continue;
+            if (friendBalance < minTotal) continue;
 
-var amount = Math.round((0.01 + Math.random() * (friendBalance - 0.01)) * 100) / 100;
-if (amount < minTotal) amount = minTotal;
-if (amount > friendBalance) amount = Math.round(friendBalance * 100) / 100;
+            var amount = Math.round((0.01 + Math.random() * (friendBalance - 0.01)) * 100) / 100;
+            if (amount < minTotal) amount = minTotal;
+            if (amount > friendBalance) amount = Math.round(friendBalance * 100) / 100;
 
-            var ok = sendGroupRedpacketByFriend(room.id, memberId, mode, amount);
-            if (ok) {
-                log[today][logKey] = true;
-                changed = true;
-            }
+            sendGroupRedpacketByFriend(room.id, memberId, mode, amount);
         }
-    }
-    if (changed) {
-        DataHub.set('groupRedpacketAutoLog', log);
     }
 }
 
@@ -32372,19 +32360,24 @@ function tryAttachFeatureRequestInChat(chatId) {
     });
 }
 
-// 定时随机触发：每个好友 6~24 小时一次
+// 定时随机触发：每个好友独立计时，6~24 小时一次
+var featureRequestTimerLog = {};
+
 function autoFeatureRequestByTimer() {
     var friends = DataHub.get('friends', []);
     if (friends.length === 0) return;
-    var log = DataHub.get('featureRequestTimerLog', {});
     var now = Date.now();
 
     friends.forEach(function(friend) {
-        var last = log[friend.id] || 0;
-        var interval = 6 * 3600 * 1000 + Math.random() * 18 * 3600 * 1000;
-        if (now - last < interval) return;
-        log[friend.id] = now;
-        DataHub.set('featureRequestTimerLog', log);
+        var nextAt = featureRequestTimerLog[friend.id];
+        if (!nextAt) {
+            // 第一次：错开初始化，6~24 小时后才可能触发
+            featureRequestTimerLog[friend.id] = now + 6 * 3600 * 1000 + Math.random() * 18 * 3600 * 1000;
+            return;
+        }
+        if (now < nextAt) return;
+        // 到点了，重排下一次
+        featureRequestTimerLog[friend.id] = now + 6 * 3600 * 1000 + Math.random() * 18 * 3600 * 1000;
 
         var mood = friend.currentMood || { level: 'normal' };
         var prob = 50;
@@ -32611,13 +32604,29 @@ setInterval(function() { checkQuestionnairePendingAnswers(); }, 60000);
     DataHub.set('friends', friends);
 }
     
-    function generateMomentsOnAppUse() {
+    // 好友朋友圈（每个好友独立计时，6~20 小时一次）
+var friendMomentsNextAt = {};
+
+function generateMomentsOnAppUse() {
     var friends = DataHub.get('friends', []);
-    friends.forEach(function(friend) {
-        if (Math.random() * 100 <= 30) {
-            generateMomentForFriendById(friend.id);
+    if (friends.length === 0) return;
+
+    var now = Date.now();
+
+    for (var i = 0; i < friends.length; i++) {
+        var friend = friends[i];
+        if (isFeatureBlockedForFriend(friend.id, 'social_friend_moments') || !getFeatureGlobalEnabled('social_friend_moments')) continue;
+
+        var nextAt = friendMomentsNextAt[friend.id];
+        if (!nextAt) {
+            friendMomentsNextAt[friend.id] = now + 6 * 3600 * 1000 + Math.random() * 14 * 3600 * 1000;
+            continue;
         }
-    });
+        if (now < nextAt) continue;
+        friendMomentsNextAt[friend.id] = now + 6 * 3600 * 1000 + Math.random() * 14 * 3600 * 1000;
+
+        generateMomentForFriendById(friend.id);
+    }
 }
 
     function generateMomentForFriend(friend) {
