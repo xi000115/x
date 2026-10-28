@@ -2530,12 +2530,13 @@ try {
         console.error('updateChatTopAvatar 报错:', e);
     }
 
-    updateChatTopAvatar(chatId);
+            updateChatTopAvatar(chatId);
     updateChatTopStatus(chatId);
     startChatTopStatusTimer(chatId);
     startAutoStartTimer();
 startChatSessionTimer(chatId);
 startFriendSpecialVoteTimer(chatId);
+    jumpChatToBottom();
     if (window.visualViewport) {
         handleVisualViewport();
     }
@@ -4421,23 +4422,34 @@ if (m.isPayRequest && m.payRequestId) {
     var wasNearBottom = isChatNearBottom();
     
     // 如果不在底部，开启浏览器的锚点锁定（让浏览器自己保持当前位置，绝对不闪）
-    if (!wasNearBottom) {
-        container.style.overflowAnchor = 'auto';
-    } else {
-        container.style.overflowAnchor = 'none';
-    }
+if (!wasNearBottom) {
+    container.style.overflowAnchor = 'auto';
+} else {
+    container.style.overflowAnchor = 'none';
+}
 
-    // 渲染新 DOM
-    container.innerHTML = html;
+// 渲染新 DOM
+container.innerHTML = html;
 
-    if (wasNearBottom) {
-        // 如果在底部，直接滚到底部
-        container.scrollTop = container.scrollHeight;
-        clearChatUnreadBubble();
-    } else {
-        // 如果不在底部，由于启用了 overflow-anchor，浏览器会自动保持你当前看到的消息不动
-        chatViewState.isNearBottom = false;
+if (wasNearBottom) {
+    // 如果在底部，多帧兜底滚到底部（覆盖图片加载、布局延迟导致 scrollHeight 偏小的情况）
+    function _doScrollChatToBottom() {
+        var _c = document.getElementById('chatMessages');
+        if (_c) _c.scrollTop = _c.scrollHeight;
     }
+    _doScrollChatToBottom();
+    requestAnimationFrame(function() {
+        _doScrollChatToBottom();
+        requestAnimationFrame(_doScrollChatToBottom);
+    });
+    setTimeout(_doScrollChatToBottom, 50);
+    setTimeout(_doScrollChatToBottom, 150);
+    setTimeout(_doScrollChatToBottom, 300);
+    clearChatUnreadBubble();
+} else {
+    // 如果不在底部，由于启用了 overflow-anchor，浏览器会自动保持你当前看到的消息不动
+    chatViewState.isNearBottom = false;
+}
 
     bindChatMessageLongPress();
     bindQuoteBubbleClick();
