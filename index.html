@@ -1219,44 +1219,40 @@ color: #000000;
     to { transform: scale(1); opacity: 1; }
 }
 
-/* 新增：修复未读小圆圈没有样式导致撑开底部的问题 */
-#chatUnreadBubble {
+/* 文字提示：右边，贴紧输入框 */
+#chatUnreadText {
     position: absolute;
-    right: 16px;
-    bottom: 140px; /* 悬浮在文字提示的上方 */
-    min-width: 18px;
-    height: 18px;
-    padding: 0 5px;
-    border-radius: 10px;
-    background: var(--theme-dark, #4a7a4e); /* 使用主题深色，保证可读性 */
-    color: #ffffff; /* 白色文字 */
-    font-size: 10px;
-    font-weight: 600;
-    display: none;
-    align-items: center;
-    justify-content: center;
+    right: 16px; /* 文字在右边 */
+    bottom: 65px; /* 贴在输入区正上方 */
+    padding: 5px 12px;
+    border-radius: 16px;
+    background: var(--theme-dark, #4a7a4e);
+    color: #ffffff;
+    font-size: 11px;
     cursor: pointer;
     z-index: 999;
+    display: none;
     box-shadow: 0 2px 6px rgba(0,0,0,0.2);
     user-select: none;
     pointer-events: auto;
+    white-space: nowrap;
 }
-#chatUnreadBubble.show {
-    display: flex;
+#chatUnreadText.show {
+    display: block;
 }
 
-/* 新增：修复未读小圆圈没有样式导致撑开底部的问题 */
+/* 数字圆圈：左边，贴紧输入框 */
 #chatUnreadBubble {
     position: absolute;
-    right: 16px;
-    bottom: 140px; /* 悬浮在文字提示的上方 */
-    min-width: 18px;
-    height: 18px;
-    padding: 0 5px;
+    left: 16px; /* 圆圈在左边 */
+    bottom: 65px; /* 高度一样，贴紧上方 */
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
     border-radius: 10px;
-    background: var(--theme-dark, #4a7a4e); /* 使用主题深色，保证可读性 */
-    color: #ffffff; /* 白色文字 */
-    font-size: 10px;
+    background: var(--theme-dark, #4a7a4e);
+    color: #ffffff;
+    font-size: 11px;
     font-weight: 600;
     display: none;
     align-items: center;
@@ -1400,7 +1396,7 @@ color: #000000;
     <span id="voiceRecordTime" style="font-size:14px;color:#000000;font-weight:500;">0″</span>
     <span id="voiceRecordHint" style="font-size:12px;color:#666666;">正在录音，再点一次图标结束</span>
 </div>
-        <div id="emojiPanel">
+                <div id="emojiPanel">
     <div class="emoji-type-tabs" id="emojiTypeTabs">
         <button data-type="emoji_pack" class="active">表情包</button>
         <button data-type="pat">拍一拍</button>
@@ -1416,6 +1412,10 @@ color: #000000;
             <div class="emoji-content" id="emojiContent"></div>
     </div>
 </div>
+
+    <!-- 聊天未读提示：分开独立，文字在右下角偏上，圆圈在文字右侧 -->
+<div id="chatUnreadText" onclick="jumpChatToFirstUnread()"></div>
+<div id="chatUnreadBubble" onclick="jumpChatToBottom()"></div>
 
     <div id="subPageContainer"></div>
     <div id="videoCallContainer"></div>
@@ -3703,11 +3703,17 @@ function isChatNearBottom() {
     return distance <= 50;
 }
 
+// 动态计算位置，避开底部输入区
+// 已废弃动态计算，位置完全交由 CSS 固定控制
+function positionChatUnreadTips() {
+}
+
 function showChatUnreadBubble(count) {
     var bubble = document.getElementById('chatUnreadBubble');
     if (!bubble) return;
     if (count > 0) {
         bubble.textContent = count > 99 ? '99+' : String(count);
+        positionChatUnreadTips();
         bubble.classList.add('show');
     } else {
         bubble.classList.remove('show');
@@ -3752,6 +3758,7 @@ function showChatUnreadText(chatId) {
     chatUnreadTextState.count = unreadList.length;
 
     el.textContent = unreadList.length + '条消息未读↑';
+    positionChatUnreadTips();
     el.classList.add('show');
 }
 
@@ -4410,23 +4417,29 @@ if (m.isPayRequest && m.payRequestId) {
 
     if (!html) html = '<div style="text-align:center;color:#999999;padding:20px;">暂无消息</div>';
 
-var prevScrollHeight = container.scrollHeight;
-var prevScrollTop = container.scrollTop;
-var prevClientHeight = container.clientHeight;
-var wasNearBottom = (prevScrollHeight - prevScrollTop - prevClientHeight) <= 50;
+    // 记住当前是否在底部
+    var wasNearBottom = isChatNearBottom();
+    
+    // 如果不在底部，开启浏览器的锚点锁定（让浏览器自己保持当前位置，绝对不闪）
+    if (!wasNearBottom) {
+        container.style.overflowAnchor = 'auto';
+    } else {
+        container.style.overflowAnchor = 'none';
+    }
 
-container.innerHTML = html;
+    // 渲染新 DOM
+    container.innerHTML = html;
 
-if (wasNearBottom) {
-    container.scrollTop = container.scrollHeight;
-    clearChatUnreadBubble();
-} else {
-    var newScrollHeight = container.scrollHeight;
-    container.scrollTop = prevScrollTop + (newScrollHeight - prevScrollHeight);
-    chatViewState.isNearBottom = false;
-}
+    if (wasNearBottom) {
+        // 如果在底部，直接滚到底部
+        container.scrollTop = container.scrollHeight;
+        clearChatUnreadBubble();
+    } else {
+        // 如果不在底部，由于启用了 overflow-anchor，浏览器会自动保持你当前看到的消息不动
+        chatViewState.isNearBottom = false;
+    }
 
-bindChatMessageLongPress();
+    bindChatMessageLongPress();
     bindQuoteBubbleClick();
     bindChatScrollListener();
 
