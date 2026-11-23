@@ -22907,7 +22907,7 @@ function showGachaPoolModal(id) {
     const preview = window._gachaPoolCoverTemp
         ? '<img src="' + window._gachaPoolCoverTemp + '" id="gachaPoolPreview" style="width:100%;height:120px;object-fit:cover;border-radius:10px;background:#f0f0f0;">'
         : '<div id="gachaPoolPreview" style="width:100%;height:120px;border-radius:10px;background:#f0f0f0;display:flex;align-items:center;justify-content:center;color:#bbbbbb;font-size:13px;">点击上传卡池封面（可选）</div>';
-    const isLimited = editing && editing.type === 'limited';
+        const isLimited = editing && (editing.type === 'limited' || editing.type === 'reprint');
     // 卡牌多选列表
     let cardsHtml = '';
     const chosen = editing ? (editing.cardIds || []) : [];
@@ -22925,9 +22925,10 @@ function showGachaPoolModal(id) {
         <input type="text" id="gachaPoolNameInput" placeholder="卡池名称" value="${editing ? gachaEsc(editing.name) : ''}" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;margin-bottom:10px;">
         <textarea id="gachaPoolDescInput" placeholder="卡池简介（可选）" rows="2" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;margin-bottom:10px;">${editing ? gachaEsc(editing.desc) : ''}</textarea>
         <div style="display:flex;gap:8px;margin-bottom:10px;">
-            <select id="gachaPoolTypeInput" onchange="gachaPoolTypeChanged()" style="flex:1;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;">
-                <option value="normal" ${!isLimited ? 'selected' : ''}>常驻池</option>
-                <option value="limited" ${isLimited ? 'selected' : ''}>限时池</option>
+                        <select id="gachaPoolTypeInput" onchange="gachaPoolTypeChanged()" style="flex:1;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;">
+                <option value="normal" ${editing && (editing.type === 'limited' || editing.type === 'reprint') ? '' : 'selected'}>常驻池</option>
+                <option value="limited" ${editing && editing.type === 'limited' ? 'selected' : ''}>限时池</option>
+                <option value="reprint" ${editing && editing.type === 'reprint' ? 'selected' : ''}>复刻池</option>
             </select>
         </div>
         <div id="gachaPoolTimeBox" style="display:${isLimited ? 'flex' : 'none'};gap:8px;margin-bottom:10px;">
@@ -22951,7 +22952,7 @@ function showGachaPoolModal(id) {
 }
 function gachaPoolTypeChanged() {
     const v = document.getElementById('gachaPoolTypeInput').value;
-    document.getElementById('gachaPoolTimeBox').style.display = (v === 'limited') ? 'flex' : 'none';
+    document.getElementById('gachaPoolTimeBox').style.display = (v === 'limited' || v === 'reprint') ? 'flex' : 'none';
 }
 function gachaPoolCoverPicked() {
     const inp = document.getElementById('gachaPoolCoverInput');
@@ -22978,8 +22979,8 @@ function saveGachaPool() {
     };
     const sum = rates.R + rates.SR + rates.SSR;
     if (Math.abs(sum - 100) > 0.01) { showToast('R+SR+SSR 概率之和应为 100（当前 ' + sum + '）'); return; }
-    const startTime = type === 'limited' ? document.getElementById('gachaPoolStartInput').value : '';
-    const endTime = type === 'limited' ? document.getElementById('gachaPoolEndInput').value : '';
+        const startTime = (type === 'limited' || type === 'reprint') ? document.getElementById('gachaPoolStartInput').value : '';
+    const endTime = (type === 'limited' || type === 'reprint') ? document.getElementById('gachaPoolEndInput').value : '';
     const cardIds = Array.prototype.slice.call(document.querySelectorAll('.gachaPoolCardChk:checked')).map(function (el) { return el.value; });
     const data = getGachaData();
     const editId = window._gachaPoolId;
@@ -23051,9 +23052,170 @@ function setTickets(n) {
     persistGacha();
 }
 
+// 判断卡池当前是否在开放期：常驻池永远开放；限定池/复刻池看当前时间是否落在开放起止区间内
+function gachaPoolIsOpen(pool) {
+    if (!pool) return false;
+    if (pool.type !== 'limited' && pool.type !== 'reprint') return true;
+    var now = Date.now();
+    var st = pool.startTime ? new Date(pool.startTime).getTime() : 0;
+    var et = pool.endTime ? new Date(pool.endTime).getTime() : Infinity;
+    return now >= st && now <= et;
+}
+// 抽卡页自动刷新开放状态：每 10 秒复查一次，仅当页面开着且某池开放状态变化时才重绘
+function _gachaRefreshOpenState() {
+    if (!window._gachaPageOpen) return;
+    const pools = (getGachaData().pools || []);
+    var key = '';
+    pools.forEach(function (p) { key += p.id + ':' + (gachaPoolIsOpen(p) ? 1 : 0) + '|'; });
+    if (key === window._gachaLastOpenKey) return;
+    window._gachaLastOpenKey = key;
+    const c = document.getElementById('subPageContainer');
+    if (!c) return;
+    c.innerHTML = renderGachaDrawPage();
+    const sp = c.querySelector('.sub-page');
+    if (sp) { sp.classList.add('active'); sp.style.pointerEvents = 'auto'; }
+}
+setInterval(_gachaRefreshOpenState, 10000);
+
+// 抽一次的核心：只更新内存里的保底/拥有/溢出/统计/记录，不扣券、不落盘、不弹窗
+// 返回 {ok, card, isOverflow, currencyName, currencyTotal, ownNow}；调用方负责 setTickets 与 persistGacha
+function gachaRollOnce(pool) {
+    const g = getGachaData();
+    if (!g.pity || typeof g.pity !== 'object') g.pity = {};
+    let pity = g.pity[pool.id];
+    if (!pity || typeof pity.sinceSSR !== 'number' || typeof pity.sinceSR !== 'number') pity = { sinceSSR: 0, sinceSR: 0 };
+    if (!g.records) g.records = [];
+    if (!g.own || typeof g.own !== 'object') g.own = {};
+    if (!g.stats || typeof g.stats !== 'object') g.stats = {};
+
+    const res = drawFromPool(pool, pity);
+    const hit = res.card;
+    if (!hit) return { ok: false };
+
+    const curOwn = g.own[hit.id] || 0;
+    const isOverflow = curOwn >= 4;
+    let currencyName = '', currencyTotal = 0;
+    if (isOverflow) {
+        if (hit.rarity === 'SSR') { g.diamond = (g.diamond || 0) + 10; currencyTotal = g.diamond; currencyName = '卡钻'; }
+        else if (hit.rarity === 'SR') { g.gravel = (g.gravel || 0) + 10; currencyTotal = g.gravel; currencyName = '卡砾'; }
+        else { g.sand = (g.sand || 0) + 10; currencyTotal = g.sand; currencyName = '卡沙'; }
+    } else {
+        g.own[hit.id] = curOwn + 1;
+    }
+
+    if (hit.rarity === 'SSR') { pity.sinceSSR = 0; pity.sinceSR = 0; }
+    else if (hit.rarity === 'SR') { pity.sinceSSR = pity.sinceSSR + 1; pity.sinceSR = 0; }
+    else { pity.sinceSSR = pity.sinceSSR + 1; pity.sinceSR = pity.sinceSR + 1; }
+    g.pity[pool.id] = pity;
+
+    if (!g.stats[pool.id] || typeof g.stats[pool.id] !== 'object') g.stats[pool.id] = { total: 0, ssr: 0 };
+    g.stats[pool.id].total = (g.stats[pool.id].total || 0) + 1;
+    if (hit.rarity === 'SSR') g.stats[pool.id].ssr = (g.stats[pool.id].ssr || 0) + 1;
+
+    const now = new Date();
+    const time = now.getFullYear() + '.' + String(now.getMonth()+1).padStart(2,'0') + '.' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
+    // 记录只存名字/稀有度，不存图片字段，省内存（图片按需在卡库里查）
+    g.records.unshift({ poolId: pool.id, poolName: pool.name, cardId: hit.id, cardName: hit.name, rarity: hit.rarity || '', time: time });
+    if (g.records.length > 500) g.records = g.records.slice(0, 500);
+
+    return { ok: true, card: hit, isOverflow: isOverflow, currencyName: currencyName, currencyTotal: currencyTotal, ownNow: g.own[hit.id] };
+}
+
+// 切换当前卡池（底部三池标签点击调用）
+function gachaSwitchPool(poolId) {
+    window._gachaSelPoolId = poolId;
+    if (window._gachaPageOpen) openGachaDrawPage();
+}
+
+// 取当前选中的卡池对象
+function gachaCurrentPool() {
+    const g = getGachaData();
+    return (g.pools || []).find(function (x) { return x.id === window._gachaSelPoolId; }) || null;
+}
+
+// 抽 1 抽：点了直接抽，无确认弹窗
+function gachaDrawOnce() {
+    if (getTickets() < 1) { showToast('抽卡券不足，请先去卡店买券'); return; }
+    const pool = gachaCurrentPool();
+    if (!pool) { showToast('请先选择一个卡池'); return; }
+    if (!gachaPoolIsOpen(pool)) { showToast('该卡池未开放'); return; }
+    const r = gachaRollOnce(pool);
+    if (!r.ok) { showToast('该卡池没有可抽取的卡牌'); return; }
+    setTickets(getTickets() - 1);
+    persistGacha();
+    const c = r.card;
+    const thumb = c.image
+        ? '<img src="' + c.image + '" style="width:110px;height:110px;object-fit:cover;border-radius:12px;margin:0 auto 10px auto;display:block;">'
+        : '<div style="width:110px;height:110px;border-radius:12px;background:#f0f0f0;margin:0 auto 10px auto;"></div>';
+    const ownLine = r.isOverflow
+        ? '<div style="text-align:center;font-size:12px;color:#c62828;margin-bottom:10px;">已溢出 · 转化为 10 枚' + r.currencyName + '（当前共 ' + r.currencyTotal + '）</div>'
+        : '<div style="text-align:center;font-size:12px;color:#2e7d32;margin-bottom:10px;">入袋 · 当前拥有 ' + r.ownNow + ' 张</div>';
+    const html =
+        '<div class="modal-title">抽卡结果</div>' +
+        thumb +
+        '<div style="text-align:center;font-size:16px;color:#000000;font-weight:600;margin-bottom:6px;">' + gachaEsc(c.name) + '</div>' +
+        '<div style="text-align:center;margin-bottom:8px;">' + gachaRarityBadge(c.rarity) + '</div>' +
+                ownLine +
+        '<div class="btn-row"><button class="confirm" onclick="closeModal()">好的</button></div>';
+    showModal(html);
+    renderAll();
+    if (window._gachaPageOpen) openGachaDrawPage();
+}
+
+// 抽 10 抽：连抽10次，结果网格一次看完（缩略小图防卡顿）
+function gachaDrawTen() {
+    if (getTickets() < 10) { showToast('抽卡券不足，抽10次需要10张券'); return; }
+    const pool = gachaCurrentPool();
+    if (!pool) { showToast('请先选择一个卡池'); return; }
+    if (!gachaPoolIsOpen(pool)) { showToast('该卡池未开放'); return; }
+    const results = [];
+    for (let i = 0; i < 10; i++) {
+        const r = gachaRollOnce(pool);
+        if (!r.ok) break;
+        results.push(r);
+    }
+    if (!results.length) { showToast('该卡池没有可抽取的卡牌'); return; }
+    setTickets(getTickets() - results.length);
+    persistGacha();
+    let grid = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">';
+    results.forEach(function (r) {
+        const c = r.card;
+        const thumb = c.image
+            ? '<img src="' + c.image + '" style="width:56px;height:56px;object-fit:cover;border-radius:8px;flex-shrink:0;">'
+            : '<div style="width:56px;height:56px;border-radius:8px;background:#f0f0f0;flex-shrink:0;"></div>';
+        grid += '<div style="display:flex;align-items:center;gap:8px;padding:6px;background:var(--theme-lighter, #f8fbf8);border-radius:12px;min-width:0;">' +
+            thumb +
+            '<div style="min-width:0;">' +
+                '<div style="font-size:13px;color:#000000;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + gachaEsc(c.name) + '</div>' +
+                '<div style="margin-top:3px;">' + gachaRarityBadge(c.rarity) + '</div>' +
+            '</div>' +
+        '</div>';
+    });
+    grid += '</div>';
+    const html =
+        '<div class="modal-title">抽卡结果（' + results.length + ' 连）</div>' +
+        grid +
+        '<div class="btn-row"><button class="confirm" onclick="closeModal()">好的</button></div>';
+    showModal(html);
+    renderAll();
+    if (window._gachaPageOpen) openGachaDrawPage();
+}
+
 // ---- 抽卡页 ----
 function openGachaDrawPage() {
     window._gachaPageOpen = true;
+    // 保留当前选中池；仅当它已不存在时才回退：优先第一个常驻池，否则第一个池
+    var _gpools = (getGachaData().pools || []);
+    var _gsel = window._gachaSelPoolId;
+    var _valid = _gsel && _gpools.some(function (x) { return x.id === _gsel; });
+    if (!_valid) {
+        _gsel = null;
+        for (var _gi = 0; _gi < _gpools.length; _gi++) {
+            if (_gpools[_gi].type !== 'limited' && _gpools[_gi].type !== 'reprint') { _gsel = _gpools[_gi].id; break; }
+        }
+        if (!_gsel && _gpools.length) _gsel = _gpools[0].id;
+        window._gachaSelPoolId = _gsel;
+    }
     const container = document.getElementById('subPageContainer');
     container.innerHTML = renderGachaDrawPage();
     const sp = container.querySelector('.sub-page');
@@ -23067,49 +23229,80 @@ function renderGachaDrawPage() {
     const g = getGachaData();
     const tickets = getTickets();
     const pools = g.pools || [];
-    let listHtml = '';
-    if (!pools.length) {
-        listHtml = '<div style="text-align:center;color:#999999;padding:30px 0;font-size:13px;">还没有卡池，请先到「卡库」新建卡池</div>';
-    } else {
-        pools.forEach(function (p) {
-            const typeTag = p.type === 'limited' ? '限时' : '常驻';
-            const tagColor = p.type === 'limited' ? '#c62828' : '#999999';
-            const r = p.rates || {};
-            const rateTxt = 'R ' + (r.R != null ? r.R : '-') + '% · SR ' + (r.SR != null ? r.SR : '-') + '% · SSR ' + (r.SSR != null ? r.SSR : '-') + '%';
-            const cover = p.cover
-                ? '<img src="' + p.cover + '" style="width:50px;height:50px;border-radius:8px;object-fit:cover;flex-shrink:0;">'
-                : '<div style="width:50px;height:50px;border-radius:8px;background:#f0f0f0;flex-shrink:0;"></div>';
-            listHtml += '<div class="setting-block" style="margin:8px 0;display:flex;align-items:center;gap:10px;">' +
-                cover +
-                '<div style="flex:1;min-width:0;">' +
-                    '<div style="font-size:14px;color:#000000;font-weight:600;">' + gachaEsc(p.name) + '<span style="margin-left:6px;font-size:11px;color:' + tagColor + ';">' + typeTag + '</span></div>' +
-                    '<div style="font-size:11px;color:#888888;margin-top:3px;">含卡牌 ' + ((p.cardIds || []).length) + ' 张 · ' + rateTxt + '</div>' +
-                '</div>' +
-                '<button class="btn-primary" onclick="showGachaDrawConfirm(\'' + p.id + '\')" style="flex-shrink:0;padding:6px 16px;">抽卡</button>' +
-            '</div>';
-        });
+
+    // 当前选中池（若选中池已被删除，回退第一个常驻池，再退第一个池）
+    let pool = pools.find(function (x) { return x.id === window._gachaSelPoolId; }) || null;
+    if (!pool) {
+        pool = pools.find(function (x) { return x.type !== 'limited' && x.type !== 'reprint'; }) || pools[0] || null;
+        window._gachaSelPoolId = pool ? pool.id : null;
     }
-    return '<div class="sub-page active" style="z-index:60;background:#ffffff;position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:auto;display:flex;flex-direction:column;">' +
+
+    // 顶部：券数 + 卡店 + 记录入口
+    const topBar =
         '<div class="sub-top">' +
             '<div class="back-btn" onclick="backToGachaMainFromDraw()">' +
                 '<svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>' +
             '</div>' +
             '<span>抽卡</span>' +
-        '</div>' +
-        '<div class="sub-content" style="padding:16px;overflow-y:auto;pointer-events:auto;flex:1;">' +
-            '<div style="display:flex;align-items:center;justify-content:space-between;background:var(--theme-lighter, #f8fbf8);border-radius:16px;padding:14px 16px;margin-bottom:12px;">' +
-                '<div>' +
-                    '<div style="font-size:13px;color:#999999;">我的抽卡券</div>' +
-                    '<div style="font-size:28px;font-weight:600;color:#000000;">' + tickets + '</div>' +
-                '</div>' +
-                '<div style="display:flex;gap:8px;">' +
-                    '<button class="btn-icon" onclick="showBuyTicketModal()" style="padding:8px 16px;border-radius:30px;border:none;font-size:13px;cursor:pointer;background:var(--theme-main, #d4e9d6);color:#000000;">买券</button>' +
-                    '<button class="btn-icon" onclick="showGachaRecords()" style="padding:8px 16px;border-radius:30px;border:1px solid #d4e4d6;font-size:13px;cursor:pointer;background:transparent;color:#000000;">抽卡记录</button>' +
-                '</div>' +
+            '<div style="margin-left:auto;display:flex;align-items:center;gap:10px;padding-right:12px;">' +
+                '<span style="font-size:13px;color:#000000;">券 ' + tickets + '</span>' +
+                '<button class="btn-icon" onclick="showBuyTicketModal()" style="padding:5px 12px;border-radius:30px;border:none;font-size:12px;cursor:pointer;background:var(--theme-main, #d4e9d6);color:#000000;">卡店</button>' +
+                '<span onclick="showGachaRecords()" style="font-size:12px;color:#000000;cursor:pointer;">记录</span>' +
             '</div>' +
-            '<div style="font-size:13px;color:#888888;margin-bottom:4px;">选择卡池抽取（每次消耗1张抽卡券）</div>' +
-            listHtml +
+        '</div>';
+
+    // 券不足红条
+    const lowBar = tickets < 1
+        ? '<div style="background:#c62828;color:#ffffff;font-size:12px;text-align:center;padding:6px 12px;">抽卡券不足，点右上角「卡店」买券</div>'
+        : '';
+
+    // 中间：背景大图（或主题极浅绿底）+ 概率角标
+    let midInner = '';
+    if (!pools.length) {
+        midInner = '<div style="text-align:center;color:#999999;padding:40px 20px;font-size:14px;">还没有卡池，请先到「卡库」新建卡池</div>';
+    } else if (!pool) {
+        midInner = '<div style="text-align:center;color:#999999;padding:40px 20px;font-size:14px;">暂无可用卡池</div>';
+    } else {
+        const bg = pool.cover
+            ? '<img src="' + pool.cover + '" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;">'
+            : '';
+        const r = pool.rates || {};
+        const rateBadge = '<div style="position:absolute;top:10px;left:10px;background:rgba(0,0,0,0.45);color:#ffffff;font-size:11px;line-height:1.6;padding:6px 10px;border-radius:10px;max-width:70%;">' +
+            gachaEsc(pool.name) + '<br>R ' + (r.R != null ? r.R : '-') + '% · SR ' + (r.SR != null ? r.SR : '-') + '% · SSR ' + (r.SSR != null ? r.SSR : '-') + '%' +
+            (!gachaPoolIsOpen(pool) ? '<br>未开放' : '') +
+        '</div>';
+        midInner = bg + rateBadge;
+    }
+
+    // 底部：抽1抽 / 抽10抽（当前池未开放时置灰不可点）
+    const open = pool ? gachaPoolIsOpen(pool) : false;
+    const btnOn = 'flex:1;padding:12px;border:none;border-radius:14px;font-size:15px;font-weight:600;cursor:pointer;background:var(--theme-main, #d4e9d6);color:#000000;';
+    const btnOff = 'flex:1;padding:12px;border:none;border-radius:14px;font-size:15px;font-weight:600;cursor:not-allowed;background:#e0e0e0;color:#999999;';
+    const drawBtns =
+        '<div style="display:flex;gap:12px;padding:12px 16px;">' +
+            '<button style="' + (open ? btnOn : btnOff) + '" onclick="gachaDrawOnce()"' + (open ? '' : ' disabled') + '>抽 1 抽</button>' +
+            '<button style="' + (open ? btnOn : btnOff) + '" onclick="gachaDrawTen()"' + (open ? '' : ' disabled') + '>抽 10 抽</button>' +
+        '</div>';
+
+    // 最底：三池标签（未开放置灰）
+    let tabsHtml = '';
+    pools.forEach(function (p) {
+        const isSel = pool && p.id === pool.id;
+        const isOpen = gachaPoolIsOpen(p);
+        const typeLabel = p.type === 'limited' ? '·限时' : (p.type === 'reprint' ? '·复刻' : '');
+        const tabOn = 'flex:1;padding:8px 4px;border:none;border-radius:12px;font-size:12px;cursor:pointer;background:var(--theme-main, #d4e9d6);color:#000000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+        const tabOff = 'flex:1;padding:8px 4px;border:none;border-radius:12px;font-size:12px;cursor:pointer;background:#f0f0f0;color:#999999;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+        const gray = !isOpen ? 'opacity:0.5;' : '';
+        tabsHtml += '<button style="' + (isSel ? tabOn : tabOff) + gray + '" onclick="gachaSwitchPool(\'' + p.id + '\')">' + gachaEsc(p.name) + typeLabel + (isOpen ? '' : '（未开放）') + '</button>';
+    });
+    const tabBar = '<div style="display:flex;gap:8px;padding:8px 12px 14px 12px;">' + tabsHtml + '</div>';
+
+    return '<div class="sub-page active" style="z-index:60;background:#ffffff;position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:auto;display:flex;flex-direction:column;">' +
+        topBar + lowBar +
+        '<div style="flex:1;position:relative;overflow:hidden;background:var(--theme-lighter, #f8fbf8);">' +
+            midInner +
         '</div>' +
+        drawBtns + tabBar +
     '</div>';
 }
 
@@ -23117,26 +23310,57 @@ function renderGachaDrawPage() {
 function showBuyTicketModal() {
     const wallet = DataHub.get('wallet', { balance: 0, flows: [] });
     const balance = (wallet.balance || 0);
+    window._gachaTicketRatio = 10; // 兑换比固定：10元 = 1张，不可改
     const html =
         '<div class="modal-title">购买抽卡券</div>' +
-        '<div style="font-size:13px;color:#888888;margin-bottom:10px;">当前余额 ¥' + balance.toFixed(2) + '</div>' +
+        '<div style="font-size:13px;color:#888888;margin-bottom:10px;">当前余额 ¥' + balance.toFixed(2) + ' · 兑换比 10元 = 1张</div>' +
         '<div style="display:flex;gap:8px;margin-bottom:10px;">' +
-            '<div style="flex:1;"><div style="font-size:11px;color:#888888;margin-bottom:4px;">单价（元/张）</div><input type="number" id="gachaTicketPrice" min="0" step="0.01" value="1" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;"></div>' +
-            '<div style="flex:1;"><div style="font-size:11px;color:#888888;margin-bottom:4px;">数量（张）</div><input type="number" id="gachaTicketCount" min="1" step="1" value="1" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;"></div>' +
+            '<div style="flex:1;"><div style="font-size:11px;color:#888888;margin-bottom:4px;">消耗金额（元）</div><input type="number" id="gachaTicketMoney" min="0" step="10" value="10" oninput="gachaMoneyChanged()" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;"></div>' +
+            '<div style="flex:1;"><div style="font-size:11px;color:#888888;margin-bottom:4px;">获得券（张）</div><input type="number" id="gachaTicketCount" min="1" step="1" value="1" oninput="gachaCountChanged()" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;"></div>' +
         '</div>' +
+        '<div id="gachaTicketTotalLine" style="font-size:13px;color:#000000;margin-bottom:12px;"></div>' +
         '<div class="btn-row">' +
             '<button class="cancel" onclick="closeModal()">取消</button>' +
             '<button class="confirm" onclick="buyTickets()">确定购买</button>' +
         '</div>';
     showModal(html);
+    gachaMoneyChanged();
 }
-function buyTickets() {
-    const price = parseFloat(document.getElementById('gachaTicketPrice').value) || 0;
+// 改「金额」→ 券 = 金额÷10（向下取整），再把金额规整成 10 的整数倍，保证严格 10:1
+function gachaMoneyChanged() {
+    const ratio = window._gachaTicketRatio || 10;
+    const money = parseFloat(document.getElementById('gachaTicketMoney').value) || 0;
+    const count = Math.floor(money / ratio);
+    document.getElementById('gachaTicketCount').value = count;
+    document.getElementById('gachaTicketMoney').value = count * ratio;
+    gachaTicketTotalLine();
+}
+// 改「券」→ 金额 = 券×10
+function gachaCountChanged() {
+    const ratio = window._gachaTicketRatio || 10;
     const count = parseInt(document.getElementById('gachaTicketCount').value, 10) || 0;
-    if (price <= 0 || count <= 0) { showToast('请输入有效的单价和数量'); return; }
-    const total = price * count;
+    document.getElementById('gachaTicketMoney').value = count * ratio;
+    gachaTicketTotalLine();
+}
+function gachaTicketTotalLine() {
+    const ratio = window._gachaTicketRatio || 10;
+    const money = parseFloat(document.getElementById('gachaTicketMoney').value) || 0;
+    const count = parseInt(document.getElementById('gachaTicketCount').value, 10) || 0;
     const wallet = DataHub.get('wallet', { balance: 0, flows: [] });
-    if ((wallet.balance || 0) < total) { showToast('余额不足，当前余额 ¥' + (wallet.balance || 0).toFixed(2)); return; }
+    const balance = wallet.balance || 0;
+    var line = '消耗 ¥' + money.toFixed(2) + ' · 可得 ' + count + ' 张券';
+    if (money > balance) line += '<span style="color:#c62828;"> · 超出余额</span>';
+    document.getElementById('gachaTicketTotalLine').innerHTML = line;
+}
+window.gachaMoneyChanged = gachaMoneyChanged;
+window.gachaCountChanged = gachaCountChanged;
+function buyTickets() {
+    const ratio = window._gachaTicketRatio || 10;
+    const count = parseInt(document.getElementById('gachaTicketCount').value, 10) || 0;
+    if (count <= 0) { showToast('请输入要购买的券数（至少1张）'); return; }
+    const total = count * ratio; // 实际花费 = 券数 × 10，与「金额」框无关，杜绝用超低价换券
+    const wallet = DataHub.get('wallet', { balance: 0, flows: [] });
+    if ((wallet.balance || 0) < total) { showToast('余额不足，购买 ' + count + ' 张需 ¥' + total.toFixed(2) + '，当前余额 ¥' + (wallet.balance || 0).toFixed(2)); return; }
     wallet.balance = (wallet.balance || 0) - total;
     if (!wallet.flows) wallet.flows = [];
     const now = new Date();
@@ -23406,11 +23630,7 @@ function renderGachaSituationRecords() {
     }
     let html = '';
     recs.forEach(function (r) {
-        const img = r.image
-            ? '<img src="' + r.image + '" style="width:44px;height:44px;object-fit:cover;border-radius:8px;flex-shrink:0;">'
-            : '<div style="width:44px;height:44px;border-radius:8px;background:#f0f0f0;flex-shrink:0;"></div>';
         html += '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f0f0f0;">' +
-            img +
             '<div style="flex:1;min-width:0;">' +
                 '<div style="font-size:14px;color:#000000;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + gachaEsc(r.cardName || '') + '</div>' +
                 '<div style="font-size:11px;color:#999999;margin-top:2px;">' + gachaEsc(r.poolName || '') + ' · ' + (r.time || '') + '</div>' +
@@ -23534,6 +23754,12 @@ window.backToGachaMainFromDraw = backToGachaMainFromDraw;
 window.showBuyTicketModal = showBuyTicketModal;
 window.buyTickets = buyTickets;
 window.showGachaDrawConfirm = showGachaDrawConfirm;
+window.gachaSwitchPool = gachaSwitchPool;
+window.gachaDrawOnce = gachaDrawOnce;
+window.gachaDrawTen = gachaDrawTen;
+window.gachaPoolIsOpen = gachaPoolIsOpen;
+window.renderGachaDrawPage = renderGachaDrawPage;
+window.renderGachaSituationRecords = renderGachaSituationRecords;
 window.doGachaDraw = doGachaDraw;
 window.showGachaRecords = showGachaRecords;
 
