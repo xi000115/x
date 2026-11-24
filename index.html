@@ -22531,6 +22531,163 @@ function gachaRarityBadge(r) {
     return '<span style="display:inline-block;padding:1px 8px;border-radius:8px;font-size:11px;color:#ffffff;background:' + bg + ';">' + gachaEsc(r) + '</span>';
 }
 
+
+// ==================== 抽卡数据 导出 / 导入（卡池·卡店·卡库·我的抽卡·好友抽卡 全覆盖） ====================
+// 数据分布在两处：1) 独立 gachaStore（gachaCache）= 我的卡池/卡店/卡库/卡券/货币/抽卡流水/保底/拥有/欧非统计；
+// 2) 主数据 appData 里的 friends[].gacha（好友个人独立抽卡）与 friendGacha（好友抽卡货币）。导出合并成一个 bundle，
+// 导入时两处各自写回并按好友 id 合并（已存在好友只替换其抽卡数据，不动聊天/余额等其它字段）。
+function collectGachaBundle() {
+    var g = getGachaData();
+    var friends = DataHub.get('friends', []) || [];
+    var fb = [];
+    friends.forEach(function (f) {
+        if (f && f.gacha && typeof f.gacha === 'object') {
+            fb.push({ id: f.id, name: f.name || '', gacha: f.gacha });
+        }
+    });
+    return {
+        __type: 'gacha-bundle',
+        version: 1,
+        exportedAt: Date.now(),
+        gacha: g,
+        friends: fb,
+        friendGacha: DataHub.get('friendGacha', {}) || {}
+    };
+}
+
+function gachaBundleSummary(obj) {
+    var g = obj.gacha || {};
+    var cards = (g.cards || []).length;
+    var pools = (g.pools || []).length;
+    var shop = (g.shop || []).length;
+    var recs = (g.records || []).length;
+    var fr = (obj.friends || []).length;
+    return '卡库 ' + cards + ' 张 / 卡池 ' + pools + ' 个 / 卡店 ' + shop + ' 件 / 我的抽卡流水 ' + recs + ' 条 / 好友抽卡 ' + fr + ' 人';
+}
+
+window.gachaExportData = function () {
+    ensureGachaLoaded().then(function () {
+        try {
+            var bundle = collectGachaBundle();
+            var json = JSON.stringify(bundle, null, 2);
+            var blob = new Blob([json], { type: 'application/json' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            var d = new Date();
+            var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+            var stamp = d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '_' + pad(d.getHours()) + pad(d.getMinutes());
+            a.download = '抽卡数据_备份_' + stamp + '.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast('已导出：' + gachaBundleSummary(bundle));
+        } catch (e) {
+            alert('导出失败：' + (e && e.message ? e.message : e));
+        }
+    }).catch(function (e) {
+        alert('导出失败，抽卡数据加载异常：' + (e && e.message ? e.message : e));
+    });
+};
+
+function applyGachaBundle(data) {
+    var g = data.gacha || { cards: [], pools: [], tickets: 0, records: [], shop: [], sand: 0, gravel: 0, diamond: 0, pity: {}, own: {}, stats: {} };
+    return saveGachaData(g).then(function () {
+        gachaCache = null;
+        return ensureGachaLoaded();
+    }).then(function () {
+        var friends = DataHub.get('friends', []) || [];
+        var changed = false;
+        (data.friends || []).forEach(function (bf) {
+            if (!bf || !bf.id) return;
+            var idx = -1;
+            for (var i = 0; i < friends.length; i++) { if (friends[i] && friends[i].id === bf.id) { idx = i; break; } }
+            if (idx >= 0) {
+                if (bf.gacha && typeof bf.gacha === 'object') { friends[idx].gacha = bf.gacha; changed = true; }
+                if (bf.name && !friends[idx].name) { friends[idx].name = bf.name; }
+            } else {
+                friends.push({ id: bf.id, name: bf.name || '好友', gacha: bf.gacha || {} });
+                changed = true;
+            }
+        });
+        if (changed) DataHub.set('friends', friends);
+        if (data.friendGacha && typeof data.friendGacha === 'object') {
+            DataHub.set('friendGacha', data.friendGacha);
+        }
+        return true;
+    });
+}
+
+window.gachaImportData = function () {
+    var fileInput = document.getElementById('gachaImportFile');
+    if (!fileInput || !fileInput.files || !fileInput.files[0]) {
+        alert('请先选择要导入的抽卡备份文件（.json）');
+        return;
+    }
+    var reader = new FileReader();
+    reader.onload = function (e) {
+        try {
+            var data = JSON.parse(e.target.result);
+            var bundle = null;
+            if (data && data.__type === 'gacha-bundle') {
+                bundle = data;
+            } else if (data && data.appData && data.gachaStore) {
+                bundle = { __type: 'gacha-bundle', gacha: data.gachaStore, friends: ((data.appData.friends) || []).map(function (f) { return { id: f.id, name: f.name, gacha: f.gacha }; }).filter(function (x) { return x.gacha; }), friendGacha: (data.appData.friendGacha || {}) };
+            }
+            if (!bundle || !bundle.gacha) {
+                alert('导入失败：这个文件不是抽卡备份文件。');
+                return;
+            }
+            if (!confirm('确定导入抽卡数据吗？\n将覆盖当前的卡池、卡店、卡库、我的抽卡记录，并按备份恢复好友的独立抽卡情况。\n\n备份内容：' + gachaBundleSummary(bundle))) {
+                return;
+            }
+            applyGachaBundle(bundle).then(function () {
+                try { renderAll(); } catch (e) {}
+                try { updateTopBar(); } catch (e) {}
+                backToGachaMain();
+                showToast('导入成功：' + gachaBundleSummary(bundle));
+            }).catch(function (err) {
+                alert('导入失败：' + (err && err.message ? err.message : err));
+            });
+        } catch (err) {
+            alert('导入失败，请检查文件格式是否为 JSON。');
+        }
+    };
+    reader.readAsText(fileInput.files[0]);
+};
+
+function openGachaExportImport() {
+    var container = document.getElementById('subPageContainer');
+    container.innerHTML = renderGachaExportImportPage();
+    var sp = container.querySelector('.sub-page');
+    if (sp) { sp.classList.add('active'); sp.style.pointerEvents = 'auto'; }
+}
+
+function renderGachaExportImportPage() {
+    return '<div class="sub-page active" style="z-index:60;background:#ffffff;position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:auto;display:flex;flex-direction:column;">' +
+        '<div class="sub-top">' +
+            '<div class="back-btn" onclick="backToGachaMain()">' +
+                '<svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>' +
+            '</div>' +
+            '<span>抽卡数据 导出导入</span>' +
+        '</div>' +
+        '<div class="sub-content" style="padding:16px;overflow-y:auto;pointer-events:auto;flex:1;">' +
+            '<div style="font-size:12px;color:#999999;line-height:1.7;margin-bottom:8px;">导出/导入覆盖：卡池、卡店、卡库、我的抽卡情况（记录与欧非），以及每位好友的个人独立抽卡情况。好友按身份合并，不会动到聊天、余额等其它数据。</div>' +
+            '<div class="setting-block no-click" style="margin:8px 0;">' +
+                '<div style="font-weight:500;color:#000000;margin-bottom:8px;">导出抽卡数据</div>' +
+                '<button class="btn-primary" onclick="gachaExportData()">导出为 JSON 文件</button>' +
+            '</div>' +
+            '<div class="setting-block no-click" style="margin:8px 0;">' +
+                '<div style="font-weight:500;color:#000000;margin-bottom:8px;">导入抽卡数据</div>' +
+                '<input type="file" id="gachaImportFile" accept=".json,application/json" style="margin-bottom:8px;padding:8px;border:1px solid #d4e4d6;border-radius:8px;width:100%;box-sizing:border-box;">' +
+                '<button class="btn-primary" onclick="gachaImportData()">从文件导入</button>' +
+                '<div style="font-size:12px;color:#e57373;margin-top:6px;">导入会覆盖当前抽卡数据，请先自行确认。</div>' +
+            '</div>' +
+        '</div>' +
+    '</div>';
+}
+
 // ---- 抽卡系统主页面 ----
 function renderGachaSystemPage() {
     return '<div class="sub-page active" style="z-index:60;background:#ffffff;position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:auto;display:flex;flex-direction:column;">' +
@@ -22552,6 +22709,10 @@ function renderGachaSystemPage() {
             '<div class="setting-block clickable" onclick="openGachaLibrary()" style="margin:8px 0;">' +
                 '<div class="title">卡库</div>' +
                 '<div style="font-size:12px;color:#999999;margin-top:4px;">上传卡牌 · 配置卡池与概率</div>' +
+            '</div>' +
+            '<div class="setting-block clickable" onclick="openGachaExportImport()" style="margin:8px 0;">' +
+                '<div class="title">导出导入</div>' +
+                '<div style="font-size:12px;color:#999999;margin-top:4px;">卡池 / 卡店 / 卡库 / 我的抽卡 / 好友抽卡 · 一键备份还原</div>' +
             '</div>' +
         '</div>' +
     '</div>';
@@ -22852,6 +23013,7 @@ function shopSaveGift(type) {
 function renderShopCardTab() {
     var g = getGachaData();
     var all = g.shop || [];
+    var cards = g.cards || [];
     var rarMap = { R:{key:'sand',name:'卡砂',color:'#8d6e63'}, SR:{key:'gravel',name:'卡砾',color:'#7b1fa2'}, SSR:{key:'diamond',name:'卡钻',color:'#e65100'} };
     var list = all.filter(function(it){
         if (it.expireAt && Date.now() > it.expireAt) return false;
@@ -22876,21 +23038,33 @@ function renderShopCardTab() {
         var cur = rarMap[it.rarity] || rarMap.R;
         var bal = g[cur.key] || 0;
         var cost = it.cost || 1;
-        var can = bal >= cost;
-        var imgHtml = it.cover && it.cover.img
-            ? '<img src="' + it.cover.img + '" style="width:48px;height:48px;object-fit:cover;border-radius:8px;flex:none;">'
-            : '<div style="width:48px;height:48px;border-radius:8px;flex:none;background:' + shopCoverBg(it.cover) + ';"></div>';
+        var coverImg = it.cover && it.cover.img;
+        var coverColor = (it.cover && it.cover.color) || 'theme';
+        if (!coverImg && it.cardId) {
+            for (var ci=0; ci<cards.length; ci++){ if (cards[ci].id === it.cardId) { if (cards[ci].image) coverImg = cards[ci].image; break; } }
+        }
+        var imgHtml = coverImg
+            ? '<img src="' + coverImg + '" style="width:48px;height:48px;object-fit:cover;border-radius:8px;flex:none;">'
+            : '<div style="width:48px;height:48px;border-radius:8px;flex:none;background:' + shopCoverBg({color:coverColor}) + ';"></div>';
+        var limit = (typeof it.limit === 'number') ? it.limit : 0;
+        var sold = it.sold || 0;
+        var remain = limit > 0 ? (limit - sold) : -1;
+        var soldOut = limit > 0 && remain <= 0;
+        var can = (!soldOut) && (bal >= cost);
+        var stockTxt = limit > 0 ? ('<div style="font-size:10px;color:' + (soldOut?'#c62828':'#999') + ';margin-top:2px;">' + (soldOut?'已售罄':'剩 ' + remain + ' 张') + '</div>') : '';
+        var srcTxt = it.cardId ? '卡库' : '';
         var expireTxt = it.expireAt ? ('<div style="font-size:10px;color:#c62828;margin-top:2px;">限时 · ' + shopFmtDate(it.expireAt) + '下架</div>') : '';
+        var btnLabel = soldOut ? '售罄' : '兑换';
         h +=
             '<div style="display:flex;align-items:center;gap:10px;background:#f8f9fa;border-radius:10px;padding:10px;margin-bottom:8px;">' +
                 imgHtml +
                 '<div style="flex:1;min-width:0;">' +
-                    '<div style="font-size:14px;color:#000;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + gachaEsc(it.name||'未命名') + '</div>' +
-                    '<div style="margin-top:2px;">' + gachaRarityBadge(it.rarity) + '</div>' + expireTxt +
+                    '<div style="font-size:14px;color:#000;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (srcTxt?'<span style="font-size:10px;color:#3a6b4f;background:#e6f2e8;border-radius:4px;padding:1px 5px;margin-right:4px;">'+srcTxt+'</span>':'') + gachaEsc(it.name||'未命名') + '</div>' +
+                    '<div style="margin-top:2px;">' + gachaRarityBadge(it.rarity) + '</div>' + stockTxt + expireTxt +
                 '</div>' +
                 '<div style="text-align:right;flex:none;">' +
                     '<div style="font-size:12px;color:' + cur.color + ';font-weight:600;">' + cost + ' ' + cur.name + '</div>' +
-                    '<button onclick="gachaExchangeCard(\'' + it.sid + '\')" style="margin-top:4px;background:' + (can?'var(--theme-main, #d4e9d6)':'#ccc') + ';color:' + (can?'var(--theme-dark, #2e6b45)':'#fff') + ';border:' + (can?'1px solid var(--theme-border, #b7d6c0)':'none') + ';border-radius:6px;padding:5px 12px;font-size:12px;cursor:' + (can?'pointer':'not-allowed') + ';"' + (can?'':' disabled') + '>兑换</button>' +
+                    '<button onclick="gachaExchangeCard(\'' + it.sid + '\')" style="margin-top:4px;background:' + (can?'var(--theme-main, #d4e9d6)':'#ccc') + ';color:' + (can?'var(--theme-dark, #2e6b45)':'#fff') + ';border:' + (can?'1px solid var(--theme-border, #b7d6c0)':'none') + ';border-radius:6px;padding:5px 12px;font-size:12px;cursor:' + (can?'pointer':'not-allowed') + ';"' + (can?'':' disabled') + '>' + btnLabel + '</button>' +
                 '</div>' +
                 '<span onclick="shopDelCard(\'' + it.sid + '\')" title="下架" style="color:#bbb;font-size:18px;cursor:pointer;flex:none;padding:0 2px;">×</span>' +
             '</div>';
@@ -22902,22 +23076,27 @@ function gachaExchangeCard(sid) {
     var item = (g.shop || []).find(function(x){ return x.sid === sid; });
     if (!item) { showToast('商品不存在'); return; }
     if (item.expireAt && Date.now() > item.expireAt) { showToast('该卡牌已下架'); return; }
+    var limit = (typeof item.limit === 'number') ? item.limit : 0;
+    var sold = item.sold || 0;
+    if (limit > 0 && sold >= limit) { showToast('已售罄'); return; }
     var rar = item.rarity || 'R';
     var curKey = rar==='SSR'?'diamond':rar==='SR'?'gravel':'sand';
-    var curName = rar==='SSR'?'卡钻':rar==='SR'?'卡砾':'卡沙';
+    var curName = rar==='SSR'?'卡钻':rar==='SR'?'卡砾':'卡砂';
     var cost = item.cost || 1;
     if ((g[curKey]||0) < cost) { showToast(curName + '不足，需要 ' + cost + ' 枚'); return; }
     g[curKey] = (g[curKey]||0) - cost;
+    item.sold = sold + 1;
     if (!g.records) g.records = [];
     if (!g.own || typeof g.own !== 'object') g.own = {};
-    var ownKey = 's:' + sid;
+    var ownKey = item.cardId ? item.cardId : ('s:' + sid);
     var curOwn = g.own[ownKey] || 0;
     var overflowTip = '';
     if (curOwn >= 4) { g[curKey] = (g[curKey]||0) + 10; overflowTip = '（已溢出 +10 ' + curName + '）'; }
     else g.own[ownKey] = curOwn + 1;
     var now = new Date();
     var time = now.getFullYear()+'.'+String(now.getMonth()+1).padStart(2,'0')+'.'+String(now.getDate()).padStart(2,'0')+' '+String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0')+':'+String(now.getSeconds()).padStart(2,'0');
-    g.records.unshift({ poolId:'shop', poolName:'卡店兑换', cardId: sid, cardName: item.name||'卡牌', rarity: rar, image:(item.cover&&item.cover.img)||'', time: time });
+    var recCardId = item.cardId ? item.cardId : sid;
+    g.records.unshift({ poolId:'shop', poolName:'卡店兑换', cardId: recCardId, cardName: item.name||'卡牌', rarity: rar, image:(item.cover&&item.cover.img)||'', time: time });
     if (g.records.length > 500) g.records = g.records.slice(0,500);
     persistGacha();
     showToast('兑换成功：' + (item.name||'') + overflowTip);
@@ -22929,52 +23108,145 @@ function shopDelCard(sid) {
     g.shop = (g.shop || []).filter(function(x){ return x.sid !== sid; });
     persistGacha(); showToast('已下架'); openGachaShopPage();
 }
-// 卡牌上架（上传即上架：不进卡库/卡池，仅兑换，兑换后计买家图鉴）
+// 上架入口：选择来源（卡库 / 相册）
 function shopCardForm() {
     var html =
-        '<div class="modal-title">上架卡牌（仅兑换 · 不进卡池）</div>' +
-        '<div style="font-size:12px;color:#999;margin-bottom:10px;">此卡不在卡库/卡池，抽不到，只能兑换获得；兑换后进图鉴。</div>' +
+        '<div class="modal-title">上架卡牌 · 选择来源</div>' +
+        '<div style="font-size:12px;color:#999;margin-bottom:14px;">上架的卡只用于兑换、不进卡池抽不到；下架只从商店撤下，卡库里的原卡不动。</div>' +
+        '<button class="btn-primary" style="width:100%;margin-bottom:10px;" onclick="closeModal();_libPickSel={};_libPickRar=\'全部\';shopPickLibrary();">卡库选择</button>' +
+        '<button class="btn-primary" style="width:100%;" onclick="closeModal();shopPickAlbum();">相册选择</button>';
+    showModal(html);
+}
+function shopPickLibrary() {
+    var g = getGachaData(); var cards = g.cards || [];
+    if (!cards.length) { showToast('卡库为空，先去卡库添加卡牌'); return; }
+    if (!window._libPickSel) window._libPickSel = {};
+    var rars = ['全部','SSR','SR','R'];
+    var cur = window._libPickRar || '全部';
+    var tabsHtml = '<div style="display:flex;gap:6px;margin-bottom:8px;">';
+    rars.forEach(function(r){
+        var active = (r===cur);
+        tabsHtml += '<button onclick="shopLibTab(\''+r+'\')" style="flex:1;padding:7px 0;font-size:12px;border-radius:14px;border:1px solid '+(active?'#2e7d32':'#ddd')+';background:'+(active?'#2e7d32':'#fff')+';color:'+(active?'#fff':'#555')+';cursor:pointer;">'+r+'</button>';
+    });
+    tabsHtml += '</div>';
+    var list = cards.filter(function(c){ return cur==='全部' || (c.rarity||'R')===cur; });
+    var html =
+        '<div class="modal-title">卡库选择（勾选要上架的卡）</div>' +
+        '<div style="font-size:12px;color:#999;margin-bottom:8px;">按稀有度切换页签，勾选要上架的卡，设定兑换价格（按稀有度：SSR=卡钻/SR=卡砾/R=卡砂）与限量（0=不限，默认5）。价格默认1。</div>' +
+        tabsHtml +
+        '<div style="max-height:46vh;overflow-y:auto;">';
+    if (!list.length) {
+        html += '<div style="text-align:center;color:#bbb;font-size:13px;padding:18px 0;">该分类下暂无卡牌</div>';
+    }
+    list.forEach(function(c){
+        var rar = c.rarity || 'R';
+        var curName = rar==='SSR'?'卡钻':rar==='SR'?'卡砾':'卡砂';
+        var sel = window._libPickSel[c.id];
+        var chkAttr = sel ? ' checked' : '';
+        var priceVal = sel ? sel.price : 1;
+        var limitVal = sel ? sel.limit : 5;
+        var img = c.image ? '<img src="'+c.image+'" style="width:40px;height:40px;object-fit:cover;border-radius:6px;flex:none;">' : '<div style="width:40px;height:40px;border-radius:6px;flex:none;background:#eee;"></div>';
+        html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f0f0f0;">' +
+            '<input type="checkbox" class="slcCard" data-cardid="'+c.id+'" onchange="shopLibUpdate(\''+c.id+'\')"'+chkAttr+' style="width:18px;height:18px;flex:none;accent-color:#2e7d32;">' +
+            img +
+            '<div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+gachaEsc(c.name||'未命名')+'</div><div style="margin-top:2px;">'+gachaRarityBadge(rar)+'</div></div>' +
+            '<div style="flex:none;display:flex;gap:4px;align-items:center;">' +
+                '<input class="priceIn" data-cardid="'+c.id+'" type="number" min="1" value="'+priceVal+'" oninput="shopLibUpdate(\''+c.id+'\')" title="兑换价格" style="width:62px;padding:5px;border:1px solid #ddd;border-radius:6px;font-size:12px;">' +
+                '<span style="font-size:11px;color:#888;">'+curName+'</span>' +
+                '<input class="limitIn" data-cardid="'+c.id+'" type="number" min="0" value="'+limitVal+'" oninput="shopLibUpdate(\''+c.id+'\')" title="限量(0=不限)" style="width:52px;padding:5px;border:1px solid #ddd;border-radius:6px;font-size:12px;">' +
+            '</div>' +
+        '</div>';
+    });
+    html += '</div><div class="btn-row"><button class="cancel" onclick="closeModal()">取消</button><button class="confirm" onclick="shopSaveLibraryCards()">上架选中</button></div>';
+    showModal(html);
+}
+function shopLibUpdate(id) {
+    if (!window._libPickSel) window._libPickSel = {};
+    var bx = document.querySelector('.slcCard[data-cardid="'+id+'"]');
+    if (!bx) return;
+    if (!bx.checked) { delete window._libPickSel[id]; return; }
+    var pEl = document.querySelector('.priceIn[data-cardid="'+id+'"]');
+    var lEl = document.querySelector('.limitIn[data-cardid="'+id+'"]');
+    var cost = pEl ? (parseInt(pEl.value)||1) : 1; if (cost<1) cost=1;
+    var limit = lEl ? (parseInt(lEl.value)||0) : 5; if (limit<0) limit=0;
+    window._libPickSel[id] = { price:cost, limit:limit };
+}
+function shopLibSyncVisible() {
+    document.querySelectorAll('.slcCard').forEach(function(bx){ shopLibUpdate(bx.getAttribute('data-cardid')); });
+}
+function shopLibTab(r) {
+    shopLibSyncVisible();
+    window._libPickRar = r;
+    shopPickLibrary();
+}
+function shopSaveLibraryCards() {
+    var g = getGachaData(); var cards = g.cards || [];
+    if (!g.shop) g.shop = [];
+    shopLibSyncVisible();
+    var ids = Object.keys(window._libPickSel || {});
+    if (!ids.length) { showToast('请至少勾选一张卡'); return; }
+    var n = 0, firstRar = null;
+    ids.forEach(function(cid){
+        var c = null; for (var i=0;i<cards.length;i++){ if (cards[i].id===cid){ c=cards[i]; break; } }
+        if (!c) return;
+        var sel = window._libPickSel[cid];
+        var rar = c.rarity || 'R';
+        if (!firstRar) firstRar = rar;
+        g.shop.push({ sid:gachaUid(), name:c.name, rarity:rar, cover:{color:'theme', img:c.image||''}, cost:sel.price, limit:sel.limit, sold:0, expireAt:0, cardId:c.id });
+        n++;
+    });
+    window._libPickSel = {}; window._libPickRar = '全部';
+    if (firstRar) _shopRarity = firstRar;
+    persistGacha(); closeModal(); showToast('已上架 ' + n + ' 张（来自卡库）'); openGachaShopPage();
+}
+
+function shopPickAlbum() {
+    // 像发表情包一样：点相册选择 -> 直接调起系统相册选照片 -> 选完直接进填表
+    var input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.style.display = 'none';
+    document.body.appendChild(input);
+    input.addEventListener('change', function(e){
+        var f = e.target.files && e.target.files[0];
+        if (!f) { if (input.parentNode) input.parentNode.removeChild(input); return; }
+        var rd = new FileReader();
+        rd.onload = function(ev){
+            if (input.parentNode) input.parentNode.removeChild(input);
+            shopAlbumCardForm(ev.target.result);
+        };
+        rd.readAsDataURL(f);
+    });
+    input.click();
+}
+function shopAlbumCardForm(img) {
+    if (!img) { showToast('图片不存在'); return; }
+    var html =
+        '<div class="modal-title">上架卡牌（相册 · 独立卡）</div>' +
+        '<div style="font-size:12px;color:#999;margin-bottom:8px;">填名称、选稀有度、定价格与限量后点“确认上架”即直接上架到商店；不进卡库、不进卡池，抽不到，只能兑换获得，兑换后单独计数。</div>' +
+        '<div style="text-align:center;margin-bottom:10px;"><img src="'+img+'" style="width:80px;height:80px;object-fit:cover;border-radius:10px;"></div>' +
         '<div style="font-size:11px;color:#888;margin-bottom:3px;">稀有度（必填）</div>' +
         '<select id="scRar" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:10px;box-sizing:border-box;"><option value="">— 选择稀有度 —</option><option value="SSR">SSR（卡钻）</option><option value="SR">SR（卡砾）</option><option value="R">R（卡砂）</option></select>' +
         '<div style="font-size:11px;color:#888;margin-bottom:3px;">名称</div><input id="scName" type="text" placeholder="卡牌名称" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;font-size:13px;margin-bottom:10px;box-sizing:border-box;">' +
-        '<div style="font-size:11px;color:#888;margin-bottom:3px;">封面</div>' +
-        '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">' +
-            '<label style="display:flex;align-items:center;gap:4px;font-size:12px;color:#555;cursor:pointer;white-space:nowrap;"><input id="scCoverTheme" type="checkbox" checked style="accent-color:var(--theme-dark, #5a7a5e);">默认封面（跟随主题色）</label>' +
-            '<input id="scCoverColor" type="color" value="' + shopThemeHex() + '" oninput="var cb=document.getElementById(\'scCoverTheme\');if(cb)cb.checked=false;" style="width:44px;height:34px;border:none;background:none;">' +
-            '<label style="font-size:12px;color:#666;cursor:pointer;">或上传卡面图 <input id="scCoverImg" type="file" accept="image/*" style="display:none;"></label>' +
-            '<span id="scCoverName" style="font-size:11px;color:#2e7d32;"></span>' +
-        '</div>' +
         '<div style="display:flex;gap:8px;margin-bottom:10px;">' +
-            '<div style="flex:1;"><div style="font-size:11px;color:#888;margin-bottom:3px;">消耗数量</div><input id="scCost" type="number" min="1" value="1" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;font-size:13px;"></div>' +
-            '<div style="flex:1;"><div style="font-size:11px;color:#888;margin-bottom:3px;">限时下架(留空=长期)</div><input id="scExpire" type="datetime-local" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;font-size:13px;"></div>' +
+            '<div style="flex:1;"><div style="font-size:11px;color:#888;margin-bottom:3px;">兑换价格（对应货币）</div><input id="scCost" type="number" min="1" value="1" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;font-size:13px;"></div>' +
+            '<div style="flex:1;"><div style="font-size:11px;color:#888;margin-bottom:3px;">限量（0=不限）</div><input id="scLimit" type="number" min="0" value="5" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;font-size:13px;"></div>' +
         '</div>' +
-        '<div class="btn-row"><button class="cancel" onclick="closeModal()">取消</button><button class="confirm" onclick="shopSaveCard()">上架</button></div>';
-    window._scCoverImg = '';
+        '<div class="btn-row"><button class="cancel" onclick="closeModal()">取消</button><button class="confirm" onclick="shopSaveAlbumCard()">确认上架</button></div>';
+    window._scAlbumImg = img;
     showModal(html);
-    var fi = document.getElementById('scCoverImg');
-    if (fi) fi.addEventListener('change', function(e){
-        var f = e.target.files[0]; if (!f) return;
-        var rd = new FileReader();
-        rd.onload = function(ev){ window._scCoverImg = ev.target.result; var nm=document.getElementById('scCoverName'); if(nm) nm.textContent='已选图'; };
-        rd.readAsDataURL(f);
-    });
 }
-function shopSaveCard() {
+
+function shopSaveAlbumCard() {
     var rar = document.getElementById('scRar').value;
     var name = (document.getElementById('scName').value||'').trim();
     var cost = parseInt(document.getElementById('scCost').value) || 1;
+    var limit = parseInt(document.getElementById('scLimit').value); if (isNaN(limit)||limit<0) limit = 0;
     if (!rar) { showToast('请选择稀有度'); return; }
     if (!name) { showToast('请填写卡牌名称'); return; }
-    if (cost < 1) { showToast('消耗数量至少为 1'); return; }
-    var cbS = document.getElementById('scCoverTheme');
-    var useTheme = !(cbS && !cbS.checked);        // 默认勾选=跟随主题色
-    var color = useTheme ? 'theme' : (document.getElementById('scCoverColor').value || 'theme');
-    var cover = { color: color, img: window._scCoverImg || '' };
-    var exv = document.getElementById('scExpire').value;
-    var expireAt = exv ? new Date(exv).getTime() : 0;
-    var g = getGachaData();
-    if (!g.shop) g.shop = [];
-    g.shop.push({ sid: gachaUid(), name:name, rarity:rar, cover:cover, cost:cost, expireAt:expireAt });
+    if (cost<1) { showToast('兑换价格至少为 1'); return; }
+    var g = getGachaData(); if (!g.shop) g.shop = [];
+    g.shop.push({ sid:gachaUid(), name:name, rarity:rar, cover:{color:'theme', img:window._scAlbumImg||''}, cost:cost, limit:limit, sold:0, expireAt:0 });
     _shopRarity = rar;
     persistGacha(); closeModal(); showToast('已上架：' + name); openGachaShopPage();
 }
@@ -23998,7 +24270,11 @@ window.shopDelGift = shopDelGift;
 window.shopGiftForm = shopGiftForm;
 window.shopSaveGift = shopSaveGift;
 window.shopCardForm = shopCardForm;
-window.shopSaveCard = shopSaveCard;
+window.shopPickLibrary = shopPickLibrary;
+window.shopSaveLibraryCards = shopSaveLibraryCards;
+window.shopPickAlbum = shopPickAlbum;
+window.shopAlbumCardForm = shopAlbumCardForm;
+window.shopSaveAlbumCard = shopSaveAlbumCard;
 window.shopDelCard = shopDelCard;
 window.gachaGetPityInfo = gachaGetPityInfo;
 window.gachaGetLuckStats = gachaGetLuckStats;
@@ -24089,27 +24365,58 @@ function renderGachaSituationLibrary() {
 
 function renderGachaSituationLuck() {
     const g = getGachaData();
+    // 总欧非：合并所有抽卡流水（排除"卡店兑换"——兑换必得卡会虚高出货率），
+    // 欧非率与真实抽数强关联；流水被超期清理时回退用各池永久累计，杜绝"有抽却说没抽"
+    const recs = g.records || [];
+    let total = 0, totalSsr = 0;
+    recs.forEach(function (r) {
+        if (!r || r.poolId === 'shop') return;
+        total++;
+        if (r.rarity === 'SSR') totalSsr++;
+    });
+    if (total === 0) {
+        const stMap = (g.stats && typeof g.stats === 'object') ? g.stats : {};
+        for (const pid in stMap) { const st = stMap[pid] || {}; total += (st.total || 0); totalSsr += (st.ssr || 0); }
+    }
+    const tAvg = totalSsr > 0 ? (total / totalSsr) : 0;
+    const tRate = total > 0 ? (totalSsr / total * 100) : 0;
+    let tLuck = '';
+    if (totalSsr > 0) { tLuck = tAvg < 60 ? '欧' : (tAvg <= 80 ? '正常' : '非'); }
+    const lowSample = total > 0 && total < 10;
+
     const pools = g.pools || [];
     const rows = [];
     pools.forEach(function (p) {
         const st = gachaGetLuckStats(p.id);
         if (st.total > 0) rows.push({ name: p.name || '未命名卡池', st: st });
     });
-    if (!rows.length) {
+    if (total === 0 && !rows.length) {
         return '<div style="text-align:center;color:#999999;font-size:13px;padding:40px 0;">还没有抽卡记录，去抽卡吧</div>';
     }
-    let html = '';
-    rows.forEach(function (r) {
-        const st = r.st;
-        const luckColor = st.luck === '欧' ? '#2e7d32' : st.luck === '非' ? '#c62828' : '#666666';
-        html += '<div style="padding:12px 0;border-bottom:1px solid #f0f0f0;">' +
-            '<div style="display:flex;align-items:center;justify-content:space-between;">' +
-                '<span style="font-size:14px;color:#000000;font-weight:600;">' + gachaEsc(r.name) + '</span>' +
-                (st.luck ? '<span style="font-size:12px;color:' + luckColor + ';font-weight:600;">' + st.luck + '</span>' : '') +
-            '</div>' +
-            '<div style="margin-top:6px;font-size:12px;color:#999999;">总抽 ' + st.total + ' 次 · 出SSR ' + st.ssrCount + ' 次 · 出货率 <b style="color:#666666;">' + (st.rate ? st.rate.toFixed(1) : '0.0') + '%</b> · 平均出金 <b style="color:#666666;">' + (st.avgDraw ? st.avgDraw.toFixed(1) : '—') + '</b> 抽</div>' +
-        '</div>';
-    });
+    const tColor = tLuck === '欧' ? '#2e7d32' : tLuck === '非' ? '#c62828' : '#666666';
+    const badge = tLuck
+        ? '<span style="font-size:13px;color:' + tColor + ';font-weight:700;">' + tLuck + (lowSample ? '（样本太少，仅供参考）' : '') + '</span>'
+        : '<span style="font-size:12px;color:#999999;">暂未出SSR' + (lowSample ? '，样本太少' : '') + '</span>';
+    let html = '<div style="background:#f0f5f0;border-radius:10px;padding:12px;margin-bottom:8px;">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;">' +
+            '<span style="font-size:15px;color:#000000;font-weight:700;">总欧非情况</span>' + badge +
+        '</div>' +
+        '<div style="margin-top:6px;font-size:13px;color:#555555;line-height:1.7;">总抽 <b>' + total + '</b> 次 · 出SSR <b>' + totalSsr + '</b> 次<br>出货率 <b style="color:' + tColor + ';">' + (tRate ? tRate.toFixed(1) : '0.0') + '%</b> · 平均出金 <b>' + (tAvg ? tAvg.toFixed(1) : '—') + '</b> 抽</div>' +
+    '</div>';
+    if (rows.length) {
+        html += '<div style="font-size:12px;color:#999999;margin:4px 0 0;">分卡池明细</div>';
+        rows.forEach(function (r) {
+            const st = r.st;
+            const luckColor = st.luck === '欧' ? '#2e7d32' : st.luck === '非' ? '#c62828' : '#666666';
+            html += '<div style="padding:12px 0;border-bottom:1px solid #f0f0f0;">' +
+                '<div style="display:flex;align-items:center;justify-content:space-between;">' +
+                    '<span style="font-size:14px;color:#000000;font-weight:600;">' + gachaEsc(r.name) + '</span>' +
+                    (st.luck ? '<span style="font-size:12px;color:' + luckColor + ';font-weight:600;">' + st.luck + '</span>' : '') +
+                '</div>' +
+                '<div style="margin-top:6px;font-size:12px;color:#999999;">总抽 ' + st.total + ' 次 · 出SSR ' + st.ssrCount + ' 次 · 出货率 <b style="color:#666666;">' + (st.rate ? st.rate.toFixed(1) : '0.0') + '%</b> · 平均出金 <b style="color:#666666;">' + (st.avgDraw ? st.avgDraw.toFixed(1) : '—') + '</b> 抽</div>' +
+            '</div>';
+        });
+    }
     return html;
 }
 
@@ -28398,6 +28705,7 @@ window.importData = function() {
             if (data && (data.version === 3 || data.version === 4 || data.version === 5 || data.version === 6) && data.appData) {
                 DataHub.setAll(data.appData);
                 DataHub.delete('votes');
+                if (data.gachaStore) { try { gachaCache = null; saveGachaData(data.gachaStore); } catch (_ge) {} }
 
                 var blobs = data.blobs || [];
                 var promises = blobs.map(function(item) {
@@ -34257,15 +34565,47 @@ function rollFriendPersona() {
     };
 }
 
-// 好友欧非统计：读好友自己的 stats，口径与 gachaGetLuckStats 完全一致（出货率一位小数；平均出金<60欧、61~80正常、>80非）
+// 好友欧非称号：口径与 gachaGetLuckStats 完全一致（平均出金<60欧、61~80正常、>80非）
+function _friendLuckTitle(avgDraw) {
+    if (avgDraw < 60) return '欧';
+    else if (avgDraw <= 80) return '正常';
+    else return '非';
+}
+// 好友欧非统计（分池）：读好友自己的 stats
 function friendLuckStats(f, poolId) {
     var st = ((f.gacha && f.gacha.stats) || {})[poolId] || { total: 0, ssr: 0 };
     var total = st.total || 0, ssrCount = st.ssr || 0;
+    // 兜底：早期抽卡记录未写入 stats 时，用抽卡流水按卡池聚合补回，保证分卡池欧非与总计口径一致
+    var _recs = (f.gacha && f.gacha.records) || [];
+    var _rt = 0, _rs = 0;
+    _recs.forEach(function (r) { if (r && r.poolId === poolId) { _rt++; if (r.rarity === 'SSR') _rs++; } });
+    if (_rt > total) total = _rt;
+    if (_rs > ssrCount) ssrCount = _rs;
     var avgDraw = ssrCount > 0 ? (total / ssrCount) : 0;
     var rate = total > 0 ? (ssrCount / total * 100) : 0;
     var luck = '';
-    if (ssrCount > 0) { if (avgDraw < 60) luck = '欧'; else if (avgDraw <= 80) luck = '正常'; else luck = '非'; }
+    if (ssrCount > 0) { luck = _friendLuckTitle(avgDraw); }
     return { total: total, ssrCount: ssrCount, avgDraw: avgDraw, luck: luck, rate: rate };
+}
+// 好友欧非统计（总计）：直接读抽卡流水 records（排除"卡店兑换"——兑换必得卡会虚高出货率），
+// 让欧非率与好友真实抽数强关联；流水已清理时回退用 stats 各池累加，杜绝"有抽却说没抽"。
+function friendLuckStatsTotal(f) {
+    var recs = (f.gacha && f.gacha.records) || [];
+    var total = 0, ssrCount = 0;
+    recs.forEach(function (r) {
+        if (!r || r.poolId === 'shop') return;
+        total++;
+        if (r.rarity === 'SSR') ssrCount++;
+    });
+    if (total === 0) {
+        var stats = (f.gacha && f.gacha.stats) || {};
+        for (var pid in stats) { var st = stats[pid] || {}; total += (st.total || 0); ssrCount += (st.ssr || 0); }
+    }
+    var avgDraw = ssrCount > 0 ? (total / ssrCount) : 0;
+    var rate = total > 0 ? (ssrCount / total * 100) : 0;
+    var luck = '';
+    if (ssrCount > 0) { luck = _friendLuckTitle(avgDraw); }
+    return { total: total, ssrCount: ssrCount, avgDraw: avgDraw, luck: luck, rate: rate, lowSample: total > 0 && total < 10 };
 }
 
 // 好友货币独立存储：走 DataHub.set('friendGacha', ...)，不写进 friends 数组；导出导入经 DataHub.getAll 自动带上
@@ -34535,7 +34875,7 @@ function renderFriendGachaStatusPage(f) {
             '<div class="back-btn" onclick="closeInnerSubPage()">' +
                 '<svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>' +
             '</div>' +
-            '<span>' + gachaEsc(f.name || '') + '的抽卡情况</span>' +
+            '<span>'+ gachaEsc(f.name || '') + '的抽卡情况（已有券数：' + ((f.gacha && typeof f.gacha.tickets === 'number') ? f.gacha.tickets : 10) + '）</span>' +
             '<span style="margin-left:auto;font-size:12px;color:#999999;padding:4px 8px;">仅查看</span>' +
         '</div>' +
         '<div style="display:flex;border-bottom:1px solid var(--theme-lighter, #eef5ef);">' +
@@ -34595,23 +34935,36 @@ function renderFriendGachaLibrary(f) {
 }
 
 function renderFriendGachaLuck(f) {
-    var gd = f.gacha || {};
     var pools = getGachaData().pools || [];
+    var total = friendLuckStatsTotal(f);
     var rows = [];
     pools.forEach(function (p) { var st = friendLuckStats(f, p.id); if (st.total > 0) rows.push({ name: p.name || '未命名卡池', st: st }); });
-    if (!rows.length) return '<div style="text-align:center;color:#999999;font-size:13px;padding:40px 0;">还没有抽卡记录</div>';
+    if (total.total === 0 && !rows.length) return '<div style="text-align:center;color:#999999;font-size:13px;padding:40px 0;">还没有抽卡记录</div>';
     var html = '';
-    rows.forEach(function (r) {
-        var st = r.st;
-        var luckColor = st.luck === '欧' ? 'var(--theme-dark, #2e7d32)' : st.luck === '非' ? '#c62828' : '#666666';
-        html += '<div style="padding:12px 0;border-bottom:1px solid #f0f0f0;">' +
-            '<div style="display:flex;align-items:center;justify-content:space-between;">' +
-                '<span style="font-size:14px;color:#000000;font-weight:600;">' + gachaEsc(r.name) + '</span>' +
-                (st.luck ? '<span style="font-size:12px;color:' + luckColor + ';font-weight:600;">' + st.luck + '</span>' : '') +
-            '</div>' +
-            '<div style="margin-top:6px;font-size:12px;color:#999999;">总抽 ' + st.total + ' 次 · 出SSR ' + st.ssrCount + ' 次 · 出货率 <b style="color:#666666;">' + (st.rate ? st.rate.toFixed(1) : '0.0') + '%</b> · 平均出金 <b style="color:#666666;">' + (st.avgDraw ? st.avgDraw.toFixed(1) : '—') + '</b> 抽</div>' +
-        '</div>';
-    });
+    var tColor = total.luck === '欧' ? 'var(--theme-dark, #2e7d32)' : total.luck === '非' ? '#c62828' : '#666666';
+    var badge = total.luck
+        ? '<span style="font-size:13px;color:' + tColor + ';font-weight:700;">' + total.luck + (total.lowSample ? '（样本太少，仅供参考）' : '') + '</span>'
+        : '<span style="font-size:12px;color:#999999;">暂未出SSR' + (total.lowSample ? '，样本太少' : '') + '</span>';
+    html += '<div style="background:var(--theme-lighter, #f0f5f0);border-radius:10px;padding:12px;margin-bottom:8px;">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;">' +
+            '<span style="font-size:15px;color:#000000;font-weight:700;">总欧非情况</span>' + badge +
+        '</div>' +
+        '<div style="margin-top:6px;font-size:13px;color:#555555;line-height:1.7;">总抽 <b>' + total.total + '</b> 次 · 出SSR <b>' + total.ssrCount + '</b> 次<br>出货率 <b style="color:' + tColor + ';">' + (total.rate ? total.rate.toFixed(1) : '0.0') + '%</b> · 平均出金 <b>' + (total.avgDraw ? total.avgDraw.toFixed(1) : '—') + '</b> 抽</div>' +
+    '</div>';
+    if (rows.length) {
+        html += '<div style="font-size:12px;color:#999999;margin:4px 0 0;">分卡池明细</div>';
+        rows.forEach(function (r) {
+            var st = r.st;
+            var luckColor = st.luck === '欧' ? 'var(--theme-dark, #2e7d32)' : st.luck === '非' ? '#c62828' : '#666666';
+            html += '<div style="padding:12px 0;border-bottom:1px solid #f0f0f0;">' +
+                '<div style="display:flex;align-items:center;justify-content:space-between;">' +
+                    '<span style="font-size:14px;color:#000000;font-weight:600;">' + gachaEsc(r.name) + '</span>' +
+                    (st.luck ? '<span style="font-size:12px;color:' + luckColor + ';font-weight:600;">' + st.luck + '</span>' : '') +
+                '</div>' +
+                '<div style="margin-top:6px;font-size:12px;color:#999999;">总抽 ' + st.total + ' 次 · 出SSR ' + st.ssrCount + ' 次 · 出货率 <b style="color:#666666;">' + (st.rate ? st.rate.toFixed(1) : '0.0') + '%</b> · 平均出金 <b style="color:#666666;">' + (st.avgDraw ? st.avgDraw.toFixed(1) : '—') + '</b> 抽</div>' +
+            '</div>';
+        });
+    }
     return html;
 }
 
