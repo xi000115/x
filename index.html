@@ -23301,7 +23301,7 @@ function renderGachaCardList() {
         '</div>';
     });
     html += '</div>';
-
+    c.innerHTML = html;
 }
 
 // ---- 卡池列表 ----
@@ -24286,8 +24286,7 @@ function renderGachaSituationLibrary() {
         '</div>';
     });
     html += '</div>';
-
-
+    return html;
 }
 
 function renderGachaSituationLuck() {
@@ -34873,8 +34872,7 @@ function renderFriendGachaLibrary(f) {
         '</div>';
     });
     html += '</div>';
-
-
+    return html;
 }
 
 function renderFriendGachaLuck(f) {
