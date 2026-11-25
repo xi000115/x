@@ -33980,6 +33980,12 @@ function confirmGiftCardSend() {
     if (ok) { closeModal(); renderAll(); }
 }
 
+// 内联 onclick 需要全局可见：本应用整体包在 IIFE 里，函数默认是局部，必须显式挂到 window
+window.showGiftCardPicker = showGiftCardPicker;
+window.selectGiftCard = selectGiftCard;
+window.confirmGiftCardSend = confirmGiftCardSend;
+window.openCardGiftCard = openCardGiftCard;
+
 // 聊天里的「卡牌卡片」渲染（即时到账，仿抽卡券卡片）
 function renderCardGiftCard(m) {
     var isMine = (m.from === 'me');
