@@ -4380,6 +4380,8 @@ if (m.isPayRequest && m.payRequestId) {
     msgContent = renderHongbaoResultCard(m.hongbaoId, m.resultType);
 } else if (m.isTicketCard) {
     msgContent = renderTicketCard(m);
+} else if (m.isCardGift) {
+    msgContent = renderCardGiftCard(m);
 } else if (m.isCollectionCard && m.collectionProduct) {
     msgContent = renderCollectionCard(m);
 } else if (m.isHelpRequest && m.helpRequestId) {
@@ -4395,7 +4397,7 @@ if (m.isPayRequest && m.payRequestId) {
         var longPressAttr = ' oncontextmenu="return false;"';
 
         if (isMe) {
-            var isBubbleCard = (m.isHongbaoCard || m.isHongbaoResult || m.isHelpRequest || m.isCollectionCard || m.isVoteCard || m.isTicketCard);
+            var isBubbleCard = (m.isHongbaoCard || m.isHongbaoResult || m.isHelpRequest || m.isCollectionCard || m.isVoteCard || m.isTicketCard || m.isCardGift);
             if (isBubbleCard) {
                 html += '<div' + msgIdAttr + longPressAttr + ' class="chat-msg-row" data-from="me" style="display:flex;justify-content:flex-end;margin-bottom:14px;">' +
                     '<div style="display:flex;flex-direction:column;align-items:flex-end;max-width:100%;min-width:0;">' +
@@ -4428,7 +4430,7 @@ if (m.isPayRequest && m.payRequestId) {
             '</div>';
             }
         } else {
-            var isBubbleCardOther = (m.isHongbaoCard || m.isHongbaoResult || m.isHelpRequest || m.isCollectionCard || m.isVoteCard || m.isTicketCard);
+            var isBubbleCardOther = (m.isHongbaoCard || m.isHongbaoResult || m.isHelpRequest || m.isCollectionCard || m.isVoteCard || m.isTicketCard || m.isCardGift);
             if (isBubbleCardOther) {
                 html += '<div' + msgIdAttr + longPressAttr + ' class="chat-msg-row" data-from="other" style="display:flex;justify-content:flex-start;margin-bottom:14px;">' +
                     '<div style="display:flex;flex-direction:column;align-items:flex-start;max-width:100%;min-width:0;">' +
@@ -22488,6 +22490,8 @@ function ensureGachaLoaded() {
         if (!d.pity || typeof d.pity !== 'object') d.pity = {};
         // own: 每张卡的拥有数量（封顶 4，第 5 张起溢出为货币），key 为卡牌 id
         if (!d.own || typeof d.own !== 'object') d.own = {};
+        // giftMeta: 赠送获得的独立卡（不在卡库、也不在兑换流水）的名字/稀有度/图，供图鉴显示
+        if (!d.giftMeta || typeof d.giftMeta !== 'object') d.giftMeta = {};
         // stats: 每个卡池的永久欧非统计（total 总抽数 / ssr 出金数），不随流水清理而丢失
         if (!d.stats || typeof d.stats !== 'object') d.stats = {};
         // 载入即清理超期流水（只清流水，stats 不受影响）
@@ -24199,6 +24203,9 @@ window.shopGiftForm = shopGiftForm;
 window.shopSaveGift = shopSaveGift;
 window.shopCardForm = shopCardForm;
 window.shopPickLibrary = shopPickLibrary;
+window.shopLibTab = shopLibTab;
+window.shopLibUpdate = shopLibUpdate;
+window.shopLibSyncVisible = shopLibSyncVisible;
 window.shopSaveLibraryCards = shopSaveLibraryCards;
 window.shopPickAlbum = shopPickAlbum;
 window.shopAlbumCardForm = shopAlbumCardForm;
@@ -24207,6 +24214,68 @@ window.shopDelCard = shopDelCard;
 window.gachaGetPityInfo = gachaGetPityInfo;
 window.gachaGetLuckStats = gachaGetLuckStats;
 window.gachaRenderPityBar = gachaRenderPityBar;
+
+// 统一图鉴网格：合并「卡库卡（抽到+兑换卡库来源）」「兑换获得的独立卡」，一行4个表情包式网格
+// own: 拥有计数表; cards: 卡库定义; records: 抽卡流水（兑换的独立卡信息从 poolId==='shop' 的记录回查）
+// 聚合「真正拥有」的卡牌清单（抽到的卡库卡 + 兑换/赠送的独立卡），返回 [{key,ownKey,cid,name,rarity,image,num}]
+// ownKey = 实际持有计数的那个键（独立卡兑换键可能是 's:'+sid 或裸 sid）；cid = 跨端身份键（卡库卡=cardId，独立卡=sid）
+function gachaListOwned(own, cards, records, extraMeta) {
+    own = own || {}; cards = cards || []; records = records || []; extraMeta = extraMeta || {};
+    var rank = { SSR: 0, SR: 1, R: 2 };
+    var res = []; var seen = {}; var inCards = {};
+    cards.forEach(function (c) {
+        inCards[c.id] = 1;
+        var n = own[c.id] || 0;
+        if (n > 0) { res.push({ key: c.id, ownKey: c.id, cid: c.id, name: c.name, rarity: c.rarity, image: c.image, num: n }); seen[c.id] = 1; }
+    });
+    // 兑换获得的「独立卡」（不在卡库里）：从兑换流水回查名字/稀有度/图
+    var meta = {};
+    records.forEach(function (r) {
+        if (!r || r.poolId !== 'shop' || !r.cardId) return;
+        if (inCards[r.cardId]) return; // 卡库来源已在上面统计
+        if (!meta[r.cardId]) meta[r.cardId] = { name: r.cardName, rarity: r.rarity, image: r.image || '' };
+    });
+    Object.keys(meta).forEach(function (key) {
+        if (seen[key]) return;
+        var n = own[key] || 0, ownKey = key;
+        if (n < 1 && (own['s:' + key] || 0) > 0) { n = own['s:' + key]; ownKey = 's:' + key; }
+        if (n > 0) { res.push({ key: key, ownKey: ownKey, cid: key, name: meta[key].name, rarity: meta[key].rarity, image: meta[key].image, num: n }); seen[key] = 1; }
+    });
+    // 赠送/额外独立卡（giftMeta）：卡库里没有、兑换流水也没覆盖的
+    Object.keys(extraMeta).forEach(function (key) {
+        if (seen[key]) return;
+        var n = own[key] || 0, ownKey = key;
+        if (n < 1 && (own['s:' + key] || 0) > 0) { n = own['s:' + key]; ownKey = 's:' + key; }
+        if (n > 0) { var mm = extraMeta[key] || {}; res.push({ key: key, ownKey: ownKey, cid: key, name: mm.name, rarity: mm.rarity, image: mm.image || '', num: n }); seen[key] = 1; }
+    });
+    res.sort(function (a, b) {
+        var ra = rank[a.rarity] !== undefined ? rank[a.rarity] : 3;
+        var rb = rank[b.rarity] !== undefined ? rank[b.rarity] : 3;
+        if (ra !== rb) return ra - rb;
+        return b.num - a.num;
+    });
+    return res;
+}
+
+// own: 拥有计数表; cards: 卡库定义; records: 抽卡流水（兑换的独立卡信息从 poolId==='shop' 的记录回查）; extraMeta: 赠送独立卡元数据
+function buildGachaOwnedGrid(own, cards, records, extraMeta) {
+    var list = gachaListOwned(own, cards, records, extraMeta);
+    if (!list.length) return '<div style="text-align:center;color:#999999;font-size:13px;padding:40px 0;">还没有卡牌，去抽卡或兑换吧</div>';
+    var html = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">';
+    list.forEach(function (it) {
+        var img = it.image
+            ? '<img src="' + it.image + '" loading="lazy" style="width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:8px;display:block;background:#f0f0f0;">'
+            : '<div style="width:100%;aspect-ratio:1/1;border-radius:8px;background:#f0f0f0;display:flex;align-items:center;justify-content:center;color:#bbbbbb;font-size:11px;">无图</div>';
+        html += '<div style="box-sizing:border-box;background:#f8fbf8;border-radius:10px;padding:5px;">' +
+            img +
+            '<div style="font-size:11px;color:#000000;font-weight:500;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + gachaEsc(it.name || '') + '</div>' +
+            '<div style="margin-top:2px;">' + gachaRarityBadge(it.rarity) + '</div>' +
+            '<div style="margin-top:2px;font-size:10px;color:#999999;">拥有 ' + it.num + '/4' + (it.num >= 4 ? ' <span style="color:#2e7d32;font-weight:600;">满</span>' : '') + '</div>' +
+        '</div>';
+    });
+    html += '</div>';
+    return html;
+}
 
 // ========== 抽卡情况子页面（抽卡记录 + 卡牌图鉴 + 欧非情况） ==========
 function renderGachaSituationPage() {
@@ -24236,7 +24305,8 @@ function renderGachaSituationPage() {
 
 function renderGachaSituationRecords() {
     const g = getGachaData();
-    const recs = g.records || [];
+    // 抽卡记录只展示卡池抽出的记录，卡店兑换不算抽卡（兑换的卡在图鉴里体现）
+    const recs = (g.records || []).filter(function (r) { return r && r.poolId !== 'shop'; });
     if (!recs.length) {
         return '<div style="text-align:center;color:#999999;font-size:13px;padding:40px 0;">还没有抽卡记录，去抽卡吧</div>';
     }
@@ -24255,38 +24325,8 @@ function renderGachaSituationRecords() {
 
 function renderGachaSituationLibrary() {
     const g = getGachaData();
-    const own = g.own || {};
-    const cards = g.cards || [];
-    const ownedList = [];
-    cards.forEach(function (c) {
-        const n = own[c.id] || 0;
-        if (n > 0) ownedList.push({ card: c, num: n });
-    });
-    if (!ownedList.length) {
-        return '<div style="text-align:center;color:#999999;font-size:13px;padding:40px 0;">还没有抽到卡牌，去抽卡吧</div>';
-    }
-    const rank = { SSR: 0, SR: 1, R: 2 };
-    ownedList.sort(function (a, b) {
-        const ra = rank[a.card.rarity] !== undefined ? rank[a.card.rarity] : 3;
-        const rb = rank[b.card.rarity] !== undefined ? rank[b.card.rarity] : 3;
-        if (ra !== rb) return ra - rb;
-        return b.num - a.num;
-    });
-    let html = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">';
-    ownedList.forEach(function (it) {
-        const c = it.card, num = it.num;
-        const img = c.image
-            ? '<img src="' + c.image + '" loading="lazy" style="width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:8px;display:block;background:#f0f0f0;">'
-            : '<div style="width:100%;aspect-ratio:1/1;border-radius:8px;background:#f0f0f0;display:flex;align-items:center;justify-content:center;color:#bbbbbb;font-size:11px;">无图</div>';
-        html += '<div style="box-sizing:border-box;background:#f8fbf8;border-radius:10px;padding:5px;">' +
-            img +
-            '<div style="font-size:11px;color:#000000;font-weight:500;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + gachaEsc(c.name || '') + '</div>' +
-            '<div style="margin-top:2px;">' + gachaRarityBadge(c.rarity) + '</div>' +
-            '<div style="margin-top:2px;font-size:10px;color:#999999;">拥有 ' + num + '/4' + (num >= 4 ? ' <span style="color:#2e7d32;font-weight:600;">满</span>' : '') + '</div>' +
-        '</div>';
-    });
-    html += '</div>';
-    return html;
+    // 图鉴 = 抽到的卡 + 兑换的卡（含独立卡），统一网格
+    return buildGachaOwnedGrid(g.own || {}, g.cards || [], g.records || [], g.giftMeta || {});
 }
 
 function renderGachaSituationLuck() {
@@ -24365,7 +24405,7 @@ window.switchGachaSituationTab = switchGachaSituationTab;
 // ---- 抽卡记录 ----
 function showGachaRecords() {
     const g = getGachaData();
-    const recs = g.records || [];
+    const recs = (g.records || []).filter(function (r) { return r && r.poolId !== 'shop'; });
     let body = '';
     if (!recs.length) {
         body = '<div style="text-align:center;color:#999999;padding:20px 0;font-size:13px;">还没有抽卡记录</div>';
@@ -33117,32 +33157,51 @@ if (amount < 0.01) amount = 0.01;
 if (amount > friendBalance) amount = Math.round(friendBalance * 100) / 100;
 
     var friendName = friend.name || '好友';
-    // 三选一：红包 / 转账 / 抽卡券（好友券数<1则不触发赠送，退回红包/转账二选一）
-    var gdTicket = (ensureFriendGacha(friend).tickets) || 0;
+    // 四选一：红包 / 转账 / 抽卡券 / 卡牌 —— 在「可选项」里等概率（默认各占 1/4；
+    // 券<1 剔除券、图鉴空剔除卡牌，红包/转账因有余额恒在），自然退化到三选一/二选一
+    var gd = ensureFriendGacha(friend);
+    var gdTicket = gd.tickets || 0;
+    var gdOwned = gachaListOwned(gd.own || {}, getGachaData().cards || [], gd.records || [], gd.giftMeta || {});
+    var opts = ['redpacket', 'transfer'];
+    if (gdTicket >= 1) opts.push('ticket');
+    if (gdOwned.length > 0) opts.push('card');
+    var _pick = opts[Math.floor(Math.random() * opts.length)];
     var isRedpacket;
-    if (gdTicket >= 1) {
-        var _typeRoll = Math.random();
-        if (_typeRoll < 1/3) {
-            isRedpacket = true;
-        } else if (_typeRoll < 2/3) {
-            isRedpacket = false;
-        } else {
-            // 好友赠送抽卡券：数量随机 1~好友券数，即时到账，扣好友券直接进我券包
-            var _tkCount = 1 + Math.floor(Math.random() * gdTicket);
-            var _fGd = ensureFriendGacha(friend);
-            _fGd.tickets = Math.max(0, (_fGd.tickets || 0) - _tkCount);
-            DataHub.set('friends', DataHub.get('friends', []));
-            setTickets(getTickets() + _tkCount);
-            pushHongbaoMessage(chatId, chatId, '', {
-                isTicketCard: true,
-                ticketCount: _tkCount,
-                ticketNote: friendName + ' 送你的抽卡券'
-            });
-            showToast(friendName + ' 送你 ' + _tkCount + ' 张抽卡券');
-            return;
+    if (_pick === 'ticket') {
+        var _tkCount = 1 + Math.floor(Math.random() * gdTicket);
+        var _fs = DataHub.get('friends', []);
+        var _f2 = _fs.find(function (x) { return x.id === chatId; });
+        if (_f2) { var _fGd = ensureFriendGacha(_f2); _fGd.tickets = Math.max(0, (_fGd.tickets || 0) - _tkCount); DataHub.set('friends', _fs); }
+        setTickets(getTickets() + _tkCount);
+        pushHongbaoMessage(chatId, chatId, '', {
+            isTicketCard: true,
+            ticketCount: _tkCount,
+            ticketNote: friendName + ' 送你的抽卡券'
+        });
+        showToast(friendName + ' 送你 ' + _tkCount + ' 张抽卡券');
+        return;
+    } else if (_pick === 'card') {
+        var _card = gdOwned[Math.floor(Math.random() * gdOwned.length)];
+        // 好友 own 减 1（送出方不管剩几张都减）
+        var _fs2 = DataHub.get('friends', []);
+        var _f3 = _fs2.find(function (x) { return x.id === chatId; });
+        if (_f3) {
+            var _gd3 = ensureFriendGacha(_f3);
+            var _cur = _gd3.own[_card.ownKey] || 0;
+            if (_cur <= 1) delete _gd3.own[_card.ownKey]; else _gd3.own[_card.ownKey] = _cur - 1;
+            DataHub.set('friends', _fs2);
         }
+        // 进我图鉴（满4溢出转货币）
+        applyCardToSelf(_card);
+        pushHongbaoMessage(chatId, chatId, '', {
+            isCardGift: true,
+            cgName: _card.name, cgRarity: _card.rarity, cgImage: _card.image || '',
+            cgNote: giftRandomNote()
+        });
+        showToast(friendName + ' 送你一张卡牌：' + (_card.name || ''));
+        return;
     } else {
-        isRedpacket = Math.random() < 0.5;
+        isRedpacket = (_pick === 'redpacket');
     }
     var id = 'hb' + Date.now() + Math.random().toString(36).substr(2, 4);
     var now = Date.now();
@@ -33791,6 +33850,179 @@ window.getGroupHongbaoCardInfo = getGroupHongbaoCardInfo;
 window.calcLuckyAmount = calcLuckyAmount;
 window.calcNormalAmount = calcNormalAmount;
 
+// ==================== 赠送已有卡牌（聊天内，即时到账，无领取/拒绝/退回/撤回） ====================
+// 送出方 own 直接 -1；接收方已有>=4 则不叠加、按稀有度换算成对应货币（与抽卡溢出同一套：SSR=卡钻/SR=卡砾/R=卡砂，1张=10枚）。
+// 不进抽卡记录，只在聊天里出现一张「卡牌卡片」，图鉴拥有数照常增减。
+function rarityToCur(rar) { return rar === 'SSR' ? 'diamond' : (rar === 'SR' ? 'gravel' : 'sand'); }
+function rarityCurName(rar) { return rar === 'SSR' ? '卡钻' : (rar === 'SR' ? '卡砾' : '卡砂'); }
+
+var _GIFT_NOTE_POOL = [
+    '送你一张，凑齐一套呀~',
+    '这张我觉得超适合你',
+    '嘿嘿，抽到好卡分你一张',
+    '缘分呐，收好咯',
+    '看你缺这张，给你',
+    '欧气分你一半~',
+    '独乐乐不如众乐乐',
+    '这张卡跟你有缘'
+];
+function giftRandomNote() { return _GIFT_NOTE_POOL[Math.floor(Math.random() * _GIFT_NOTE_POOL.length)]; }
+
+// 接收方（我）落库：findOwnKey 命中的键优先累加，否则用 cid 新建并在非卡库时登记 giftMeta
+function _giftResolveOwnKey(own, cid) {
+    var cards = (getGachaData().cards) || [];
+    var inLib = cards.some(function (c) { return c.id === cid; });
+    if (inLib) return cid;
+    if ((own[cid] || 0) > 0) return cid;
+    if ((own['s:' + cid] || 0) > 0) return 's:' + cid;
+    return cid; // 默认用裸 cid（与好友侧一致）
+}
+function _giftInLib(cid) { return ((getGachaData().cards) || []).some(function (c) { return c.id === cid; }); }
+
+function applyCardToSelf(item) {
+    var g = getGachaData();
+    if (!g.own || typeof g.own !== 'object') g.own = {};
+    if (!g.giftMeta || typeof g.giftMeta !== 'object') g.giftMeta = {};
+    var ownKey = _giftResolveOwnKey(g.own, item.cid);
+    var cur = g.own[ownKey] || 0;
+    var overflow = false;
+    if (cur >= 4) { var ck = rarityToCur(item.rarity); g[ck] = (g[ck] || 0) + 10; overflow = true; }
+    else { g.own[ownKey] = cur + 1; }
+    if (!_giftInLib(item.cid)) g.giftMeta[item.cid] = { name: item.name, rarity: item.rarity, image: item.image || '' };
+    persistGacha();
+    return overflow;
+}
+
+function applyCardToFriend(fid, item) {
+    var fs = DataHub.get('friends', []);
+    var f = fs.find(function (x) { return x.id === fid; });
+    if (!f) return;
+    var gd = ensureFriendGacha(f);
+    if (!gd.giftMeta || typeof gd.giftMeta !== 'object') gd.giftMeta = {};
+    var ownKey = _giftResolveOwnKey(gd.own, item.cid);
+    var cur = gd.own[ownKey] || 0;
+    if (cur >= 4) { addFriendCurrency(fid, rarityToCur(item.rarity), 10); }
+    else { gd.own[ownKey] = cur + 1; }
+    if (!_giftInLib(item.cid)) gd.giftMeta[item.cid] = { name: item.name, rarity: item.rarity, image: item.image || '' };
+    DataHub.set('friends', fs);
+}
+
+// 我赠送一张已有卡牌给好友
+function sendCardToFriend(fid, item, note) {
+    var friend = getFriendObj(fid);
+    if (!friend) { showToast('好友不存在'); return false; }
+    var g = getGachaData();
+    if (!g.own || typeof g.own !== 'object') g.own = {};
+    var cur = g.own[item.ownKey] || 0;
+    if (cur < 1) { showToast('你没有这张卡'); return false; }
+    if (cur <= 1) delete g.own[item.ownKey]; else g.own[item.ownKey] = cur - 1;
+    persistGacha();
+    applyCardToFriend(fid, { cid: item.cid, name: item.name, rarity: item.rarity, image: item.image || '' });
+    pushHongbaoMessage(fid, 'me', '', {
+        isCardGift: true,
+        cgName: item.name, cgRarity: item.rarity, cgImage: item.image || '',
+        cgNote: (note && String(note).trim()) ? String(note).trim() : ('送给 ' + (friend.name || '好友'))
+    });
+    showToast('已赠送卡牌：' + (item.name || ''));
+    return true;
+}
+
+// 选卡页：从我的图鉴里点选一张
+function showGiftCardPicker() {
+    var friend = getFriendObj(currentChatId);
+    if (!friend) { showToast('请先进入好友聊天'); return; }
+    var g = getGachaData();
+    var list = gachaListOwned(g.own || {}, g.cards || [], g.records || [], g.giftMeta || {}).filter(function (x) { return x.num > 0; });
+    if (!list.length) { showToast('你的图鉴还没有可赠送的卡牌'); return; }
+    window._giftList = list;
+    var html = '<div class="modal-title">给 ' + gachaEsc(friend.name || '好友') + ' 赠送卡牌</div>' +
+        '<div style="font-size:12px;color:#999999;margin-bottom:8px;">点选要赠送的一张（赠送后你该卡拥有数 -1）</div>' +
+        '<div style="max-height:58vh;overflow-y:auto;">' +
+        '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">';
+    list.forEach(function (it, i) {
+        var img = it.image
+            ? '<img src="' + it.image + '" loading="lazy" style="width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:8px;display:block;background:#f0f0f0;">'
+            : '<div style="width:100%;aspect-ratio:1/1;border-radius:8px;background:#f0f0f0;"></div>';
+        html += '<div onclick="selectGiftCard(' + i + ')" style="box-sizing:border-box;background:#f8fbf8;border:1px solid #eef5ef;border-radius:10px;padding:5px;cursor:pointer;">' +
+            img +
+            '<div style="font-size:11px;color:#000000;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + gachaEsc(it.name || '') + '</div>' +
+            '<div style="margin-top:2px;">' + gachaRarityBadge(it.rarity) + '</div>' +
+            '<div style="margin-top:2px;font-size:10px;color:#999999;">拥有 ' + it.num + '/4</div>' +
+        '</div>';
+    });
+    html += '</div></div>' +
+        '<div class="btn-row" style="margin-top:10px;"><button class="cancel" onclick="closeModal()">取消</button></div>';
+    showModal(html);
+}
+
+function selectGiftCard(i) {
+    var list = window._giftList || [];
+    var it = list[i];
+    if (!it) { showToast('选择失效'); return; }
+    window._giftPickIdx = i;
+    var html = '<div class="modal-title">赠送 ' + gachaEsc(it.name || '卡牌') + '</div>' +
+        '<div style="font-size:12px;color:#999999;margin-bottom:8px;">填写赠语（可留空，直接发送）</div>' +
+        '<input type="text" id="cardGiftNoteInput" placeholder="赠语（可选）" maxlength="60" style="width:100%;padding:10px 12px;border:1px solid #d4e4d6;border-radius:12px;font-size:14px;color:#000000;background:#ffffff;box-sizing:border-box;box-sizing:border-box;">' +
+        '<div class="btn-row">' +
+            '<button class="cancel" onclick="closeModal()">取消</button>' +
+            '<button class="confirm" onclick="confirmGiftCardSend()">发送</button>' +
+        '</div>';
+    showModal(html);
+}
+
+function confirmGiftCardSend() {
+    var list = window._giftList || [];
+    var it = list[window._giftPickIdx];
+    if (!it) { showToast('选择失效'); return; }
+    var n = document.getElementById('cardGiftNoteInput');
+    var note = n ? n.value : '';
+    var ok = sendCardToFriend(currentChatId, it, note);
+    if (ok) { closeModal(); renderAll(); }
+}
+
+// 聊天里的「卡牌卡片」渲染（即时到账，仿抽卡券卡片）
+function renderCardGiftCard(m) {
+    var isMine = (m.from === 'me');
+    var img = m.cgImage
+        ? '<img src="' + m.cgImage + '" loading="lazy" style="width:54px;height:54px;object-fit:cover;border-radius:8px;background:#f0f0f0;flex:none;">'
+        : '<div style="width:54px;height:54px;border-radius:8px;background:#f0f0f0;display:flex;align-items:center;justify-content:center;color:#bbbbbb;font-size:11px;flex:none;">无图</div>';
+    var status = isMine ? '已送出' : '已到账';
+    var html = '<div onclick="openCardGiftCard(\'' + (m.id || '') + '\')" style="cursor:pointer;background:linear-gradient(135deg,#efe3ff,#e2d1ff);border-radius:12px;padding:10px 12px;width:212px;box-sizing:border-box;color:#000000;">' +
+        '<div style="display:flex;align-items:center;gap:10px;">' + img +
+            '<div style="min-width:0;flex:1;">' +
+                '<div style="font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + gachaEsc(m.cgName || '卡牌') + '</div>' +
+                '<div style="margin-top:3px;">' + gachaRarityBadge(m.cgRarity || '') + '</div>' +
+                '<div style="font-size:11px;color:#5a5a5a;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + gachaEsc(m.cgNote || '') + '</div>' +
+            '</div>' +
+        '</div>' +
+        '<div style="font-size:11px;opacity:0.8;margin-top:6px;">赠送卡牌 · ' + status + '</div>' +
+    '</div>';
+    return html;
+}
+
+function openCardGiftCard(id) {
+    var msgs = DataHub.get('messages', []);
+    var m = null;
+    for (var i = 0; i < msgs.length; i++) { if (msgs[i].id === id) { m = msgs[i]; break; } }
+    if (!m) { showToast('卡片不存在'); return; }
+    var isMine = (m.from === 'me');
+    var img = m.cgImage
+        ? '<img src="' + m.cgImage + '" style="width:120px;height:120px;object-fit:cover;border-radius:12px;margin:0 auto;display:block;background:#f0f0f0;">'
+        : '<div style="width:120px;height:120px;border-radius:12px;background:#f0f0f0;margin:0 auto;display:flex;align-items:center;justify-content:center;color:#bbbbbb;">无图</div>';
+    var tail = isMine ? '已送出，对方已到账' : '已到账，进入你的图鉴';
+    var html = '<div class="modal-title">赠送卡牌</div>' +
+        '<div style="text-align:center;padding:10px 0;">' + img +
+            '<div style="font-size:16px;font-weight:700;margin-top:10px;">' + gachaEsc(m.cgName || '卡牌') + '</div>' +
+            '<div style="margin-top:6px;">' + gachaRarityBadge(m.cgRarity || '') + '</div>' +
+            '<div style="color:#666666;margin-top:8px;">' + gachaEsc(m.cgNote || '') + '</div>' +
+            '<div style="font-size:12px;color:#999999;margin-top:8px;">' + tail + '</div>' +
+        '</div>' +
+        '<div class="btn-row" style="margin-top:12px;justify-content:center;">' +
+            '<button class="confirm" onclick="closeModal()">知道了</button>' +
+        '</div>';
+    showModal(html);
+}
+
 // ====== 入口弹窗：点红包图标弹出 ======
 function showSendHongbaoMenu() {
     if (!currentChatId) {
@@ -33804,6 +34036,7 @@ function showSendHongbaoMenu() {
             '<button class="btn-primary" style="width:100%;margin-bottom:8px;" onclick="closeModal();showSendRedpacketAmount();">发红包</button>' +
             '<button class="btn-primary" style="width:100%;margin-bottom:8px;" onclick="closeModal();showSendTransferAmount();">发转账</button>' +
             '<button class="btn-primary" style="width:100%;margin-bottom:8px;" onclick="closeModal();showSendTicketAmount();">赠送抽卡券</button>' +
+            '<button class="btn-primary" style="width:100%;margin-bottom:8px;" onclick="closeModal();showGiftCardPicker();">赠送已有卡牌</button>' +
             '<div class="btn-row" style="margin-top:8px;"><button class="cancel" onclick="closeModal()">取消</button></div>';
         showModal(html);
     } else {
@@ -34492,6 +34725,7 @@ function ensureFriendGacha(f) {
     if (!gd.persona || typeof gd.persona !== 'object') gd.persona = rollFriendPersona();
     if (typeof gd.personaNextAt !== 'number') gd.personaNextAt = Date.now() + (3 + Math.floor(Math.random() * 5)) * 24 * 3600 * 1000;
     if (typeof gd.lastTickAt !== 'number') gd.lastTickAt = 0;
+    if (!gd.giftMeta || typeof gd.giftMeta !== 'object') gd.giftMeta = {};
     return gd;
 }
 
@@ -34832,7 +35066,8 @@ function renderFriendGachaStatusPage(f) {
 }
 
 function renderFriendGachaRecords(f) {
-    var recs = (f.gacha && f.gacha.records) || [];
+    // 抽卡记录只展示卡池抽出的记录，卡店兑换不算抽卡（兑换的卡在图鉴里体现）
+    var recs = ((f.gacha && f.gacha.records) || []).filter(function (r) { return r && r.poolId !== 'shop'; });
     if (!recs.length) return '<div style="text-align:center;color:#999999;font-size:13px;padding:40px 0;">还没有抽卡记录</div>';
     var html = '';
     recs.forEach(function (r) {
@@ -34848,31 +35083,9 @@ function renderFriendGachaRecords(f) {
 }
 
 function renderFriendGachaLibrary(f) {
-    var own = (f.gacha && f.gacha.own) || {};
-    var cards = getGachaData().cards || [];
-    var ownedList = [];
-    cards.forEach(function (c) { var n = own[c.id] || 0; if (n > 0) ownedList.push({ card: c, num: n }); });
-    if (!ownedList.length) return '<div style="text-align:center;color:#999999;font-size:13px;padding:40px 0;">还没有抽到卡牌</div>';
-    var rank = { SSR: 0, SR: 1, R: 2 };
-    ownedList.sort(function (a, b) {
-        var ra = rank[a.card.rarity] !== undefined ? rank[a.card.rarity] : 3;
-        var rb = rank[b.card.rarity] !== undefined ? rank[b.card.rarity] : 3;
-        if (ra !== rb) return ra - rb;
-        return b.num - a.num;
-    });
-    var html = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">';
-    ownedList.forEach(function (it) {
-        var c = it.card, num = it.num;
-        var img = c.image ? '<img src="' + c.image + '" loading="lazy" style="width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:8px;display:block;background:#f0f0f0;">' : '<div style="width:100%;aspect-ratio:1/1;border-radius:8px;background:#f0f0f0;"></div>';
-        html += '<div style="box-sizing:border-box;background:var(--theme-lighter, #f8fbf8);border-radius:10px;padding:5px;">' +
-            img +
-            '<div style="font-size:11px;color:#000000;font-weight:500;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + gachaEsc(c.name || '') + '</div>' +
-            '<div style="margin-top:2px;">' + gachaRarityBadge(c.rarity) + '</div>' +
-            '<div style="margin-top:2px;font-size:10px;color:#999999;">拥有 ' + num + '/4' + (num >= 4 ? ' <span style="color:var(--theme-dark, #2e7d32);font-weight:600;">满</span>' : '') + '</div>' +
-        '</div>';
-    });
-    html += '</div>';
-    return html;
+    var gd = (f && f.gacha) || {};
+    // 图鉴 = 抽到的卡 + 兑换的卡（含独立卡），统一网格
+    return buildGachaOwnedGrid(gd.own || {}, getGachaData().cards || [], gd.records || [], gd.giftMeta || {});
 }
 
 function renderFriendGachaLuck(f) {
