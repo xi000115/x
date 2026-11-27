@@ -1306,6 +1306,36 @@ color: #000000;
     0%, 100% { transform: scaleY(1); opacity: 0.55; }
     50% { transform: scaleY(0.4); opacity: 1; }
 }
+
+/* ===== 哄他 动效样式 (coax) ===== */
+.coax-overlay{position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;pointer-events:none;display:flex;align-items:center;justify-content:center;overflow:hidden;}
+.coax-heart-svg{width:170px;height:170px;}
+.coax-heart-svg path{fill:none;stroke:#ff6b81;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:100;stroke-dashoffset:100;animation:coaxHeartDraw 1.6s ease forwards;}
+@keyframes coaxHeartDraw{to{stroke-dashoffset:0;}}
+.coax-fx-wrap{position:relative;width:1px;height:1px;}
+.coax-particle{position:absolute;width:8px;height:8px;border-radius:50%;left:0;top:0;transform:translate(-50%,-50%);opacity:0;animation:coaxBurst 1.1s ease-out forwards;}
+@keyframes coaxBurst{0%{transform:translate(-50%,-50%) scale(1);opacity:1;}100%{transform:translate(calc(-50% + var(--tx)),calc(-50% + var(--ty))) scale(2);opacity:0;}}
+.coax-flower{width:120px;height:120px;transform:translateX(-160vw) rotate(-12deg);}
+.coax-flower.go{animation:coaxFlower 2.2s ease forwards;}
+@keyframes coaxFlower{0%{transform:translateX(-160vw) rotate(-12deg);}55%{transform:translateX(0) rotate(0);}70%{transform:translateX(0) translateY(-8px);}85%{transform:translateX(0) translateY(0);}100%{transform:translateX(160vw) rotate(8deg);}}
+.coax-hug{display:flex;align-items:flex-end;gap:0;}
+.coax-hug svg{width:96px;height:96px;}
+.coax-hug .coax-hug-l{transform:translateX(-120vw);animation:coaxHugL 2.0s ease forwards;}
+.coax-hug .coax-hug-r{transform:translateX(120vw);animation:coaxHugR 2.0s ease forwards;}
+@keyframes coaxHugL{0%{transform:translateX(-120vw);}50%{transform:translateX(0);}100%{transform:translateX(0);}}
+@keyframes coaxHugR{0%{transform:translateX(120vw);}50%{transform:translateX(0);}100%{transform:translateX(0);}}
+.coax-panel-mask{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.35);z-index:9000;display:flex;align-items:flex-end;justify-content:center;}
+.coax-panel{width:100%;max-width:520px;background:#ffffff;border-radius:16px 16px 0 0;padding:18px 16px 26px;box-sizing:border-box;}
+.coax-panel-title{text-align:center;font-size:15px;color:#666666;margin-bottom:14px;}
+.coax-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.coax-cell{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:18px 4px;background:#f5f7f6;border-radius:14px;cursor:pointer;font-size:14px;color:#222222;}
+.coax-cell:active{background:#e6efe8;}
+.coax-cell .coax-emoji{font-size:30px;line-height:1;}
+.coax-respond-pop{position:fixed;z-index:10000;font-size:22px;pointer-events:none;transform:translate(-50%,-50%);animation:coaxPop 1.2s ease forwards;}
+@keyframes coaxPop{0%{transform:translate(-50%,-50%) scale(0);opacity:0;}30%{transform:translate(-50%,-120%) scale(1.1);opacity:1;}100%{transform:translate(-50%,-170%) scale(1);opacity:0;}}
+.coax-shake{animation:coaxShake 0.6s ease;}
+@keyframes coaxShake{0%,100%{transform:translateX(0);}20%{transform:translateX(-3px);}40%{transform:translateX(3px);}60%{transform:translateX(-2px);}80%{transform:translateX(2px);}}
+/* ===== 哄他 动效样式结束 ===== */
 </style>
     </head>
 <body>
@@ -1397,6 +1427,7 @@ color: #000000;
 <div onclick="openQuestionnaireMenu()" style="display:flex;align-items:center;justify-content:center;padding:14px 4px;background:var(--theme-lighter, #eef5ef);border-radius:12px;cursor:pointer;font-size:14px;color:#000000;">问卷</div>
 <div onclick="openMallFromChat()" style="display:flex;align-items:center;justify-content:center;padding:14px 4px;background:var(--theme-lighter, #eef5ef);border-radius:12px;cursor:pointer;font-size:14px;color:#000000;">商场</div>
 <div onclick="openVoteMenu()" style="display:flex;align-items:center;justify-content:center;padding:14px 4px;background:var(--theme-lighter, #eef5ef);border-radius:12px;cursor:pointer;font-size:14px;color:#000000;">投票</div>
+<div onclick="openCoaxPanel()" style="display:flex;align-items:center;justify-content:center;padding:14px 4px;background:var(--theme-lighter, #eef5ef);border-radius:12px;cursor:pointer;font-size:14px;color:#000000;">哄他</div>
     </div>
 </div>
 <div id="voiceRecordBar" style="display:none;align-items:center;justify-content:center;gap:10px;padding:10px 16px;background:var(--theme-lighter, #f0f5f0);border-top:1px solid var(--theme-border, #d4e9d6);flex-shrink:0;">
@@ -4249,6 +4280,16 @@ function renderChatMessages() {
             ? '<img src="' + senderAvatar + '" style="width:100%;height:100%;object-fit:cover;">'
             : senderName.charAt(0).toUpperCase();
 
+        if (m.coaxSub) {
+            var subAlign = isMe ? 'flex-end' : 'flex-start';
+            var subPadR = isMe ? '14px' : '0';
+            var subPadL = isMe ? '0' : '14px';
+            var subTx = isMe ? 'right' : 'left';
+            html += '<div data-msgid="' + (m.id || '') + '" class="chat-msg-row coax-sub-row" data-from="' + (isMe ? 'me' : 'other') + '" style="display:flex;justify-content:' + subAlign + ';margin:-8px 0 14px 0;">' +
+                '<div style="max-width:80%;padding:0 ' + subPadR + ' 0 ' + subPadL + ';font-size:12px;color:#999999;line-height:1.5;text-align:' + subTx + ';word-wrap:break-word;">' + (m.text || '') + '</div>' +
+            '</div>';
+            continue;
+        }
         if (m.isRecall) {
             html += '<div style="display:flex;justify-content:center;margin-bottom:14px;">' +
                 '<div style="max-width:80%;padding:6px 14px;border-radius:12px;background:transparent;border:1px solid #e8e8e8;color:#999999;font-size:11px;line-height:1.5;text-align:center;white-space:pre-wrap;word-wrap:break-word;">' +
@@ -35625,6 +35666,7 @@ window.openChat = openChat;
 window.openImagePicker = openImagePicker;
 window.closeChat = closeChat;
 window.sendChatMessage = sendChatMessage;
+try{window.DataHub=DataHub;window.genId=genId;window.renderChatMessages=renderChatMessages;}catch(e){}
 window.openFriendProfile = openFriendProfile;
 window.closeFriendProfile = closeFriendProfile;
 window.closeInnerSubPage = closeInnerSubPage;
@@ -35916,6 +35958,189 @@ window.deleteMonopolyRecord = deleteMonopolyRecord;
 
 init().catch(console.warn);
 })();
+
+/* ===== 哄他 功能 (coax) ===== */
+(function(){
+  var COAX_TYPES={
+    heart:{label:'爱心',fx:'爱心'},
+    firework:{label:'烟花',fx:'烟花'},
+    flower:{label:'递花',fx:'小红花'},
+    hug:{label:'抱抱',fx:'抱抱'}
+  };
+  var COAX_SUBS=['今天也辛苦啦','这朵花只给你','看到你就开心','想你了呀','给你加加油','抱抱你呀','有你真好'];
+  var COAX_FACE=['(*^^*)','(^o^)','(u2563u2665u203Fu2665u2562)','(u25D5u203Fu25D5)'];
+  var coaxChat=null;var coaxLock=false;
+  var coaxTimer={chatId:null,start:0,judged:false};
+  var coaxPending=null;
+  var coaxHiddenAt=0;
+  function now(){return Date.now();}
+  window.__coaxIsLocked=function(){return coaxLock;};
+  function lock(){coaxLock=true;}
+  function unlockSoon(){setTimeout(function(){coaxLock=false;},1000);}
+  function coaxNick(chatId){
+    var friends=window.DataHub.get('friends',[])||[];
+    var f=friends.find(function(x){return x.id===chatId;});
+    if(f&&f.couple&&f.couple.info&&f.couple.info.nickname) return f.couple.info.nickname;
+    if(f&&f.name) return f.name;
+    return 'TA';
+  }
+  function coaxPushMsg(chatId,from,text,extra){
+    var msgs=window.DataHub.get('messages',[]);
+    var d=new Date();
+    var time=d.getFullYear()+'.'+String(d.getMonth()+1).padStart(2,'0')+'.'+String(d.getDate()).padStart(2,'0')+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0');
+    var msg={id:'m'+window.genId(),chatId:chatId,from:from,text:text,time:time,timestamp:now(),unread:(from==='me'?0:1)};
+    if(extra){for(var k in extra){msg[k]=extra[k];}}
+    msgs.push(msg);
+    window.DataHub.set('messages',msgs);
+    window.renderChatMessages();
+    if(typeof renderMessages==='function'){try{renderMessages();}catch(e){}}
+    if(typeof jumpChatToBottom==='function'){try{jumpChatToBottom();}catch(e){}}
+    return msg;
+  }
+  function coaxBubble(type,chatId,fromMe){
+    var nick=coaxNick(chatId);
+    var fx=COAX_TYPES[type].fx;
+    var main=fromMe?('送给['+nick+']'+fx):('['+nick+']送给你'+fx);
+    coaxPushMsg(chatId,fromMe?'me':chatId,main,{coax:true});
+    if(type==='flower'){
+      var sub=COAX_SUBS[Math.floor(Math.random()*COAX_SUBS.length)];
+      coaxPushMsg(chatId,fromMe?'me':chatId,sub,{coaxSub:true});
+    }
+  }
+  function coaxRespond(){
+    var av=document.getElementById('chatTopAvatar');
+    if(av){
+      av.classList.remove('coax-shake');void av.offsetWidth;av.classList.add('coax-shake');
+      var r=av.getBoundingClientRect();
+      var pop=document.createElement('div');
+      pop.className='coax-respond-pop';
+      pop.textContent=COAX_FACE[Math.floor(Math.random()*COAX_FACE.length)];
+      pop.style.left=(r.left+r.width/2)+'px';
+      pop.style.top=(r.top)+'px';
+      document.body.appendChild(pop);
+      setTimeout(function(){if(pop&&pop.parentNode)pop.parentNode.removeChild(pop);},1300);
+    }
+  }
+  function coaxBuildFx(type){
+    if(type==='heart'){
+      return "<svg class='coax-heart-svg' viewBox='0 0 100 100'><path d='M50 86 C10 56 6 30 26 20 C40 13 50 26 50 34 C50 26 60 13 74 20 C94 30 90 56 50 86 Z'/></svg>";
+    }
+    if(type==='firework'){
+      var colors=['#ff8fab','#ffd166','#8fd3f4','#c3f0c8','#f4a261','#b8a6ff'];
+      var html="<div class='coax-fx-wrap'>";
+      for(var i=0;i<28;i++){
+        var ang=(Math.PI*2/28)*i;var dist=70+Math.random()*60;
+        var tx=Math.cos(ang)*dist;var ty=Math.sin(ang)*dist;
+        html+="<span class='coax-particle' style='background:"+colors[i%colors.length]+";--tx:"+tx.toFixed(1)+"px;--ty:"+ty.toFixed(1)+"px;animation-delay:"+(Math.random()*0.15).toFixed(2)+"s'></span>";
+      }
+      html+="</div>";
+      return html;
+    }
+    if(type==='flower'){
+      return "<div class='coax-flower go'><svg viewBox='0 0 100 100'><g><circle cx='50' cy='30' r='12' fill='#ff6b81'/><circle cx='68' cy='44' r='12' fill='#ff8fab'/><circle cx='61' cy='64' r='12' fill='#ff6b81'/><circle cx='39' cy='64' r='12' fill='#ff8fab'/><circle cx='32' cy='44' r='12' fill='#ff6b81'/><circle cx='50' cy='50' r='10' fill='#ffd166'/><path d='M50 62 L50 92' stroke='#6fbf73' stroke-width='5'/><ellipse cx='60' cy='80' rx='9' ry='5' fill='#6fbf73'/></g></svg></div>";
+    }
+    if(type==='hug'){
+      var person="<svg viewBox='0 0 60 90'><circle cx='30' cy='18' r='13' fill='none' stroke='#5b6b7a' stroke-width='3'/><path d='M30 31 L30 58 M30 40 L14 50 M30 40 L46 48 M30 58 L20 82 M30 58 L40 82' fill='none' stroke='#5b6b7a' stroke-width='3' stroke-linecap='round'/></svg>";
+      return "<div class='coax-hug'><span class='coax-hug-l'>"+person+"</span><span class='coax-hug-r'>"+person+"</span></div>";
+    }
+    return '';
+  }
+  function coaxPlayFx(type,cb){
+    var ov=document.createElement('div');
+    ov.className='coax-overlay';
+    ov.innerHTML=coaxBuildFx(type);
+    document.body.appendChild(ov);
+    var dur=type==='flower'?2400:2200;
+    setTimeout(function(){
+      if(ov&&ov.parentNode)ov.parentNode.removeChild(ov);
+      if(cb)cb();
+    },dur);
+  }
+  function coaxTrigger(type,chatId,fromMe){
+    if(window.__coaxIsLocked()){return false;}
+    lock();
+    var inChat=(coaxChat===chatId);
+    coaxBubble(type,chatId,fromMe);
+    if(!inChat){
+      coaxPending={chatId:chatId,type:type};
+      unlockSoon();
+      return true;
+    }
+    coaxPlayFx(type,function(){coaxRespond();unlockSoon();});
+    return true;
+  }
+  window.openCoaxPanel=function(){
+    if(!coaxChat){ if(typeof showToast==='function')showToast('请先打开一个聊天'); return; }
+    // 不再因“是否好友”硬拦截面板（这是“点了没面板”的唯一代码路径）；
+    // 只要当前打开了一个聊天就弹面板，非好友时昵称自动回退备注名/TA。
+    if(window.__coaxIsLocked()){ if(typeof showToast==='function')showToast('刚才的动画还没结束，稍等一下'); return; }
+    var order=['heart','firework','flower','hug'];
+    var mask=document.createElement('div');
+    mask.className='coax-panel-mask';
+    mask.onclick=function(e){ if(e.target===mask){document.body.removeChild(mask);} };
+    var cells='';
+    for(var i=0;i<order.length;i++){
+      var t=order[i];
+      cells+="<div class='coax-cell' data-t='"+t+"'><span class='coax-emoji' data-t='"+t+"'></span><span>"+COAX_TYPES[t].label+"</span></div>";
+    }
+    mask.innerHTML="<div class='coax-panel'><div class='coax-panel-title'>哄 TA 一下</div><div class='coax-grid'>"+cells+"</div></div>";
+    var glyphs={heart:'\u2661',firework:'\u273A',flower:'\u273F',hug:'\u263A'};
+    var spans=mask.querySelectorAll('.coax-emoji');
+    for(var j=0;j<spans.length;j++){ spans[j].textContent=glyphs[spans[j].getAttribute('data-t')]; }
+    mask.querySelector('.coax-grid').onclick=function(e){
+      var cell=e.target.closest('.coax-cell'); if(!cell)return;
+      var t=cell.getAttribute('data-t');
+      document.body.removeChild(mask);
+      coaxTrigger(t,coaxChat,true);
+    };
+    document.body.appendChild(mask);
+  };
+  function coaxOnMyMsg(chatId){
+    if(!chatId)return;
+    coaxTimer={chatId:chatId,start:now(),judged:false};
+  }
+  if(typeof window.sendChatMessage==='function'){
+    var _origSendChat=window.sendChatMessage;
+    window.sendChatMessage=function(){
+      var cid=coaxChat;
+      _origSendChat.apply(this,arguments);
+      coaxOnMyMsg(cid);
+    };
+  }
+  document.addEventListener('visibilitychange',function(){
+    if(document.hidden){ coaxHiddenAt=now(); }
+    else {
+      if(coaxHiddenAt && (now()-coaxHiddenAt)>30000){
+        coaxTimer={chatId:coaxTimer.chatId,start:now(),judged:false};
+      }
+      coaxHiddenAt=0;
+    }
+  });
+  setInterval(function(){
+    if(!coaxTimer.chatId||coaxTimer.judged)return;
+    if(now()-coaxTimer.start>=3600000){
+      coaxTimer.judged=true;
+      if(Math.random()<0.01){
+        coaxTrigger(['heart','firework','flower','hug'][Math.floor(Math.random()*4)],coaxTimer.chatId,false);
+      }
+    }
+  },30000);
+  if(typeof window.openChat==='function'){
+    var _origOpenChat=window.openChat;
+    window.openChat=function(chatId){
+      coaxChat=chatId;_origOpenChat.apply(this,arguments);
+      if(coaxPending && coaxPending.chatId===chatId){
+        var t=coaxPending.type; coaxPending=null;
+        setTimeout(function(){
+          if(window.__coaxIsLocked()){return;}
+          lock();
+          coaxPlayFx(t,function(){coaxRespond();unlockSoon();});
+        },300);
+      }
+    };
+  }
+})();
+/* ===== 哄他 功能结束 ===== */
 </script>
 </body>
 </html>
